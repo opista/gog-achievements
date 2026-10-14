@@ -6,6 +6,7 @@ import {
   localFields,
   offsetLabel,
   timeZoneOptions,
+  timeZoneOffset,
   resolveLocalDate,
   zoneLabel,
 } from '../../src/renderer/date-time';
@@ -128,11 +129,78 @@ it('uses human-readable zone option labels with consistent offsets and caches fo
   const zones = ['America/New_York', 'Asia/Kathmandu', 'UTC'];
   const first = timeZoneOptions(zones);
   expect(first[0]?.label).toMatch(/^America\/New York \(UTC-\d{2}:\d{2}\)$/);
-  expect(first[1]).toEqual({ value: 'Asia/Kathmandu', label: 'Asia/Kathmandu (UTC+05:45)' });
-  expect(first[2]).toEqual({ value: 'UTC', label: 'UTC (UTC+00:00)' });
+  expect(first[1]).toEqual({ value: 'UTC', label: 'UTC (UTC+00:00)' });
+  expect(first[2]).toEqual({ value: 'Asia/Kathmandu', label: 'Asia/Kathmandu (UTC+05:45)' });
   const format = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts');
   const repeated = timeZoneOptions(zones);
   expect(repeated[0]).toBe(first[0]);
   expect(repeated[1]).toBe(first[1]);
   expect(format).not.toHaveBeenCalled();
+});
+
+it('orders negative, zero, fractional and positive offsets numerically', () => {
+  const zones = [
+    'Pacific/Kiritimati',
+    'Asia/Kathmandu',
+    'UTC',
+    'Pacific/Marquesas',
+    'Asia/Tokyo',
+    'America/Phoenix',
+    'Asia/Colombo',
+    'Pacific/Honolulu',
+  ];
+  expect(timeZoneOptions(zones).map((option) => option.value)).toEqual([
+    'Pacific/Honolulu',
+    'Pacific/Marquesas',
+    'America/Phoenix',
+    'UTC',
+    'Asia/Colombo',
+    'Asia/Kathmandu',
+    'Asia/Tokyo',
+    'Pacific/Kiritimati',
+  ]);
+});
+
+it('orders equal offsets alphabetically without changing the input or cached option identities', () => {
+  const zones = Object.freeze([
+    'Asia/Tokyo',
+    'Africa/Accra',
+    'UTC',
+    'Asia/Seoul',
+    'Africa/Abidjan',
+  ]);
+  const first = timeZoneOptions(zones);
+  expect(first.map((option) => option.value)).toEqual([
+    'Africa/Abidjan',
+    'Africa/Accra',
+    'UTC',
+    'Asia/Seoul',
+    'Asia/Tokyo',
+  ]);
+  expect(zones).toEqual(['Asia/Tokyo', 'Africa/Accra', 'UTC', 'Asia/Seoul', 'Africa/Abidjan']);
+  const reversed = timeZoneOptions(zones.toReversed());
+  for (const [index, option] of first.entries()) expect(reversed[index]).toBe(option);
+});
+
+it('uses the same reference instant for newly cached zones after the clock changes', () => {
+  const berlin = timeZoneOptions(['Europe/Berlin'])[0]!;
+  const offset = berlin.label.endsWith('(UTC+02:00)') ? 7200 : 3600;
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(offset === 7200 ? '2020-01-01T12:00:00Z' : '2020-07-01T12:00:00Z');
+    const paris = timeZoneOptions(['Europe/Paris'])[0]!;
+    expect(paris.label).toBe(`Europe/Paris (${offsetLabel(offset)})`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('exports offset seconds for exact instants, including daylight saving and fractional zones', () => {
+  const instant = '2020-01-01T12:00:00.987Z';
+  expect(timeZoneOffset('Pacific/Marquesas', instant)).toBe(-34200);
+  expect(timeZoneOffset('UTC', instant)).toBe(0);
+  expect(timeZoneOffset('Asia/Colombo', instant)).toBe(19800);
+  expect(timeZoneOffset('Asia/Kathmandu', instant)).toBe(20700);
+  expect(timeZoneOffset('Europe/London', instant)).toBe(0);
+  expect(timeZoneOffset('Europe/London', '2020-07-01T12:00:00Z')).toBe(3600);
 });

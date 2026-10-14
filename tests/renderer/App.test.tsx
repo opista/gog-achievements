@@ -131,7 +131,7 @@ describe('desktop restoration flow', () => {
     await user.click(screen.getByRole('button', { name: 'Cyberpunk 2077' }));
     await ready();
     const apply = await confirm(api, user, 'The Witcher 3: Wild Hunt');
-    await user.click(screen.getByRole('button', { name: 'Apply 1 achievements' }));
+    await user.click(screen.getByRole('button', { name: 'Apply 1 achievement' }));
     await screen.findByRole('heading', { name: 'Results confirmed' });
     await ready();
     expect(screen.getByLabelText('Queue for Cyberpunk 2077')).toBeVisible();

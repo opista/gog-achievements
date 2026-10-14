@@ -143,10 +143,14 @@ export function formatTimestamp(iso: string | null, zone: string, exact = true):
   return value.format(date).replace(',', '');
 }
 
-export function zoneLabel(zone: string, iso = new Date().toISOString()): string {
+export function timeZoneOffset(zone: string, iso = new Date().toISOString()): number {
   const local = wallEpoch(localFields(iso, zone));
   const actual = Math.floor(Date.parse(iso) / 1000) * 1000;
-  return `${zone} (${offsetLabel(((local ?? actual) - actual) / 1000)})`;
+  return ((local ?? actual) - actual) / 1000;
+}
+
+export function zoneLabel(zone: string, iso = new Date().toISOString()): string {
+  return `${zone} (${offsetLabel(timeZoneOffset(zone, iso))})`;
 }
 
 export function detectTimeZone(): string {
@@ -176,17 +180,36 @@ export interface TimeZoneOption {
   value: string;
   label: string;
 }
+interface CachedTimeZoneOption {
+  option: TimeZoneOption;
+  offsetSeconds: number;
+}
 const optionReferenceDate = new Date().toISOString();
-const zoneOptions = new Map<string, TimeZoneOption>();
+const zoneOptions = new Map<string, CachedTimeZoneOption>();
 
-/** All option offsets use one instant, and each label is formatted once. */
+/** Sort cached options by UTC offset at one instant, then by zone name. */
 export function timeZoneOptions(zones: readonly string[] = TIME_ZONES): TimeZoneOption[] {
-  return zones.map((zone) => {
-    let option = zoneOptions.get(zone);
-    if (!option) {
-      option = { value: zone, label: zoneLabel(zone, optionReferenceDate).replaceAll('_', ' ') };
-      zoneOptions.set(zone, option);
-    }
-    return option;
-  });
+  return zones
+    .map((zone) => {
+      let cached = zoneOptions.get(zone);
+      if (!cached) {
+        const offsetSeconds = timeZoneOffset(zone, optionReferenceDate);
+        cached = {
+          offsetSeconds,
+          option: {
+            value: zone,
+            label: `${zone.replaceAll('_', ' ')} (${offsetLabel(offsetSeconds)})`,
+          },
+        };
+        zoneOptions.set(zone, cached);
+      }
+      return cached;
+    })
+    .toSorted(
+      (left, right) =>
+        left.offsetSeconds - right.offsetSeconds ||
+        left.option.label.localeCompare(right.option.label, 'en') ||
+        left.option.value.localeCompare(right.option.value, 'en'),
+    )
+    .map((cached) => cached.option);
 }

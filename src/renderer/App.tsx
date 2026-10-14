@@ -283,6 +283,8 @@ export function App({ api }: { api: DesktopApi }) {
       {w.preview ? (
         <ApplyConfirmation
           report={w.preview.report}
+          achievementFor={w.achievementFor}
+          demo={api.isDemo}
           zone={zone}
           busy={w.busy}
           onClose={w.cancelPreview}

@@ -40,14 +40,22 @@ async function useUtc(page: Page) {
 async function confirmation(page: Page, title = CYBERPUNK, count = 3) {
   await expect(applyButton(page, title)).toBeEnabled();
   await applyButton(page, title).click();
-  const dialog = page.getByRole('dialog', { name: `Apply ${count} achievements?`, exact: true });
+  const dialog = page.getByRole('dialog', {
+    name: `Apply ${count} achievement${count === 1 ? '' : 's'}?`,
+    exact: true,
+  });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
 async function confirmApply(page: Page, title = CYBERPUNK, count = 3) {
   const dialog = await confirmation(page, title, count);
-  await dialog.getByRole('button', { name: `Apply ${count} achievements`, exact: true }).click();
+  await dialog
+    .getByRole('button', {
+      name: `Apply ${count} achievement${count === 1 ? '' : 's'}`,
+      exact: true,
+    })
+    .click();
 }
 
 test.beforeEach(async ({ page, baseURL }) => {
@@ -351,7 +359,7 @@ test('per-game apply retains the other global queue across selection, history an
   await expect(dialog.getByRole('heading', { name: WITCHER, exact: true })).toBeVisible();
   await expect(dialog.getByText('Passed the Trial', { exact: true })).toBeVisible();
   await expect(dialog.getByText('The World', { exact: true })).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'Apply 1 achievements', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Apply 1 achievement', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Results confirmed', exact: true })).toBeVisible();
   await expect(gameQueue(page).locator('.queue-row')).toHaveCount(3);
   await expect(gameQueue(page, WITCHER)).toHaveCount(0);

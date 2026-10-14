@@ -167,7 +167,6 @@ export function HistoryView({
   return (
     <section className="history-view">
       <h2>Achievement history</h2>
-      <p className="muted">Unlock dates · {zone}</p>
       {loading ? (
         <div className="history-skeleton" role="status" aria-label="Loading achievement history">
           <span className="sr-only">Loading achievement history…</span>
