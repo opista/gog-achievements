@@ -15,7 +15,7 @@ import { Art } from './components/Art';
 import { Achievements } from './features/Achievements';
 import { AchievementSkeleton } from './features/AchievementSkeleton';
 import { ApplyConfirmation } from './features/Review';
-import { detectTimeZone } from './date-time';
+import { useLocalTimeZone } from './use-local-time-zone';
 import { HistoryView, Results } from './features/Results';
 import { Library } from './features/Library';
 import { QueuePane } from './features/QueuePane';
@@ -25,7 +25,7 @@ export function App({ api }: { api: DesktopApi }) {
   const w = useWorkspace(api);
   const [libraryWidth, setLibraryWidth] = useState<number>();
   const [queueWidth, setQueueWidth] = useState<number>();
-  const [zone, setZone] = useState(detectTimeZone);
+  const zone = useLocalTimeZone();
   const [scenario, setScenario] = useState<DemoScenario>(() =>
     'getScenario' in api ? (api as DemoDesktopApi).getScenario() : 'complete',
   );
@@ -275,7 +275,6 @@ export function App({ api }: { api: DesktopApi }) {
           workspace={w}
           zone={zone}
           demo={api.isDemo}
-          onZone={setZone}
           width={queueWidth}
           onResize={setQueueWidth}
         />

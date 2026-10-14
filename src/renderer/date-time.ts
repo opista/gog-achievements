@@ -1,4 +1,4 @@
-/** Convert local wall times by round-tripping offsets through the selected zone. */
+/** Convert wall times to UTC without assuming a daylight-saving offset. */
 const formatters = new Map<string, Intl.DateTimeFormat>();
 const timestampFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -89,7 +89,7 @@ export function resolveLocalDate(
       return {
         iso: null,
         choices: [],
-        error: 'This local time does not exist in the selected zone.',
+        error: 'This local time does not exist in your time zone.',
       };
     const offset = matches.length === 1 ? matches[0] : selectedOffset;
     if (offset === undefined || !matches.includes(offset))
@@ -117,7 +117,24 @@ export function resolveLocalDate(
       error: null,
     };
   } catch {
-    return { iso: null, choices: [], error: 'Choose a valid time zone.' };
+    return { iso: null, choices: [], error: 'Your local time zone is unavailable.' };
+  }
+}
+
+/** Distinguish repeated wall times without changing the saved instant. */
+export function localTimeOccurrence(iso: string, zone: string): string | null {
+  const instant = Math.floor(Date.parse(iso) / 1000) * 1000;
+  if (!Number.isFinite(instant)) return null;
+  try {
+    const fields = localFields(iso, zone);
+    const wall = wallEpoch(fields);
+    const { choices } = resolveLocalDate(fields, zone);
+    if (wall === null || choices.length !== 2) return null;
+    // Larger offsets occur first because UTC = wall time minus offset.
+    const index = choices.findIndex((offset) => wall - offset * 1000 === instant);
+    return index === 0 ? 'First occurrence' : index === 1 ? 'Second occurrence' : null;
+  } catch {
+    return null;
   }
 }
 
@@ -143,16 +160,6 @@ export function formatTimestamp(iso: string | null, zone: string, exact = true):
   return value.format(date).replace(',', '');
 }
 
-export function timeZoneOffset(zone: string, iso = new Date().toISOString()): number {
-  const local = wallEpoch(localFields(iso, zone));
-  const actual = Math.floor(Date.parse(iso) / 1000) * 1000;
-  return ((local ?? actual) - actual) / 1000;
-}
-
-export function zoneLabel(zone: string, iso = new Date().toISOString()): string {
-  return `${zone} (${offsetLabel(timeZoneOffset(zone, iso))})`;
-}
-
 export function detectTimeZone(): string {
   try {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -163,53 +170,4 @@ export function detectTimeZone(): string {
   } catch {
     return 'UTC';
   }
-}
-
-function supportedTimeZones(): string[] {
-  try {
-    return Intl.supportedValuesOf('timeZone');
-  } catch {
-    return [];
-  }
-}
-
-// Build once; rendering the zone menu must not format hundreds of timestamps.
-export const TIME_ZONES = [...new Set(['UTC', detectTimeZone(), ...supportedTimeZones()])].sort();
-
-export interface TimeZoneOption {
-  value: string;
-  label: string;
-}
-interface CachedTimeZoneOption {
-  option: TimeZoneOption;
-  offsetSeconds: number;
-}
-const optionReferenceDate = new Date().toISOString();
-const zoneOptions = new Map<string, CachedTimeZoneOption>();
-
-/** Sort cached options by UTC offset at one instant, then by zone name. */
-export function timeZoneOptions(zones: readonly string[] = TIME_ZONES): TimeZoneOption[] {
-  return zones
-    .map((zone) => {
-      let cached = zoneOptions.get(zone);
-      if (!cached) {
-        const offsetSeconds = timeZoneOffset(zone, optionReferenceDate);
-        cached = {
-          offsetSeconds,
-          option: {
-            value: zone,
-            label: `${zone.replaceAll('_', ' ')} (${offsetLabel(offsetSeconds)})`,
-          },
-        };
-        zoneOptions.set(zone, cached);
-      }
-      return cached;
-    })
-    .toSorted(
-      (left, right) =>
-        left.offsetSeconds - right.offsetSeconds ||
-        left.option.label.localeCompare(right.option.label, 'en') ||
-        left.option.value.localeCompare(right.option.value, 'en'),
-    )
-    .map((cached) => cached.option);
 }

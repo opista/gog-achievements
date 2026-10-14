@@ -1,21 +1,14 @@
-import { CalendarDays, Globe2, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import type { Achievement, Report, ReportItem } from '../../shared/api';
-import { formatTimestamp, offsetLabel, timeZoneOffset, zoneLabel } from '../date-time';
+import { formatTimestamp, localTimeOccurrence } from '../date-time';
 import { Dialog } from '../components/Dialog';
 import { Art } from '../components/Art';
 export function ExactDate({ iso, zone }: { iso: string | null; zone: string }) {
   if (!iso) return <span className="muted">Not confirmed</span>;
   return (
-    <span className="exact-date">
-      <span>
-        <CalendarDays size={16} />
-        {formatTimestamp(iso, zone)} <span className="muted">({zoneLabel(zone, iso)})</span>
-      </span>
-      <span className="muted">
-        <Globe2 size={16} />
-        {formatTimestamp(iso, 'UTC')} UTC
-      </span>
-    </span>
+    <time className="exact-date" dateTime={iso}>
+      {formatTimestamp(iso, zone)}
+    </time>
   );
 }
 export function ApplyConfirmation({
@@ -67,12 +60,13 @@ export function ApplyConfirmation({
         <>
           <div className="confirmation-list-heading">
             <h4>Achievements to unlock</h4>
-            <p>Unlock dates in {zone.replaceAll('_', ' ')}</p>
+            <p>Unlock dates · local time</p>
           </div>
           <ul className="confirmation-rows" aria-label="Achievements to unlock">
             {pending.map((item) => {
               const achievement = achievementFor(report.game.id, item.achievement_id);
               const description = achievement?.description || 'No description available.';
+              const occurrence = localTimeOccurrence(item.requested_unlocked_at, zone);
               return (
                 <li className="confirmation-row" key={item.achievement_id}>
                   <Art
@@ -91,7 +85,7 @@ export function ApplyConfirmation({
                     <time dateTime={item.requested_unlocked_at}>
                       {formatTimestamp(item.requested_unlocked_at, zone)}
                     </time>
-                    <span>{offsetLabel(timeZoneOffset(zone, item.requested_unlocked_at))}</span>
+                    {occurrence ? <small>{occurrence}</small> : null}
                   </div>
                 </li>
               );

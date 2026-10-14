@@ -33,10 +33,6 @@ async function signIn(page: Page) {
   await expect(page.getByRole('button', { name: 'History', exact: true })).toBeEnabled();
 }
 
-async function useUtc(page: Page) {
-  await page.getByRole('combobox', { name: /^Time zone/ }).selectOption('UTC');
-}
-
 async function confirmation(page: Page, title = CYBERPUNK, count = 3) {
   await expect(applyButton(page, title)).toBeEnabled();
   await applyButton(page, title).click();
@@ -157,7 +153,6 @@ test('single-item date edits stay local until Save date and persist exact second
   await expect(remove).toBeEnabled();
   await remove.click();
   await expect(remove).toHaveCount(0);
-  await useUtc(page);
   const edit = page.getByRole('button', { name: 'Edit date for The World', exact: true });
   const originalTitle = await edit.getAttribute('title');
   await edit.click();
@@ -165,6 +160,8 @@ test('single-item date edits stay local until Save date and persist exact second
   const date = dialog.getByLabel('Unlock date for The World', { exact: true });
   await expect(date).toHaveAttribute('type', 'datetime-local');
   await expect(date).toHaveAttribute('step', '1');
+  await expect(date).toHaveValue('2026-10-10T13:30');
+  await expect(page.getByRole('combobox', { name: /^Time zone/ })).toHaveCount(0);
   await date.fill('2099-01-01T13:14:15');
   await expect(dialog.getByText(/Unlock dates must not be in the future/)).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Save date', exact: true })).toBeDisabled();
@@ -186,12 +183,11 @@ test('single-item date edits stay local until Save date and persist exact second
           .find((queue) => queue.game.id === '1')
           ?.items.find((item) => item.achievement_id === '1')?.unlocked_at,
     )
-    .toBe('2020-02-02T13:14:15Z');
+    .toBe('2020-02-02T18:14:15Z');
   expect((await savedDemo(page)).records).toHaveLength(0);
-  await expect(edit).toHaveAttribute('title', '02 Feb 2020 13:14:15 · UTC (UTC+00:00)');
+  await expect(edit).toHaveAttribute('title', '02 Feb 2020 13:14:15');
   await page.reload();
   await signIn(page);
-  await useUtc(page);
   await edit.click();
   await expect(date).toHaveValue('2020-02-02T13:14:15');
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -202,11 +198,12 @@ test('the single apply confirmation can be dismissed without changing achievemen
   page,
 }) => {
   await signIn(page);
-  await useUtc(page);
   const dialog = await confirmation(page);
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
   await expect(dialog.getByRole('heading', { name: CYBERPUNK, exact: true })).toBeVisible();
   await expect(dialog.getByText('The World', { exact: true })).toBeVisible();
+  await expect(dialog.locator('time').first()).toHaveText('10 Oct 2026 13:30:00');
+  await expect(dialog.getByText('Unlock dates · local time', { exact: true })).toBeVisible();
   expect((await savedDemo(page)).records).toHaveLength(0);
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);

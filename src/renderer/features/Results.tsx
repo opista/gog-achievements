@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { CircleAlert, History, Info } from 'lucide-react';
 import type { ApplyResult, OperationRecord } from '../../shared/api';
-import { formatTimestamp, zoneLabel } from '../date-time';
+import { formatTimestamp } from '../date-time';
 import { ExactDate, STATUS_LABELS } from './Review';
 export function resultsNeedAttention(result: ApplyResult): boolean {
   return (
@@ -80,7 +80,6 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
           </span>
         </p>
       )}
-      <p className="muted">Display zone: {zoneLabel(zone)}</p>
     </section>
   );
 }
@@ -192,11 +191,7 @@ export function HistoryView({
                     <span>{entry.game}</span>
                     {entry.differentDate ? <small>Unlocked with a different date</small> : null}
                   </div>
-                  <time
-                    className="history-unlock-date"
-                    dateTime={entry.unlockedAt}
-                    title={`${zoneLabel(zone, entry.unlockedAt)} · ${entry.unlockedAt}`}
-                  >
+                  <time className="history-unlock-date" dateTime={entry.unlockedAt}>
                     {formatTimestamp(entry.unlockedAt, zone)}
                   </time>
                 </li>

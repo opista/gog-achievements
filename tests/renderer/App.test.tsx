@@ -7,6 +7,9 @@ import { StrictMode } from 'react';
 import type { OperationState } from '../../src/shared/api';
 import { App } from '../../src/renderer/App';
 import { createDemoApi, type DemoDesktopApi, type DemoScenario } from '../../src/shared/demo-api';
+vi.mock('../../src/renderer/use-local-time-zone', () => ({
+  useLocalTimeZone: () => 'America/New_York',
+}));
 afterEach(cleanup);
 async function ready() {
   await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
@@ -81,14 +84,14 @@ describe('desktop restoration flow', () => {
     const { api, user } = await connected();
     const apply = vi.spyOn(api, 'apply');
     const setDates = vi.spyOn(api, 'setDates');
-    await user.selectOptions(screen.getByLabelText('Time zone', { exact: true }), 'UTC');
+    expect(screen.queryByLabelText('Time zone', { exact: true })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Edit date for The World' }));
     const dialog = screen.getByRole('dialog');
     const date = within(dialog).getByLabelText('Unlock date for The World');
     fireEvent.change(date, { target: { value: '2020-02-02T13:14:15' } });
     await user.click(within(dialog).getByRole('button', { name: 'Save date' }));
     await ready();
-    expect(setDates).toHaveBeenCalledWith({ gameId: '1', dates: { '1': '2020-02-02T13:14:15Z' } });
+    expect(setDates).toHaveBeenCalledWith({ gameId: '1', dates: { '1': '2020-02-02T18:14:15Z' } });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
   });

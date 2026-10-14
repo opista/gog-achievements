@@ -19,7 +19,7 @@ function row(overrides: Partial<ReportItem> = {}): ReportItem {
     ...overrides,
   };
 }
-function confirmation(results: ReportItem[] = [row()], busy = false) {
+function confirmation(results: ReportItem[] = [row()], busy = false, zone = 'Europe/London') {
   const report: Report = {
     dry_run: true,
     complete: true,
@@ -49,7 +49,7 @@ function confirmation(results: ReportItem[] = [row()], busy = false) {
     <ApplyConfirmation
       report={report}
       achievementFor={achievementFor}
-      zone="Europe/London"
+      zone={zone}
       demo={false}
       busy={busy}
       onClose={onClose}
@@ -59,7 +59,7 @@ function confirmation(results: ReportItem[] = [row()], busy = false) {
   return { onClose, onApply, achievementFor };
 }
 
-it('shows pending achievements with game-specific descriptions, local dates and date-specific offsets', () => {
+it('shows pending achievements with game-specific descriptions and exact local dates', () => {
   const { achievementFor, onApply } = confirmation([
     row(),
     row({
@@ -72,7 +72,7 @@ it('shows pending achievements with game-specific descriptions, local dates and 
   const dialog = screen.getByRole('dialog', { name: 'Apply 2 achievements?' });
   expect(within(dialog).getByRole('heading', { name: 'The Witcher 3: Wild Hunt' })).toBeVisible();
   expect(within(dialog).getByText('GOG account 123456789')).toBeVisible();
-  expect(within(dialog).getByText('Unlock dates in Europe/London')).toBeVisible();
+  expect(within(dialog).getByText('Unlock dates · local time')).toBeVisible();
   const entries = within(
     within(dialog).getByRole('list', { name: 'Achievements to unlock' }),
   ).getAllByRole('listitem');
@@ -83,13 +83,12 @@ it('shows pending achievements with game-specific descriptions, local dates and 
     'datetime',
     '2026-10-10T17:30:00Z',
   );
-  expect(within(entries[0]!).getByText('UTC+01:00')).toBeVisible();
   expect(entries[0]?.querySelector('img')).toHaveAttribute(
     'src',
     'https://images.gog-statics.com/trial.jpg',
   );
   expect(within(entries[1]!).getByText('12 Jan 2026 18:15:42')).toBeVisible();
-  expect(within(entries[1]!).getByText('UTC+00:00')).toBeVisible();
+  expect(within(dialog).queryByText(/Europe\/London|UTC[+-]/)).not.toBeInTheDocument();
   expect(within(entries[1]!).getByText('No description available.')).toBeVisible();
   expect(within(dialog).queryByText('Existing unlock')).not.toBeInTheDocument();
   expect(within(dialog).getByText('Already unlocked achievements keep their dates.')).toBeVisible();
@@ -135,4 +134,30 @@ it('does not offer to apply achievements that are all already unlocked', () => {
   expect(screen.queryByRole('list')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Apply 0 achievements' })).toBeDisabled();
   expect(onApply).not.toHaveBeenCalled();
+});
+
+it('distinguishes repeated local times without restoring time zone settings', () => {
+  confirmation(
+    [
+      row({ requested_unlocked_at: '2020-11-01T05:30:00Z' }),
+      row({ achievement_id: '202', requested_unlocked_at: '2020-11-01T06:30:00Z' }),
+    ],
+    false,
+    'America/New_York',
+  );
+  const entries = within(screen.getByRole('list', { name: 'Achievements to unlock' })).getAllByRole(
+    'listitem',
+  );
+  expect(within(entries[0]!).getByText('01 Nov 2020 01:30:00')).toHaveAttribute(
+    'datetime',
+    '2020-11-01T05:30:00Z',
+  );
+  expect(within(entries[0]!).getByText('First occurrence')).toBeVisible();
+  expect(within(entries[1]!).getByText('01 Nov 2020 01:30:00')).toHaveAttribute(
+    'datetime',
+    '2020-11-01T06:30:00Z',
+  );
+  expect(within(entries[1]!).getByText('Second occurrence')).toBeVisible();
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(screen.queryByText(/UTC[+-]|America\/New_York/)).not.toBeInTheDocument();
 });

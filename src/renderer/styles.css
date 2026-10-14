@@ -604,19 +604,6 @@ small {
   padding-top: 24px;
   flex: none;
 }
-.zone-control {
-  font-size: 12px;
-}
-.zone-control select {
-  width: 100%;
-  font-size: 13px;
-}
-.queue-actions > .primary {
-  min-height: 48px;
-}
-.queue-actions > button {
-  min-height: 44px;
-}
 .connect-state {
   min-height: 100%;
   display: flex;
@@ -762,21 +749,10 @@ small {
   margin-bottom: 14px;
 }
 .exact-date {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: block;
   font-size: 13px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
-}
-.exact-date > span {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-.exact-date svg {
-  margin-top: 1px;
 }
 .dialog-backdrop {
   position: fixed;
@@ -999,7 +975,7 @@ small {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.confirmation-date span,
+.confirmation-date small,
 .confirmation-kept {
   color: var(--muted);
   font-size: 12px;
@@ -1067,12 +1043,6 @@ small {
 }
 .result-table .exact-date {
   font-size: 12px;
-}
-.result-table .exact-date svg {
-  display: none;
-}
-.result-table .exact-date > span:first-child > .muted {
-  display: none;
 }
 .result-table small {
   display: block;

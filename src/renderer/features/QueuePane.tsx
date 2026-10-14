@@ -1,16 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { CalendarDays, Check, FileText, Info, LoaderCircle, X } from 'lucide-react';
 import type { QueueItem } from '../../shared/api';
 import type { Workspace } from '../use-workspace';
 import { Art } from '../components/Art';
 import { PaneResize } from '../components/PaneResize';
-import { TIME_ZONES, formatTimestamp, timeZoneOptions, zoneLabel } from '../date-time';
+import { formatTimestamp, localTimeOccurrence } from '../date-time';
 import { QueueDateModal } from './QueueDateModal';
 interface Props {
   workspace: Workspace;
   zone: string;
   demo: boolean;
-  onZone(value: string): void;
   width?: number;
   onResize(width: number): void;
 }
@@ -18,9 +17,8 @@ export function QueuePane(props: Props) {
   return props.workspace.auth.authenticated ? <SignedInQueuePane {...props} /> : null;
 }
 
-function SignedInQueuePane({ workspace: w, zone, demo, onZone, width, onResize }: Props) {
+function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props) {
   const [editing, setEditing] = useState<{ gameId: string; item: QueueItem } | null>(null);
-  const zones = useMemo(() => timeZoneOptions([...new Set([zone, ...TIME_ZONES])]), [zone]);
   const groups = w.queues
     .filter((item) => item.items.length > 0)
     .toSorted(
@@ -81,7 +79,12 @@ function SignedInQueuePane({ workspace: w, zone, demo, onZone, width, onResize }
                   {group.items.map((item) => {
                     const achievement = w.achievementFor(group.game.id, item.achievement_id);
                     const description = achievement?.description || 'No description available.';
-                    const savedDate = `${formatTimestamp(item.unlocked_at, zone)} · ${zoneLabel(zone, item.unlocked_at).replaceAll('_', ' ')}`;
+                    const savedDate = [
+                      formatTimestamp(item.unlocked_at, zone),
+                      localTimeOccurrence(item.unlocked_at, zone),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ');
                     return (
                       <div className="queue-row" key={item.achievement_id}>
                         <Art
@@ -145,24 +148,14 @@ function SignedInQueuePane({ workspace: w, zone, demo, onZone, width, onResize }
           </p>
         ) : null}
       </div>
-      <div className="queue-actions">
-        <label className="zone-control">
-          Time zone
-          <select value={zone} onChange={(event) => onZone(event.target.value)} disabled={w.busy}>
-            {zones.map((option) => (
-              <option value={option.value} key={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {w.error && w.auth.authenticated ? (
+      {w.error ? (
+        <div className="queue-actions">
           <p className="field-error">
             <Info size={16} />
             The last request did not complete. Your queue and results are kept.
           </p>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {editing ? (
         <QueueDateModal
           item={editing.item}

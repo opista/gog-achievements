@@ -14,6 +14,7 @@ export default defineConfig({
   expect: { timeout: 5000 },
   use: {
     baseURL: 'http://127.0.0.1:' + port,
+    timezoneId: 'America/New_York',
     viewport: { width: 1440, height: 900 },
     actionTimeout: 5000,
     navigationTimeout: 10000,

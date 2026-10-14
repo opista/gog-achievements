@@ -2,7 +2,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import type { QueueItem } from '../../shared/api';
 import { Dialog } from '../components/Dialog';
-import { localFields, offsetLabel, resolveLocalDate } from '../date-time';
+import { localFields, localTimeOccurrence, offsetLabel, resolveLocalDate } from '../date-time';
 import './QueueDateModal.css';
 
 interface Props {
@@ -54,6 +54,8 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
         ? null
         : resolution.error;
   const changed = resolution.iso && Date.parse(resolution.iso) !== Date.parse(item.unlocked_at);
+  const savedOccurrence =
+    value === initialValue ? localTimeOccurrence(item.unlocked_at, zone) : null;
 
   async function save(iso: string | null) {
     if (!iso || locked || inFlight.current) return;
@@ -105,7 +107,7 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
             <p>{description || 'No description available.'}</p>
           </div>
           <label>
-            Unlock date and time
+            Unlock date and time (local)
             <input
               type="datetime-local"
               step="1"
@@ -121,7 +123,7 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
               }}
             />
           </label>
-          <small>{zone.replaceAll('_', ' ')}</small>
+          {savedOccurrence ? <small>{savedOccurrence}</small> : null}
           {resolution.choices.length > 1 ? (
             <label>
               UTC offset

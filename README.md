@@ -4,7 +4,7 @@ An Electron app for macOS and Windows that restores GOG achievements you have al
 
 Sign in, choose a game and add locked achievements to the queue. Use the calendar button to edit a date or set the current time, then apply one game group at a time. The app checks the group before final confirmation. Existing unlocks keep their dates.
 
-The queue stays visible across games and on the history page. History lists confirmed unlocks with game names and unlock dates, with uncertain results shown separately. Time zones come from the system list, with your current zone selected automatically.
+The queue stays visible across games and on the history page. History lists confirmed unlocks with game names and unlock dates, with uncertain results shown separately. All dates are shown and edited in your machine’s local time. Stored timestamps keep their original UTC instants.
 
 The app keeps an operation record for recovery behind the achievement history list. It cannot undo an unlock, relock an achievement or change an existing unlock date. Queue edits are local until you confirm Apply.
 

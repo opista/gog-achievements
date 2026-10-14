@@ -154,7 +154,7 @@ export function Achievements({
                     ) : item.unlocked ? (
                       <span
                         className="status ready"
-                        title={`Existing unlock: ${formatTimestamp(item.unlocked_at, zone)} ${zone}. This date is read-only.`}
+                        title={`Existing unlock: ${formatTimestamp(item.unlocked_at, zone)} (local time). This date is read-only.`}
                       >
                         Unlocked{' '}
                         {item.unlocked_at

@@ -1,30 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  TIME_ZONES,
   detectTimeZone,
   formatTimestamp,
   localFields,
+  localTimeOccurrence,
   offsetLabel,
-  timeZoneOptions,
-  timeZoneOffset,
   resolveLocalDate,
-  zoneLabel,
 } from '../../src/renderer/date-time';
 const NOW = Date.parse('2030-01-01T00:00:00Z');
 describe('exact unlock dates', () => {
   it('round-trips a London date to second-precision UTC', () => {
     const result = resolveLocalDate(
-      { date: '2026-10-10', time: '18:30:00' },
+      { date: '2026-10-10', time: '18:30:47' },
       'Europe/London',
       undefined,
       NOW,
     );
-    expect(result.iso).toBe('2026-10-10T17:30:00Z');
+    expect(result.iso).toBe('2026-10-10T17:30:47Z');
     expect(localFields(result.iso!, 'Europe/London')).toEqual({
       date: '2026-10-10',
-      time: '18:30:00',
+      time: '18:30:47',
     });
-    expect(zoneLabel('Europe/London', result.iso!)).toBe('Europe/London (UTC+01:00)');
   });
   it('accepts leap days and rejects invalid calendar dates', () => {
     expect(
@@ -51,6 +47,7 @@ describe('exact unlock dates', () => {
     const fields = { date: '2026-10-25', time: '01:30:00' };
     expect(resolveLocalDate(fields, 'Europe/London', undefined, NOW).choices).toEqual([3600, 0]);
     expect(resolveLocalDate(fields, 'Europe/London', undefined, NOW).iso).toBeNull();
+    expect(resolveLocalDate(fields, 'Europe/London', 1800, NOW).iso).toBeNull();
     expect(resolveLocalDate(fields, 'Europe/London', 3600, NOW).iso).toBe('2026-10-25T00:30:00Z');
     expect(resolveLocalDate(fields, 'Europe/London', 0, NOW).iso).toBe('2026-10-25T01:30:00Z');
   });
@@ -65,7 +62,7 @@ describe('exact unlock dates', () => {
     expect(
       resolveLocalDate({ date: '2026-10-10', time: '18:30:00' }, 'Unknown/Zone', undefined, NOW)
         .error,
-    ).toMatch(/valid time zone/);
+    ).toMatch(/local time zone is unavailable/);
   });
   it('matches the CLI minimum timestamp, including UTC offset conversion', () => {
     expect(
@@ -81,15 +78,7 @@ describe('exact unlock dates', () => {
   });
 });
 
-describe('display time zones', () => {
-  it('includes every Intl-supported zone, UTC and the detected user zone once', () => {
-    expect(TIME_ZONES).toContain('UTC');
-    expect(TIME_ZONES).toContain(detectTimeZone());
-    expect(new Set(TIME_ZONES).size).toBe(TIME_ZONES.length);
-    for (const zone of Intl.supportedValuesOf('timeZone')) expect(TIME_ZONES).toContain(zone);
-    expect(TIME_ZONES).toContain('Asia/Colombo');
-    expect(TIME_ZONES).toContain('America/St_Johns');
-  });
+describe('local time detection and formatting', () => {
   it('falls back to UTC when the browser cannot report its zone', () => {
     vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementationOnce(() => {
       throw new Error('Fixture unavailable zone');
@@ -120,87 +109,51 @@ it('formats UTC offsets with a sign and fixed hour/minute digits', () => {
   expect(offsetLabel(19800)).toBe('UTC+05:30');
   expect(offsetLabel(20700)).toBe('UTC+05:45');
   expect(offsetLabel(-12600)).toBe('UTC-03:30');
-  expect(zoneLabel('America/New_York', '2020-01-01T12:00:00Z')).toBe(
-    'America/New_York (UTC-05:00)',
-  );
 });
 
-it('uses human-readable zone option labels with consistent offsets and caches formatting', () => {
-  const zones = ['America/New_York', 'Asia/Kathmandu', 'UTC'];
-  const first = timeZoneOptions(zones);
-  expect(first[0]?.label).toMatch(/^America\/New York \(UTC-\d{2}:\d{2}\)$/);
-  expect(first[1]).toEqual({ value: 'UTC', label: 'UTC (UTC+00:00)' });
-  expect(first[2]).toEqual({ value: 'Asia/Kathmandu', label: 'Asia/Kathmandu (UTC+05:45)' });
-  const format = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts');
-  const repeated = timeZoneOptions(zones);
-  expect(repeated[0]).toBe(first[0]);
-  expect(repeated[1]).toBe(first[1]);
-  expect(format).not.toHaveBeenCalled();
+it.each([
+  ['UTC', '2020-01-01T00:00:07Z', { date: '2020-01-01', time: '00:00:07' }],
+  ['Pacific/Marquesas', '2020-01-01T01:00:07Z', { date: '2019-12-31', time: '15:30:07' }],
+  ['Asia/Kathmandu', '2020-01-01T23:30:07Z', { date: '2020-01-02', time: '05:15:07' }],
+] as const)(
+  'round-trips UTC through %s across calendar boundaries with exact seconds',
+  (zone, iso, fields) => {
+    expect(localFields(iso, zone)).toEqual(fields);
+    expect(resolveLocalDate(fields, zone, undefined, NOW).iso).toBe(iso);
+  },
+);
+
+it('uses a valid machine-reported local zone without replacing it with UTC', () => {
+  const options = Intl.DateTimeFormat().resolvedOptions();
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValueOnce({
+    ...options,
+    timeZone: 'Pacific/Marquesas',
+  });
+  const zone = detectTimeZone();
+  expect(zone).toBe('Pacific/Marquesas');
+  expect(formatTimestamp('2020-01-01T01:00:07Z', zone)).toBe('31 Dec 2019 15:30:07');
 });
 
-it('orders negative, zero, fractional and positive offsets numerically', () => {
-  const zones = [
-    'Pacific/Kiritimati',
-    'Asia/Kathmandu',
-    'UTC',
-    'Pacific/Marquesas',
-    'Asia/Tokyo',
-    'America/Phoenix',
-    'Asia/Colombo',
-    'Pacific/Honolulu',
-  ];
-  expect(timeZoneOptions(zones).map((option) => option.value)).toEqual([
-    'Pacific/Honolulu',
-    'Pacific/Marquesas',
-    'America/Phoenix',
-    'UTC',
-    'Asia/Colombo',
-    'Asia/Kathmandu',
-    'Asia/Tokyo',
-    'Pacific/Kiritimati',
-  ]);
+it('formats unavailable timestamps without exposing an invalid date', () => {
+  expect(formatTimestamp(null, 'UTC')).toBe('Not confirmed');
+  expect(formatTimestamp('not-a-date', 'UTC')).toBe('Date unavailable');
 });
 
-it('orders equal offsets alphabetically without changing the input or cached option identities', () => {
-  const zones = Object.freeze([
-    'Asia/Tokyo',
-    'Africa/Accra',
-    'UTC',
-    'Asia/Seoul',
-    'Africa/Abidjan',
-  ]);
-  const first = timeZoneOptions(zones);
-  expect(first.map((option) => option.value)).toEqual([
-    'Africa/Abidjan',
-    'Africa/Accra',
-    'UTC',
-    'Asia/Seoul',
-    'Asia/Tokyo',
-  ]);
-  expect(zones).toEqual(['Asia/Tokyo', 'Africa/Accra', 'UTC', 'Asia/Seoul', 'Africa/Abidjan']);
-  const reversed = timeZoneOptions(zones.toReversed());
-  for (const [index, option] of first.entries()) expect(reversed[index]).toBe(option);
+it.each([
+  ['2020-11-01T05:30:00Z', 'America/New_York', 'First occurrence'],
+  ['2020-11-01T06:30:00Z', 'America/New_York', 'Second occurrence'],
+  ['2020-11-01T05:30:00.987Z', 'America/New_York', 'First occurrence'],
+  ['2020-11-01T06:30:00.123Z', 'America/New_York', 'Second occurrence'],
+  ['2020-10-25T00:30:00Z', 'Europe/London', 'First occurrence'],
+  ['2020-10-25T01:30:00Z', 'Europe/London', 'Second occurrence'],
+  ['2020-11-01T07:30:00Z', 'America/New_York', null],
+  ['2020-11-01T05:30:00Z', 'UTC', null],
+  ['2020-11-01T05:30:00Z', 'Asia/Kathmandu', null],
+] as const)('labels %s in %s only when its local time repeats', (iso, zone, expected) => {
+  expect(localTimeOccurrence(iso, zone)).toBe(expected);
 });
 
-it('uses the same reference instant for newly cached zones after the clock changes', () => {
-  const berlin = timeZoneOptions(['Europe/Berlin'])[0]!;
-  const offset = berlin.label.endsWith('(UTC+02:00)') ? 7200 : 3600;
-  vi.useFakeTimers();
-  try {
-    vi.setSystemTime(offset === 7200 ? '2020-01-01T12:00:00Z' : '2020-07-01T12:00:00Z');
-    const paris = timeZoneOptions(['Europe/Paris'])[0]!;
-    expect(paris.label).toBe(`Europe/Paris (${offsetLabel(offset)})`);
-  } finally {
-    vi.useRealTimers();
-  }
-});
-
-it('exports offset seconds for exact instants, including daylight saving and fractional zones', () => {
-  const instant = '2020-01-01T12:00:00.987Z';
-  expect(timeZoneOffset('Pacific/Marquesas', instant)).toBe(-34200);
-  expect(timeZoneOffset('UTC', instant)).toBe(0);
-  expect(timeZoneOffset('Asia/Colombo', instant)).toBe(19800);
-  expect(timeZoneOffset('Asia/Kathmandu', instant)).toBe(20700);
-  expect(timeZoneOffset('Europe/London', instant)).toBe(0);
-  expect(timeZoneOffset('Europe/London', '2020-07-01T12:00:00Z')).toBe(3600);
+it('does not label unavailable date or zone information as a repeated time', () => {
+  expect(localTimeOccurrence('not-a-date', 'America/New_York')).toBeNull();
+  expect(localTimeOccurrence('2020-11-01T05:30:00Z', 'Unknown/Zone')).toBeNull();
 });

@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -18,7 +17,7 @@ function QueueHarness({
   missingDetails?: boolean;
 }) {
   const workspace = useWorkspace(api);
-  const [zone, setZone] = useState('UTC');
+  const zone = 'America/New_York';
   return (
     <QueuePane
       workspace={{
@@ -26,7 +25,6 @@ function QueueHarness({
         achievementFor: missingDetails ? () => undefined : workspace.achievementFor,
       }}
       zone={zone}
-      onZone={setZone}
       demo
       onResize={() => {}}
     />
@@ -74,7 +72,7 @@ it('shows cached game descriptions beside calendar and remove controls without i
   );
   expect(within(witcher).getByText('The Witcher 3: Wild Hunt: description 201.')).toBeVisible();
   const calendar = within(cyber).getByRole('button', { name: 'Edit date for The World' });
-  expect(calendar).toHaveAttribute('title', '10 Oct 2026 17:30:00 · UTC (UTC+00:00)');
+  expect(calendar).toHaveAttribute('title', '10 Oct 2026 13:30:00');
   expect(within(cyber).getByRole('button', { name: 'Remove The World from queue' })).toBeEnabled();
   expect(screen.queryByLabelText('Unlock date for The World')).not.toBeInTheDocument();
 });
@@ -84,22 +82,13 @@ it('uses an explicit description fallback until cached achievement details exist
   expect(screen.getAllByText('No description available.')).toHaveLength(3);
 });
 
-it('includes signed offsets in zone options without a duplicate offset line below the selector', async () => {
-  const { user, container } = await connected();
-  const select = screen.getByRole('combobox', { name: 'Time zone' });
-  expect(within(select).getByRole('option', { name: 'UTC (UTC+00:00)' })).toBeInTheDocument();
-  expect(
-    within(select).getByRole('option', { name: /^America\/New York \(UTC-\d{2}:\d{2}\)$/ }),
-  ).toBeInTheDocument();
-  expect(within(select).getAllByRole('option').length).toBeGreaterThanOrEqual(
-    Intl.supportedValuesOf('timeZone').length,
-  );
-  await user.selectOptions(select, 'Asia/Colombo');
-  expect(select).toHaveValue('Asia/Colombo');
-  expect(
-    within(select).getByRole('option', { name: /^Asia\/Colombo \(UTC\+05:30\)$/ }),
-  ).toBeInTheDocument();
-  expect(container.querySelector('.queue-actions > small')).not.toBeInTheDocument();
+it('uses local dates without a time zone control', async () => {
+  const { user } = await connected();
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(screen.queryByText('Time zone')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Edit date for The World' }));
+  expect(screen.getByLabelText('Unlock date for The World')).toHaveValue('2026-10-10T13:30');
+  expect(screen.queryByText('America/New_York')).not.toBeInTheDocument();
 });
 
 it('opens and cancels one queued date without writing it', async () => {
@@ -129,7 +118,7 @@ it('saves a modal date to its game only and leaves the other queue unchanged', a
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(save).toHaveBeenCalledExactlyOnceWith({
     gameId: '2',
-    dates: { '201': '2020-02-02T13:14:15Z' },
+    dates: { '201': '2020-02-02T18:14:15Z' },
   });
   expect(screen.getByRole('button', { name: 'Edit date for The World' })).toHaveAttribute(
     'title',
