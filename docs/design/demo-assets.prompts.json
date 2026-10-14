@@ -1,0 +1,26 @@
+{
+  "generated_on": "2026-10-14",
+  "mode": "built-in ImageGen",
+  "reference": "desktop-workspace.png",
+  "purpose": "Standalone app mark and illustrative demo-only game/achievement sprites.",
+  "assets": [
+    {
+      "key": "app-icon",
+      "file": "app-icon.png",
+      "prompt": "Use case: identity-preserve. Isolate the small purple controller app mark at the TOP LEFT of the supplied GOG Achievements screenshot into a standalone high-resolution icon. Only the app mark: a rounded purple square with the same small white game-controller symbol centred inside. Preserve its exact friendly visual identity, plum gradient, soft radius and clean white control details. Fill most of a square canvas with suitable breathing room for app-icon rendering. Transparent background outside the rounded square; no app title, text, screenshot, window, shadow outside the tile or unrelated artwork. Crisp polished raster app asset.",
+      "transparent": true
+    },
+    {
+      "key": "demo-covers",
+      "file": "demo-covers.png",
+      "prompt": "Use case: compositing. Extract and faithfully recreate the EIGHT small game-cover thumbnail artworks from the library pane in the supplied screenshot as a single production-quality demo sprite sheet. No UI controls or text outside the cover art. Canvas aspect EXACTLY 2:1, a strict grid FOUR columns by TWO rows of equal SQUARE cover thumbnails, edge-to-edge with ZERO gaps, ZERO margins and ZERO borders. Each tile fills its exact quarter-width and half-height region; no overlaps. Row 1 left-to-right: Cyberpunk 2077 (yellow cover, cyberpunk figure and recognizable Cyberpunk branding); The Witcher 3 (white-haired warrior, dark red/gray, Witcher branding); Stardew Valley (bright pixel farmland and Stardew branding); Baldur's Gate 3 (fantasy heroes and Baldur's Gate branding). Row 2 left-to-right: Hades (red/black illustrated underworld hero and Hades title); Disco Elysium (painterly detective street scene and Disco Elysium title); Hollow Knight (small pale bug knight in blue/black cavern and Hollow Knight title); Celeste (pastel mountain/pixel adventurer and Celeste title). These are illustrative demo artworks, not live game-library data. Faithful square thumbnail composition, coherent cover visual identities matching reference. Every visible title belongs inside its cover. No extra labels, publisher labels, numbered tiles, surrounding mockup, desktop window, rounded tile corners, grid lines or transparent spaces. The eight equal square tiles must exactly fill the 2:1 sprite canvas.",
+      "transparent": false
+    },
+    {
+      "key": "demo-achievements",
+      "file": "demo-achievements.png",
+      "prompt": "Use case: compositing. Extract and faithfully recreate the six square achievement thumbnail artworks from the supplied GOG Achievements screenshot as one clean raster demo sprite sheet. Canvas aspect EXACTLY 3:2: a strict grid THREE columns by TWO rows, SIX equal SQUARE tiles, edge-to-edge ZERO gaps and ZERO margins. Dark near-black background in each tile, no labels/text anywhere. Row1: gold circular globe emblem for The World; gold airplane silhouette for Frequent Flyer; gold perspective road with dashed centre line for The Wandering Fool. Row2: a dusky gold/black distant city silhouette for Legend of The Afterlife; gold human figure silhouette for Full Body Conversion; a simple muted gray trophy shape for a hidden achievement. Match these artworks' simple bold shapes and high contrast from the screenshot; no new photorealistic illustrations or decorative borders. Keep each glyph centred with equal breathing room. No UI, status badges, dates, names, numbers, rounded tile corners, grid lines or external caption. Six equal square thumbnail regions must exactly fill the 3:2 sprite canvas.",
+      "transparent": false
+    }
+  ]
+}

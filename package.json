@@ -1,0 +1,57 @@
+{
+  "name": "gog-achievements",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Restore GOG achievements you have already earned.",
+  "type": "module",
+  "main": "out/main/index.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:web": "vite --config vite.web.config.ts --host 0.0.0.0",
+    "build:web": "vite build --config vite.web.config.ts",
+    "build": "node scripts/package.mjs --compile-only",
+    "package": "node scripts/package.mjs",
+    "cli:download": "node scripts/download-cli.mjs",
+    "cli:smoke": "node scripts/smoke-cli.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run && node --test tests/scripts/*.test.mjs",
+    "test:e2e": "playwright test",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "lucide-react": "1.57.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "jsdom": "30.1.2",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "7.3.7",
+    "vitest": "5.0.4",
+    "yauzl": "3.4.0"
+  }
+}

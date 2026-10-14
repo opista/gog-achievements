@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "repository": "metacurb/gog-achievements-cli",
+  "version": "0.3.0",
+  "tag": "v0.3.0",
+  "commit": "a102216760b555b2a864ed18c853f256ef484920",
+  "targets": {
+    "macos-arm64": {
+      "platform": "darwin",
+      "architecture": "arm64",
+      "archive": "gog-achievements-0.3.0-macos-arm64.zip",
+      "sha256": "302f7e7b30c7341f7856ae941e2aa385e09da4d0099d8cc5ad77f0d3ba0a6007",
+      "layout": "single_executable"
+    },
+    "macos-x64": {
+      "platform": "darwin",
+      "architecture": "x64",
+      "archive": "gog-achievements-0.3.0-macos-x64.zip",
+      "sha256": "e499f67a5329172ac379df49329edae485a0145e61f06251dfce5320b9f664c3",
+      "layout": "native_launcher_with_private_runtime"
+    },
+    "windows-arm64": {
+      "platform": "win32",
+      "architecture": "arm64",
+      "archive": "gog-achievements-0.3.0-windows-arm64.zip",
+      "sha256": "f80b99d2e5720ca77f6ca50ec26c0879f48a5fb72b6b2f8001df02fb716b15e8",
+      "layout": "single_executable"
+    },
+    "windows-x64": {
+      "platform": "win32",
+      "architecture": "x64",
+      "archive": "gog-achievements-0.3.0-windows-x64.zip",
+      "sha256": "e454e0bf891b849ab2bac7df5d860ac5762e224b8dd05a7651c34631387947a8",
+      "layout": "single_executable"
+    }
+  }
+}
