@@ -31,6 +31,7 @@ import { requireSuccess } from './cli-client';
 import { DesktopError, publicError, cliError } from './errors';
 import { NativeProcessProbe, type ProcessProbe } from './process-identity';
 import { CLI_VERSION } from '../shared/cli-release';
+import { isConfirmedUnlock, sameQueueRequest } from '../shared/queue-cleanup';
 interface Preview {
   token: string;
   path: string;
@@ -245,9 +246,58 @@ export class OperationManager implements DesktopApi {
   async getQueue(gameId: string): Promise<Queue | null> {
     return this.run(
       'read',
-      async () => this.queue(idSchema.parse(gameId), await this.account()),
+      async () => {
+        const id = idSchema.parse(gameId);
+        const account = await this.account();
+        const queue = await this.queue(id, account);
+        if (!queue?.items.length || !(await this.reconcileSavedResults(queue))) return queue;
+        try {
+          return await this.queue(id, account);
+        } catch {
+          // Housekeeping must not hide the last readable draft.
+          return queue;
+        }
+      },
       gameId,
     );
+  }
+  private async reconcileSavedResults(draft: Queue): Promise<boolean> {
+    const records = await this.store.operations(draft.user_id).catch(() => []);
+    const current = new Map(draft.items.map((item) => [item.achievement_id, item]));
+    const seen = new Set<string>();
+    let cleaned = false;
+    for (const record of records.filter((item) => item.game_id === draft.game.id)) {
+      try {
+        const bytes = await this.store.bytes(this.store.snapshotPath(record.user_id, record.id));
+        if (digestBytes(bytes) !== record.digest) break;
+        const reviewed = queueSchema.parse(JSON.parse(bytes.toString('utf8'))) as Queue;
+        if (
+          reviewed.user_id !== draft.user_id ||
+          reviewed.game.id !== draft.game.id ||
+          reviewed.game.client_id !== draft.game.client_id
+        )
+          break;
+        if (record.report) this.validateReport(record.report, reviewed, false);
+        const items = reviewed.items.filter((item) => {
+          const saved = current.get(item.achievement_id);
+          return saved && !seen.has(item.achievement_id) && sameQueueRequest(saved, item);
+        });
+        for (const item of items) seen.add(item.achievement_id);
+        // A newer unknown or unresolved attempt protects its matching requests.
+        if (record.state !== 'complete' || !record.report) continue;
+        const confirmed = new Set(
+          record.report.results.filter(isConfirmedUnlock).map((item) => item.achievement_id),
+        );
+        const completed = items.filter((item) => confirmed.has(item.achievement_id));
+        if (!completed.length) continue;
+        await this.store.clearConfirmedItems({ ...reviewed, items: completed }, record.report);
+        cleaned = true;
+      } catch {
+        // Missing evidence or a busy draft stops housekeeping, without a new apply.
+        break;
+      }
+    }
+    return cleaned;
   }
   private async mutate(input: SelectionInput, kind: 'queue-add' | 'queue-remove'): Promise<Queue> {
     const parsed = selectionSchema.parse(input);
@@ -466,6 +516,19 @@ export class OperationManager implements DesktopApi {
           'REPORT_SAVE_FAILED',
           'The result could not be saved. Check current state before another apply.',
         );
+      }
+      if (record.report) {
+        try {
+          await this.store.clearConfirmedItems(preview.queue, record.report);
+        } catch {
+          record.error = {
+            code: 'QUEUE_CLEANUP_FAILED',
+            message:
+              'The result was saved, but queue cleanup could not finish. Review the queue before another apply.',
+          };
+          // The confirmed report is already durable even if saving this warning fails.
+          await this.store.saveOperation(record).catch(() => {});
+        }
       }
       return {
         operationId: record.id,

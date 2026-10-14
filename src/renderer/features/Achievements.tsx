@@ -1,18 +1,11 @@
-import { useState } from 'react';
-import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Eye, Plus, RefreshCw } from 'lucide-react';
 import type { Achievement } from '../../shared/api';
 import { Art } from '../components/Art';
 import { formatTimestamp } from '../date-time';
+
 type Filter = 'All' | 'Unlocked' | 'Locked' | 'Queued';
-export function Achievements({
-  achievements,
-  queued,
-  busy,
-  demo,
-  zone,
-  onAdd,
-  onRefresh,
-}: {
+interface Props {
   achievements: Achievement[];
   queued: Set<string>;
   busy: boolean;
@@ -20,29 +13,58 @@ export function Achievements({
   zone: string;
   onAdd(ids: string[]): void;
   onRefresh(): void;
-}) {
+}
+function group(item: Achievement): number {
+  return item.unlocked ? 2 : item.hidden ? 1 : 0;
+}
+function unlockTime(item: Achievement): number {
+  const time = item.unlocked_at ? Date.parse(item.unlocked_at) : Number.NaN;
+  return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
+}
+function compareAchievements(left: Achievement, right: Achievement): number {
+  const groupDifference = group(left) - group(right);
+  if (groupDifference || !left.unlocked) return groupDifference;
+  const leftTime = unlockTime(left);
+  const rightTime = unlockTime(right);
+  return leftTime === rightTime ? 0 : leftTime > rightTime ? -1 : 1;
+}
+
+export function Achievements({ achievements, queued, busy, demo, zone, onAdd, onRefresh }: Props) {
   const [filter, setFilter] = useState<Filter>('All');
   const [selected, setSelected] = useState(new Set<string>());
   const [revealed, setRevealed] = useState(new Set<string>());
-  const [details, setDetails] = useState(new Set<string>());
-  const filtered = achievements.filter(
-    (item) =>
-      filter === 'All' ||
-      (filter === 'Unlocked' && item.unlocked) ||
-      (filter === 'Locked' && !item.unlocked) ||
-      (filter === 'Queued' && queued.has(item.id)),
-  );
-  const additions = [...selected].filter(
-    (id) => !queued.has(id) && !achievements.find((item) => item.id === id)?.unlocked,
-  );
-  function toggle(setter: typeof setSelected, id: string) {
-    setter((previous) => {
+  const revealTarget = useRef<string | null>(null);
+  const filtered = achievements
+    .toSorted(compareAchievements)
+    .filter(
+      (item) =>
+        filter === 'All' ||
+        (filter === 'Unlocked' && item.unlocked) ||
+        (filter === 'Locked' && !item.unlocked) ||
+        (filter === 'Queued' && queued.has(item.id)),
+    );
+  const additions = achievements
+    .filter(
+      (item) =>
+        selected.has(item.id) &&
+        !queued.has(item.id) &&
+        !item.unlocked &&
+        (!item.hidden || revealed.has(item.id)),
+    )
+    .map((item) => item.id);
+  function toggle(id: string) {
+    setSelected((previous) => {
       const next = new Set(previous);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   }
+  function reveal(id: string) {
+    revealTarget.current = id;
+    setRevealed((previous) => new Set(previous).add(id));
+  }
+
   return (
     <section className="achievement-section">
       <div className="achievement-toolbar">
@@ -90,39 +112,60 @@ export function Achievements({
             <article
               className={`achievement-row ${item.unlocked ? 'read-only' : ''}`}
               key={item.id}
+              aria-label={name}
             >
               <div className="achievement-main">
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${name}`}
-                  checked={isQueued || selected.has(item.id)}
-                  disabled={busy || item.unlocked || isQueued || concealed}
-                  onChange={() => toggle(setSelected, item.id)}
-                />
+                {!item.unlocked && !concealed ? (
+                  <input
+                    ref={(element) => {
+                      if (element && revealTarget.current === item.id && !element.disabled) {
+                        element.focus();
+                        revealTarget.current = null;
+                      }
+                    }}
+                    type="checkbox"
+                    aria-label={`Select ${name}`}
+                    checked={isQueued || selected.has(item.id)}
+                    disabled={busy || isQueued}
+                    onChange={() => toggle(item.id)}
+                  />
+                ) : null}
                 <Art
                   name={name}
                   kind="achievement"
                   image={concealed ? null : item.unlocked ? item.image_unlocked : item.image_locked}
                   demo={demo}
                 />
-                <button
-                  className="achievement-name"
-                  aria-label={`Details for ${name}`}
-                  disabled={concealed}
-                  aria-expanded={details.has(item.id)}
-                  onClick={() => toggle(setDetails, item.id)}
-                >
-                  {name}
-                  {!concealed ? <ChevronDown size={14} /> : null}
-                </button>
+                <div className="achievement-copy">
+                  <h3
+                    className="achievement-name"
+                    tabIndex={-1}
+                    ref={(element) => {
+                      if (element && revealTarget.current === item.id && isQueued) {
+                        element.focus();
+                        revealTarget.current = null;
+                      }
+                    }}
+                  >
+                    {name}
+                  </h3>
+                  {!concealed ? (
+                    <p className="achievement-description">
+                      {item.description || 'No description available.'}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="achievement-status">
                   {concealed ? (
-                    <button disabled={busy} onClick={() => toggle(setRevealed, item.id)}>
+                    <button disabled={busy} onClick={() => reveal(item.id)}>
                       <Eye size={16} />
                       Reveal
                     </button>
                   ) : item.unlocked ? (
-                    <span className="status ready">
+                    <span
+                      className="status ready"
+                      title={`Existing unlock: ${formatTimestamp(item.unlocked_at, zone)} ${zone}. This date is read-only.`}
+                    >
                       Unlocked{' '}
                       {item.unlocked_at
                         ? formatTimestamp(item.unlocked_at, zone, false)
@@ -138,17 +181,6 @@ export function Achievements({
                   )}
                 </div>
               </div>
-              {details.has(item.id) && !concealed ? (
-                <div className="achievement-details">
-                  <p>{item.description || 'No description available.'}</p>
-                  {item.unlocked ? (
-                    <p className="muted">
-                      Existing unlock: {formatTimestamp(item.unlocked_at, zone)}. This date is
-                      read-only.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
             </article>
           );
         })}

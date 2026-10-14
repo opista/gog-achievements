@@ -1,8 +1,22 @@
-import { useDeferredValue, useState } from 'react';
-import { Gamepad2, RefreshCw, Search } from 'lucide-react';
+import { useDeferredValue, useRef, useState } from 'react';
+import { Gamepad2, RefreshCw, Search, X } from 'lucide-react';
 import type { Game } from '../../shared/api';
 import { Art } from '../components/Art';
 import { PaneResize } from '../components/PaneResize';
+
+interface Props {
+  games: Game[];
+  gameId?: string;
+  signedIn: boolean;
+  loaded: boolean;
+  busy: boolean;
+  demo: boolean;
+  onSelect(game: Game): void;
+  onRefresh(): void;
+  width?: number;
+  onResize(width: number): void;
+}
+
 export function Library({
   games,
   gameId,
@@ -14,21 +28,16 @@ export function Library({
   onRefresh,
   width,
   onResize,
-}: {
-  games: Game[];
-  gameId?: string;
-  signedIn: boolean;
-  loaded: boolean;
-  busy: boolean;
-  demo: boolean;
-  onSelect(game: Game): void;
-  onRefresh(): void;
-  width?: number;
-  onResize(width: number): void;
-}) {
+}: Props) {
   const [search, setSearch] = useState('');
+  const searchInput = useRef<HTMLInputElement>(null);
   const query = useDeferredValue(search.trim().toLocaleLowerCase());
   const filtered = games.filter((game) => game.title.toLocaleLowerCase().includes(query));
+  function clearSearch() {
+    setSearch('');
+    searchInput.current?.focus();
+  }
+
   return (
     <aside className="library-pane" aria-label="Game library">
       <PaneResize pane="Library" width={width} min={216} max={320} onResize={onResize} />
@@ -43,16 +52,27 @@ export function Library({
           <RefreshCw size={18} />
         </button>
       </div>
-      <label className="search-field">
-        <Search size={18} />
+      <div className="search-field">
+        <Search size={18} aria-hidden="true" />
         <input
+          ref={searchInput}
           aria-label="Search your library"
           placeholder="Search your library…"
           value={search}
           disabled={!signedIn}
           onChange={(event) => setSearch(event.target.value)}
         />
-      </label>
+        {search ? (
+          <button
+            className="icon-button search-clear"
+            aria-label="Clear library search"
+            title="Clear search"
+            onClick={clearSearch}
+          >
+            <X size={16} />
+          </button>
+        ) : null}
+      </div>
       <div className="library-list">
         {!signedIn ? (
           <div className="library-placeholder">
@@ -69,18 +89,19 @@ export function Library({
             <button
               key={game.id}
               className={`game-row ${game.id === gameId ? 'selected' : ''}`}
+              title={game.title}
               disabled={busy}
               aria-pressed={game.id === gameId}
               onClick={() => onSelect(game)}
             >
               <Art image={game.image} name={game.title} demo={demo} />
-              <span>{game.title}</span>
+              <span className="game-title">{game.title}</span>
             </button>
           ))
         ) : (
           <div className="library-placeholder">
             <p>{query ? 'No games match your search.' : 'No GOG games found.'}</p>
-            <button disabled={busy} onClick={query ? () => setSearch('') : onRefresh}>
+            <button disabled={busy} onClick={query ? clearSearch : onRefresh}>
               {query ? 'Clear search' : 'Refresh library'}
             </button>
           </div>

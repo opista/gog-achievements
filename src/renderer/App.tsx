@@ -13,6 +13,7 @@ import type { DesktopApi } from '../shared/api';
 import type { DemoDesktopApi, DemoScenario } from '../shared/demo-api';
 import { Art } from './components/Art';
 import { Achievements } from './features/Achievements';
+import { AchievementSkeleton } from './features/AchievementSkeleton';
 import { ApplyConfirmation, PreviewRows } from './features/Review';
 import { DateEditor } from './features/DateEditor';
 import { HistoryView, Results } from './features/Results';
@@ -113,15 +114,15 @@ export function App({ api }: { api: DesktopApi }) {
               <details className="account-menu">
                 <summary>
                   <UserRound size={18} />
-                  GOG account {w.auth.user_id}
+                  GOG account
                   <span className="caret" />
                 </summary>
                 <div className="account-popover">
+                  <small>Account ID: {w.auth.user_id}</small>
                   <button disabled={w.busy} onClick={w.logout}>
                     <LogOut size={17} />
                     Sign out
                   </button>
-                  <small>Signing out also removes the CLI's saved login.</small>
                   <small>
                     App {w.versions.app}
                     <br />
@@ -223,7 +224,9 @@ export function App({ api }: { api: DesktopApi }) {
                   </button>
                 ) : null}
               </div>
-              {w.loading && !applying ? (
+              {w.loading &&
+              !applying &&
+              (w.view !== 'browse' || (w.libraryLoaded && w.achievementsLoaded)) ? (
                 <p className="loading-line" role="status">
                   <LoaderCircle size={18} className="spinner" />
                   {w.loading}
@@ -249,12 +252,14 @@ export function App({ api }: { api: DesktopApi }) {
               ) : w.view === 'history' ? (
                 <HistoryView records={w.history} zone={zone} onView={w.viewRecord} />
               ) : w.game && !w.achievementsLoaded ? (
-                <div className="empty-state" role="status">
-                  <p>{w.busy ? 'Loading achievements…' : 'Game data could not be loaded.'}</p>
-                  {!w.busy ? (
+                w.busy ? (
+                  <AchievementSkeleton />
+                ) : (
+                  <div className="empty-state" role="status">
+                    <p>Game data could not be loaded.</p>
                     <button onClick={() => w.game && w.selectGame(w.game)}>Retry game data</button>
-                  ) : null}
-                </div>
+                  </div>
+                )
               ) : w.game ? (
                 <Achievements
                   key={w.game.id}

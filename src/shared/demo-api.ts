@@ -1,3 +1,4 @@
+import { isConfirmedUnlock, remainingQueueItems } from './queue-cleanup';
 import type {
   Achievement,
   ApplyResult,
@@ -124,13 +125,7 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
       const source = initialAchievements();
       for (const record of records.filter((item) => item.game_id === gameId).toReversed()) {
         for (const result of record.report?.results ?? []) {
-          if (
-            !result.actual_unlocked_at ||
-            !['restored', 'restored_with_different_date', 'skipped_already_unlocked'].includes(
-              result.status,
-            )
-          )
-            continue;
+          if (!isConfirmedUnlock(result)) continue;
           const item = source.find((entry) => entry.id === result.achievement_id);
           if (item) {
             item.unlocked = true;
@@ -332,6 +327,7 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
       if (!preview || preview.token !== input.previewToken)
         throw problem('STALE_PREVIEW', 'The queue changed. Preview again before applying.');
       const reviewed = structuredClone(preview.report);
+      const reviewedQueue = structuredClone(queue(reviewed.game.id));
       preview = null;
       return run(
         'apply',
@@ -406,7 +402,11 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
             state: 'complete',
             report,
           });
+          // Save the attempt before reconciling the mutable draft, as the real backend does.
           persist();
+          const draft = queue(reviewed.game.id);
+          draft.items = remainingQueueItems(draft, reviewedQueue, report);
+          changed(draft);
           return { operationId: id, state: 'complete', report: structuredClone(report) };
         },
         reviewed.game.id,

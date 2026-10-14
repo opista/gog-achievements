@@ -1,11 +1,12 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, rename, readdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, readdir, open, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { OperationRecord } from '../shared/api';
-import { idSchema, tokenSchema, reportSchema } from '../shared/schemas';
+import type { OperationRecord, Queue, Report } from '../shared/api';
+import { idSchema, tokenSchema, reportSchema, queueSchema } from '../shared/schemas';
 import type { ProcessIdentity } from './process-identity';
 import { DesktopError } from './errors';
+import { isConfirmedUnlock, remainingQueueItems } from '../shared/queue-cleanup';
 const errorSchema = z.object({ code: z.string(), message: z.string() });
 const identitySchema = z.object({ pid: z.number().int().positive(), startedAt: z.string() });
 const recordSchema = z.object({
@@ -64,6 +65,50 @@ export class QueueStore {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
       throw error;
+    }
+  }
+  async clearConfirmedItems(reviewed: Queue, report: Report): Promise<void> {
+    if (!report.results.some(isConfirmedUnlock)) return;
+    const destination = await this.draftPath(reviewed.user_id, reviewed.game.id);
+    // Use the CLI's lock protocol. Never reclaim another command's lock.
+    const lockPath = `${destination}.lock`;
+    const lock = await open(lockPath, 'wx', 0o600);
+    let temporary: string | undefined;
+    try {
+      await lock.writeFile(
+        `${JSON.stringify({ pid: process.pid, started_at: new Date().toISOString() })}\n`,
+      );
+      const bytes = await this.bytes(destination);
+      const draft = queueSchema.parse(JSON.parse(bytes.toString('utf8'))) as Queue;
+      if (
+        draft.user_id !== reviewed.user_id ||
+        draft.game.id !== reviewed.game.id ||
+        draft.game.client_id !== reviewed.game.client_id
+      )
+        throw new DesktopError(
+          'QUEUE_CHANGED',
+          'The saved draft no longer matches the reviewed game and account.',
+        );
+      const items = remainingQueueItems(draft, reviewed, report);
+      if (items.length === draft.items.length) return;
+      const updated = queueSchema.parse({ ...draft, items, updated_at: new Date().toISOString() });
+      temporary = `${destination}.${randomUUID()}.tmp`;
+      await writeFile(temporary, `${JSON.stringify(updated, null, 2)}\n`, {
+        flag: 'wx',
+        mode: 0o600,
+        flush: true,
+      });
+      // Also detect manual edits that do not use the CLI lock.
+      if (digestBytes(await this.bytes(destination)) !== digestBytes(bytes))
+        throw new DesktopError('QUEUE_CHANGED', 'The saved draft changed during cleanup.');
+      await rename(temporary, destination);
+    } finally {
+      if (temporary) await unlink(temporary).catch(() => {});
+      try {
+        await lock.close();
+      } finally {
+        await unlink(lockPath);
+      }
     }
   }
   async saveOperation(operation: StoredOperation): Promise<void> {

@@ -18,7 +18,7 @@ async function signIn(page: Page) {
   await expect(login).toBeEnabled();
   await login.click();
   await expect(page.getByRole('heading', { name: 'Cyberpunk 2077', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Preview changes', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'History', exact: true })).toBeEnabled();
 }
 
 async function review(page: Page) {
@@ -64,24 +64,54 @@ test.afterEach(async ({ page }) => {
   );
 });
 
-test('demo sign-in, library search and existing unlock protection work in the browser', async ({
+test('compact library keeps game art, plain achievement details and existing unlock protection', async ({
   page,
 }) => {
   await signIn(page);
-  await expect(page.getByRole('checkbox', { name: 'Select Full Body Conversion' })).toBeDisabled();
+  const world = page.locator('.achievement-row').filter({ hasText: 'The World' });
+  const unlocked = page.locator('.achievement-row').filter({ hasText: 'Full Body Conversion' });
+  await expect(world.getByText('The World', { exact: true })).toBeVisible();
+  await expect(world.getByText(/Sample achievement description/)).toBeVisible();
+  await expect(world.getByRole('button')).toHaveCount(0);
+  await expect(unlocked.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Details for / })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Apply changes', exact: true })).toBeDisabled();
-  await expect(
-    page.getByRole('button', { name: 'Details for A sample hidden achievement' }),
-  ).toHaveCount(0);
+  await expect(page.getByText('A sample hidden achievement', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Reveal', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Details for A sample hidden achievement' }),
-  ).toBeEnabled();
-  await page.getByRole('textbox', { name: 'Search your library' }).fill('no matching game');
+  await expect(page.getByText('A sample hidden achievement', { exact: true })).toBeVisible();
+
+  const covers = page.locator('.library-pane .game-row .art-game');
+  await expect(covers).toHaveCount(8);
+  await expect(covers.first()).toBeVisible();
+  expect(
+    await covers.first().evaluate((element) => getComputedStyle(element).backgroundImage),
+  ).toContain('demo-covers.png');
+  const coverBox = await covers.first().boundingBox();
+  const rowBox = await page.locator('.library-pane .game-row').first().boundingBox();
+  expect(coverBox?.height).toBeLessThanOrEqual(44);
+  expect(rowBox?.height).toBeLessThanOrEqual(64);
+
+  const search = page.getByLabel('Search your library', { exact: true });
+  const clear = page
+    .locator('.search-field')
+    .getByRole('button', { name: 'Clear library search', exact: true });
+  await search.fill('Cyberpunk');
+  await expect(clear).toBeVisible();
+  await expect(page.locator('.library-pane .game-row')).toHaveCount(1);
+  await clear.click();
+  await expect(search).toHaveValue('');
+  await expect(page.locator('.library-pane .game-row')).toHaveCount(8);
+  await search.fill('no matching game');
   await expect(page.getByText('No games match your search.')).toBeVisible();
-  await page.getByRole('button', { name: 'Clear search' }).click();
+  await clear.click();
+  await expect(search).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Cyberpunk 2077', exact: true })).toBeVisible();
-  await page.locator('.account-menu summary').click();
+
+  const summary = page.locator('.account-menu summary');
+  await expect(summary).toHaveText('GOG account');
+  await expect(summary).not.toContainText('123456789');
+  await summary.click();
+  await expect(page.locator('.account-popover')).toContainText('123456789');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Connect GOG' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Preview changes', exact: true })).toBeDisabled();
@@ -157,7 +187,9 @@ test('explicit apply confirms once, retains a report and restores read-only hist
   await expect(page.getByText('Confirmed', { exact: true })).toHaveCount(3);
   const history = page.getByRole('button', { name: 'History', exact: true });
   await expect(history).toBeEnabled();
-  expect((await savedDemo(page)).records).toHaveLength(1);
+  const saved = await savedDemo(page);
+  expect(saved.records).toHaveLength(1);
+  expect(saved.queues.find((queue) => queue.game.id === '1')?.items).toHaveLength(0);
   await history.click();
   await expect(page.getByRole('heading', { name: 'Operation history' })).toBeVisible();
   await expect(
@@ -171,8 +203,14 @@ test('explicit apply confirms once, retains a report and restores read-only hist
   await page.getByRole('button', { name: 'History', exact: true }).click();
   await expect(page.getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Back to achievements', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Edit date for The World' })).toBeDisabled();
-  expect((await savedDemo(page)).records).toHaveLength(1);
+  await expect(page.getByRole('button', { name: 'Edit date for The World' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Preview changes', exact: true })).toBeDisabled();
+  await expect(
+    page.locator('.achievement-row').filter({ hasText: 'The World' }).getByRole('checkbox'),
+  ).toHaveCount(0);
+  const reopened = await savedDemo(page);
+  expect(reopened.records).toHaveLength(1);
+  expect(reopened.queues.find((queue) => queue.game.id === '1')?.items).toHaveLength(0);
 });
 
 for (const scenario of ['partial', 'unknown'] as const) {
@@ -205,13 +243,24 @@ for (const scenario of ['partial', 'unknown'] as const) {
       await expect(history).toBeEnabled();
       await history.click();
       await expect(page.getByRole('button', { name: 'View report', exact: true })).toBeVisible();
-      expect((await savedDemo(page)).records).toHaveLength(1);
+      const saved = await savedDemo(page);
+      expect(saved.records).toHaveLength(1);
+      expect(
+        saved.queues
+          .find((queue) => queue.game.id === '1')
+          ?.items.map((item) => item.achievement_id),
+      ).toEqual(scenario === 'partial' ? ['2', '3'] : ['1', '2', '3']);
       await page.getByRole('button', { name: 'Back to achievements', exact: true }).click();
       await expect(
         page.getByRole('button', { name: 'Preview changes', exact: true }),
       ).toBeEnabled();
       await expect(page.getByRole('button', { name: 'Apply changes', exact: true })).toBeDisabled();
       expect((await savedDemo(page)).records).toHaveLength(1);
+      if (scenario === 'partial')
+        await expect(page.getByRole('button', { name: 'Edit date for The World' })).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Edit date for Frequent Flyer' }),
+      ).toBeEnabled();
     },
   );
 }

@@ -26,12 +26,18 @@ const DEMO_ACHIEVEMENTS = [
   'Full Body Conversion',
   'Hidden achievement',
 ];
-function safeSource(image: string | null | undefined): string | undefined {
+function safeSource(
+  image: string | null | undefined,
+  kind: 'game' | 'achievement',
+): string | undefined {
   if (!image) return undefined;
   try {
     const url = new URL(image.startsWith('//') ? `https:${image}` : image);
     if (url.protocol !== 'https:' || url.username || url.password) return undefined;
-    return /(^|\.)(gog\.com|gog-statics\.com)$/.test(url.hostname) ? url.href : undefined;
+    if (!/(^|\.)(gog\.com|gog-statics\.com)$/.test(url.hostname)) return undefined;
+    // Library covers are CDN hashes; GOG's image service needs a thumbnail variant.
+    if (kind === 'game' && /^\/[a-f0-9]{32,128}$/i.test(url.pathname)) url.pathname += '_196.jpg';
+    return url.href;
   } catch {
     return undefined;
   }
@@ -47,7 +53,7 @@ export function Art({ image, name, kind = 'game', large = false, demo = false }:
           backgroundPosition: `${((index % columns) / (columns - 1)) * 100}% ${Math.floor(index / columns) * 100}%`,
         }
       : undefined;
-  const src = demo ? undefined : safeSource(image);
+  const src = demo ? undefined : safeSource(image, kind);
   const [failedSource, setFailedSource] = useState<string | undefined>();
   return (
     <span

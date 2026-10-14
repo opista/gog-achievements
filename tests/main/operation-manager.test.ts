@@ -1,12 +1,13 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm, writeFile, chmod, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { OperationManager } from '../../src/main/operation-manager';
 import { QueueStore, digestBytes, type StoredOperation } from '../../src/main/queue-store';
+import type { Report } from '../../src/shared/api';
 import type { ProcessProbe } from '../../src/main/process-identity';
-import { FakeCli, gameId, userId, makeQueue, game } from './fixtures';
+import { FakeCli, gameId, userId, makeQueue, makeReport, game } from './fixtures';
 const folders: string[] = [];
 afterEach(async () => {
   for (const folder of folders.splice(0)) await rm(folder, { recursive: true, force: true });
@@ -102,12 +103,15 @@ test('preview creates immutable reviewed bytes and applies exactly once after ex
   expect(preview.report.dry_run).toBe(true);
   expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
   const snapshot = store.snapshotPath(userId, preview.token);
+  const reviewedBytes = await store.bytes(snapshot);
   expect(digestBytes(await store.bytes(snapshot))).toBe(
     digestBytes(await store.bytes(await store.draftPath(userId, gameId))),
   );
   const result = await api.apply({ previewToken: preview.token });
   expect(result.state).toBe('complete');
   expect(result.report?.complete).toBe(true);
+  expect((await api.getQueue(gameId))?.items).toEqual([]);
+  expect(await store.bytes(snapshot)).toEqual(reviewedBytes);
   const history = await api.history({ gameId });
   expect(history).toHaveLength(1);
   expect(history[0]?.report?.results[0]?.status).toBe('restored');
@@ -190,6 +194,7 @@ test.each(['transport', 'wrong-account', 'invalid-report'] as const)(
     const result = await api.apply({ previewToken: preview.token });
     expect(result.state).toBe('unknown');
     expect(result.report).toBeNull();
+    expect((await api.getQueue(gameId))?.items).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain('fixture-secret');
     const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
     await reopened.initialize();
@@ -271,4 +276,197 @@ test('subscription cleanup stops operation callbacks', async () => {
   const count = kinds.length;
   await api.listGames();
   expect(kinds).toHaveLength(count);
+});
+
+test('partial apply clears confirmed rows and retains every unresolved status', async () => {
+  const { api, cli, store } = await fixture();
+  await api.addAchievements({ gameId, achievementIds: ['101', '102', '103', '104', '105', '106'] });
+  const preview = await api.preview({ gameId });
+  const original = cli.run.bind(cli);
+  cli.run = async (command, onSpawn) => {
+    const outcome = await original(command, onSpawn);
+    if (command.kind !== 'queue-apply' || !outcome.result.ok) return outcome;
+    const report = outcome.result.data as Report;
+    report.complete = false;
+    const statuses = [
+      'restored',
+      'skipped_already_unlocked',
+      'restored_with_different_date',
+      'failed',
+      'unconfirmed',
+      'not_attempted',
+    ] as const;
+    for (const [index, row] of report.results.entries()) {
+      row.status = statuses[index]!;
+      row.actual_unlocked_at =
+        index < 2 ? row.requested_unlocked_at : index === 2 ? '2020-01-02T00:00:00Z' : null;
+    }
+    return {
+      exitCode: 6,
+      result: {
+        ok: false,
+        error: { code: 'APPLY_INCOMPLETE', message: 'Fixture only', details: { report } },
+      },
+    };
+  };
+  const result = await api.apply({ previewToken: preview.token });
+  expect(result.report?.results).toHaveLength(6);
+  expect((await api.getQueue(gameId))?.items.map((row) => row.achievement_id)).toEqual([
+    '104',
+    '105',
+    '106',
+  ]);
+  const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
+  expect((await reopened.getQueue(gameId))?.items).toHaveLength(3);
+  expect((await reopened.history({ gameId }))[0]?.report).toEqual(result.report);
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
+});
+
+test('cleanup preserves new draft rows and changed requests after a reviewed apply', async () => {
+  const { api, cli, store } = await fixture();
+  await api.addAchievements({ gameId, achievementIds: ['101', '102'] });
+  const file = await store.draftPath(userId, gameId);
+  const preview = await api.preview({ gameId });
+  let finish!: () => void;
+  cli.pause = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const applying = api.apply({ previewToken: preview.token });
+  await waitFor(() => cli.calls.some((command) => command.kind === 'queue-apply'));
+  const draft = JSON.parse(await readFile(file, 'utf8')) as ReturnType<typeof makeQueue>;
+  draft.items[0]!.unlocked_at = '2020-02-01T00:00:00Z';
+  draft.items.push({
+    ...draft.items[1]!,
+    achievement_id: '103',
+    key: 'KEY_103',
+    name: 'New request',
+  });
+  await writeFile(file, JSON.stringify(draft));
+  finish();
+  const result = await applying;
+  expect(result.report?.complete).toBe(true);
+  expect((await api.getQueue(gameId))?.items).toEqual([draft.items[0], draft.items[2]]);
+});
+
+test('a cleanup failure preserves the saved report, queue, and external lock without replay', async () => {
+  const { api, cli, store } = await fixture();
+  const file = await seed(store);
+  const preview = await api.preview({ gameId });
+  const lock = `${file}.lock`;
+  await writeFile(lock, '{"pid":98765}');
+  const saved = vi.spyOn(store, 'saveOperation');
+  const result = await api.apply({ previewToken: preview.token });
+  expect(result.state).toBe('complete');
+  expect(result.report?.complete).toBe(true);
+  expect(result.error?.code).toBe('QUEUE_CLEANUP_FAILED');
+  expect((await api.getQueue(gameId))?.items).toHaveLength(1);
+  expect(await readFile(lock, 'utf8')).toBe('{"pid":98765}');
+  expect((await store.operations(userId))[0]?.report).toEqual(result.report);
+  expect(saved.mock.calls.some(([record]) => record.report?.complete)).toBe(true);
+  await expect(api.apply({ previewToken: preview.token })).rejects.toThrow('Preview');
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
+});
+
+test('report persistence must succeed before confirmed draft rows are removed', async () => {
+  const { api, cli, store } = await fixture();
+  const file = await seed(store);
+  const preview = await api.preview({ gameId });
+  const original = store.saveOperation.bind(store);
+  store.saveOperation = async (record) => {
+    if (record.report) {
+      expect(JSON.parse(await readFile(file, 'utf8')).items).toHaveLength(1);
+      throw new Error('Fixture disk full');
+    }
+    await original(record);
+  };
+  await expect(api.apply({ previewToken: preview.token })).rejects.toThrow(
+    'result could not be saved',
+  );
+  expect((await api.getQueue(gameId))?.items).toHaveLength(1);
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
+});
+
+async function saveOldAttempt(
+  store: QueueStore,
+  queue = makeQueue(),
+  state: 'complete' | 'unknown' = 'complete',
+  startedAt = '2020-01-01T00:00:00Z',
+) {
+  const file = await store.draftPath(userId, gameId);
+  await writeFile(file, JSON.stringify(queue));
+  const id = randomUUID();
+  const snapshot = await store.snapshot(userId, id, file);
+  const record: StoredOperation = {
+    id,
+    user_id: userId,
+    game_id: gameId,
+    game_title: game.title,
+    started_at: startedAt,
+    finished_at: startedAt,
+    state,
+    report: state === 'complete' ? makeReport(queue, false) : null,
+    digest: snapshot.digest,
+    process: null,
+  };
+  await store.saveOperation(record);
+  return { file, snapshot, record };
+}
+
+test('reopening a draft from the old apply behavior clears saved confirmed requests without a new apply', async () => {
+  const { api, cli, store } = await fixture();
+  const { snapshot, record } = await saveOldAttempt(store);
+  const before = await store.bytes(snapshot.path);
+  expect((await api.getQueue(gameId))?.items).toEqual([]);
+  const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
+  expect((await reopened.getQueue(gameId))?.items).toEqual([]);
+  expect((await reopened.history({ gameId }))[0]?.report).toEqual(record.report);
+  expect(await store.bytes(snapshot.path)).toEqual(before);
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(0);
+  expect(cli.calls.some((command) => command.kind === 'achievements')).toBe(false);
+});
+
+test('saved partial reports clear only confirmed requests and preserve later edits on load', async () => {
+  const { api, store } = await fixture();
+  const queue = makeQueue();
+  queue.items.push(
+    { ...queue.items[0]!, achievement_id: '102', key: 'KEY_102' },
+    { ...queue.items[0]!, achievement_id: '103', key: 'KEY_103' },
+  );
+  const { file, record } = await saveOldAttempt(store, queue);
+  record.report!.complete = false;
+  record.report!.results[1]!.status = 'unconfirmed';
+  record.report!.results[1]!.actual_unlocked_at = null;
+  await store.saveOperation(record);
+  const edited = structuredClone(queue);
+  edited.items[2]!.unlocked_at = '2020-02-01T00:00:00Z';
+  edited.items.push({ ...edited.items[0]!, achievement_id: '104', key: 'KEY_104' });
+  await writeFile(file, JSON.stringify(edited));
+  expect((await api.getQueue(gameId))?.items).toEqual(edited.items.slice(1));
+});
+
+test('a newer saved unknown attempt keeps its matching request instead of using older confirmation', async () => {
+  const { api, store, cli } = await fixture();
+  await saveOldAttempt(store);
+  await saveOldAttempt(store, makeQueue(), 'unknown', '2020-02-01T00:00:00Z');
+  expect((await api.getQueue(gameId))?.items).toEqual(makeQueue().items);
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(0);
+});
+
+test('a busy draft still loads when saved-result housekeeping cannot run', async () => {
+  const { api, store, cli } = await fixture();
+  const { file } = await saveOldAttempt(store);
+  const lock = `${file}.lock`;
+  await writeFile(lock, '{"pid":98765}');
+  expect((await api.getQueue(gameId))?.items).toEqual(makeQueue().items);
+  expect(await readFile(lock, 'utf8')).toBe('{"pid":98765}');
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(0);
+});
+
+test('saved-result reconciliation requires untampered snapshot evidence', async () => {
+  const { api, store, cli } = await fixture();
+  const { snapshot } = await saveOldAttempt(store);
+  await chmod(snapshot.path, 0o600);
+  await writeFile(snapshot.path, '{}');
+  expect((await api.getQueue(gameId))?.items).toEqual(makeQueue().items);
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(0);
 });

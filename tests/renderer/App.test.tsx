@@ -32,15 +32,28 @@ async function previewAndConfirm(api: DemoDesktopApi, user: ReturnType<typeof us
 }
 
 describe('desktop restoration flow', () => {
+  it('keeps account ID in its menu and removes the shared-login warning', async () => {
+    const { user } = await connected();
+    expect(screen.getByText('GOG account', { exact: true })).toBeVisible();
+    expect(
+      screen.queryByText("Signing out also removes the CLI's saved login."),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByText('GOG account', { exact: true }));
+    expect(screen.getByText('Account ID: 123456789')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
+  });
   it('starts signed out with explicit demo data and protects existing unlocks', async () => {
     const { user } = await connected();
     expect(screen.getByText('DEMO DATA')).toBeVisible();
-    expect(screen.getByRole('checkbox', { name: 'Select Full Body Conversion' })).toBeDisabled();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select Full Body Conversion' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled();
     expect(screen.queryByText('A sample hidden achievement')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reveal' }));
+    expect(screen.getByRole('heading', { name: 'A sample hidden achievement' })).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Details for A sample hidden achievement' }),
+      screen.getByRole('checkbox', { name: 'Select A sample hidden achievement' }),
     ).toBeEnabled();
   });
   it('never writes on preview or dismissed final confirmation', async () => {
@@ -55,6 +68,13 @@ describe('desktop restoration flow', () => {
     await user.click(screen.getByRole('button', { name: 'Apply 3 achievements' }));
     await screen.findByRole('heading', { name: 'Results confirmed' });
     expect(apply).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
+    expect(screen.getByText('Queue is clear. Results are saved in history.')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Back to achievements' }));
+    expect(
+      screen.queryByRole('button', { name: 'Edit date for The World' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeDisabled();
   });
   it('date editing saves the queue without applying and prevents future dates', async () => {
     const { api, user } = await connected();
@@ -84,7 +104,10 @@ describe('desktop restoration flow', () => {
     expect(screen.getByText('Not attempted')).toBeVisible();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Review queue' })).toBeEnabled());
     await user.click(screen.getByRole('button', { name: 'Review queue' }));
-    expect(screen.getByRole('button', { name: 'Edit date for The World' })).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Edit date for The World' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit date for Frequent Flyer' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled();
     expect(apply).toHaveBeenCalledTimes(1);
   });

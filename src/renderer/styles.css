@@ -294,6 +294,7 @@ small {
 .search-field input {
   width: 100%;
   padding-left: 38px;
+  padding-right: 40px;
   background: var(--canvas);
 }
 .library-list {
@@ -305,18 +306,35 @@ small {
 }
 .game-row {
   display: flex;
+  align-items: center;
   text-align: left;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 10px;
   border: 0;
-  padding: 10px;
+  padding: 6px 10px;
   width: 100%;
-  min-height: 80px;
-  font-size: 16px;
+  min-height: 40px;
+  font-size: 14px;
   font-weight: 400;
   border-radius: 6px;
   background: transparent;
   color: var(--text);
+}
+.game-row .art {
+  width: 44px;
+  height: 25px;
+}
+.game-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-clear {
+  position: absolute;
+  right: 4px;
+  top: 4px;
 }
 .game-row.selected {
   background: var(--accent-soft);
@@ -351,8 +369,8 @@ small {
   color: #f1cb47;
 }
 .art-large {
-  width: 100px;
-  height: 120px;
+  width: 128px;
+  height: 72px;
 }
 .library-placeholder {
   padding: 80px 14px;
@@ -427,32 +445,41 @@ small {
   border-bottom: 1px solid var(--line);
 }
 .achievement-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px 52px minmax(0, 1fr) auto;
   align-items: center;
   gap: 15px;
-  min-height: 94px;
-  padding: 14px 4px;
+  min-height: 100px;
+  padding: 16px 4px;
 }
-.achievement-name {
-  justify-content: flex-start;
-  text-align: left;
-  flex: 1;
-  border: 0;
-  background: transparent;
-  padding: 6px 0;
-  font-size: 16px;
-  font-weight: 600;
+.achievement-main > input {
+  grid-column: 1;
+  grid-row: 1;
+}
+.achievement-main > .art {
+  grid-column: 2;
+  grid-row: 1;
+}
+.achievement-copy {
+  grid-column: 3;
+  grid-row: 1;
   min-width: 0;
 }
-.achievement-name:disabled {
-  opacity: 1;
+.achievement-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
 }
-.achievement-name svg {
+.achievement-description {
+  margin-top: 5px;
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--muted);
-  opacity: 0.6;
+  overflow-wrap: anywhere;
 }
-.achievement-name:hover:not(:disabled) {
-  background: transparent;
+.achievement-main > .achievement-status {
+  grid-column: 4;
+  grid-row: 1;
 }
 .achievement-status {
   display: flex;
@@ -487,13 +514,6 @@ small {
 }
 .read-only .achievement-name {
   color: var(--muted);
-}
-.achievement-details {
-  padding: 0 16px 20px 86px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
 }
 .queue-pane {
   border-left: 1px solid var(--line);
@@ -1118,8 +1138,9 @@ small {
     margin-left: auto;
   }
   .achievement-main {
+    grid-template-columns: 20px 42px minmax(0, 1fr) auto;
     gap: 10px;
-    min-height: 84px;
+    min-height: 94px;
   }
   .achievement-main .art {
     width: 42px;
@@ -1139,8 +1160,8 @@ small {
     gap: 16px;
   }
   .art-large {
-    width: 82px;
-    height: 100px;
+    width: 106px;
+    height: 60px;
   }
   .game-heading > .desktop-refresh {
     padding: 9px;
@@ -1182,8 +1203,12 @@ small {
   .account-menu summary {
     font-size: 12px;
   }
+  .achievement-main {
+    grid-template-columns: 20px 35px minmax(0, 1fr) auto;
+  }
   .achievement-main .art {
-    display: none;
+    width: 35px;
+    height: 35px;
   }
   .game-heading > .desktop-refresh {
     font-size: 0;
@@ -1276,14 +1301,14 @@ small {
     width: auto;
     min-width: 155px;
     max-width: 190px;
-    min-height: 64px;
+    min-height: 40px;
     font-size: 13px;
-    padding: 8px;
+    padding: 6px 8px;
     flex: none;
   }
   .game-row .art {
-    width: 34px;
-    height: 44px;
+    width: 44px;
+    height: 25px;
   }
   .library-placeholder {
     padding: 12px;
@@ -1306,8 +1331,8 @@ small {
     font-size: 24px;
   }
   .art-large {
-    width: 70px;
-    height: 88px;
+    width: 96px;
+    height: 54px;
   }
   .achievement-toolbar {
     gap: 10px;
@@ -1333,8 +1358,9 @@ small {
     width: 95px;
   }
   .achievement-main {
+    grid-template-columns: 20px 35px minmax(0, 1fr) auto;
     gap: 10px;
-    min-height: 80px;
+    min-height: 94px;
   }
   .achievement-name {
     font-size: 14px;
@@ -1348,8 +1374,8 @@ small {
     font-size: 10px;
     max-width: 105px;
   }
-  .achievement-details {
-    padding-left: 32px;
+  .achievement-description {
+    font-size: 12px;
   }
   .queue-pane {
     border-left: 0;
@@ -1507,4 +1533,98 @@ small {
 
 :root[data-demo-theme='light'] {
   color-scheme: light;
+}
+
+.achievement-skeleton {
+  padding-top: 4px;
+}
+.skeleton-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.skeleton-block {
+  display: block;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--button) 20%, var(--line) 45%, var(--button) 70%);
+  background-size: 220% 100%;
+  animation: skeleton-loading 1.6s ease-in-out infinite;
+}
+.skeleton-filter {
+  width: 68px;
+  height: 40px;
+}
+.skeleton-action {
+  width: 112px;
+  height: 40px;
+  margin-left: auto;
+}
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 20px 52px minmax(0, 1fr) 100px;
+  align-items: center;
+  gap: 15px;
+  min-height: 110px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.skeleton-icon {
+  grid-column: 2;
+  height: 52px;
+}
+.skeleton-copy {
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.skeleton-title {
+  width: 62%;
+  height: 16px;
+}
+.skeleton-description {
+  height: 12px;
+  width: 100%;
+}
+.skeleton-description-short {
+  width: 82%;
+}
+.skeleton-status {
+  grid-column: 4;
+  height: 26px;
+}
+@keyframes skeleton-loading {
+  to {
+    background-position: -220% 0;
+  }
+}
+@media (max-width: 1280px) {
+  .skeleton-row {
+    grid-template-columns: 20px 42px minmax(0, 1fr) 94px;
+    gap: 10px;
+  }
+  .skeleton-icon {
+    height: 42px;
+  }
+}
+@media (max-width: 780px) {
+  .skeleton-row {
+    grid-template-columns: 20px 35px minmax(0, 1fr) 80px;
+  }
+  .skeleton-icon {
+    height: 35px;
+  }
+  .skeleton-filter {
+    width: 52px;
+  }
+  .skeleton-action {
+    width: 86px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block {
+    animation: none;
+  }
 }

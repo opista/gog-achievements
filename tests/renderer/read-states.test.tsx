@@ -38,6 +38,8 @@ it('separates pending and failed game reads from an empty achievement list and r
   const user = userEvent.setup();
   render(<App api={api} />);
   await screen.findByText('Loading achievements…');
+  expect(screen.getAllByText('Loading achievements…')).toHaveLength(1);
+  expect(screen.getByText('Loading achievements…').closest('.achievement-skeleton')).not.toBeNull();
   expect(screen.queryByText('No achievements available for this game.')).not.toBeInTheDocument();
   expect(screen.getByText('Loading queue…')).toBeVisible();
   expect(screen.queryByText('0 achievements')).not.toBeInTheDocument();

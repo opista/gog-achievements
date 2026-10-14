@@ -60,7 +60,7 @@ export function QueuePane({
             <p className="muted">
               {review
                 ? `${pending.length} achievements to restore`
-                : `${items.length} achievements`}
+                : `${items.length} ${resultView ? 'remaining' : 'achievements'}`}
             </p>
           ) : null}
         </div>
@@ -93,7 +93,11 @@ export function QueuePane({
         ) : items.length === 0 ? (
           <div className="empty-state">
             <FileText size={34} />
-            <p>Select achievements you have already earned.</p>
+            <p>
+              {resultView
+                ? 'Queue is clear. Results are saved in history.'
+                : 'Select achievements you have already earned.'}
+            </p>
           </div>
         ) : (
           <div className="queue-items">

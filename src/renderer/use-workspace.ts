@@ -338,15 +338,16 @@ export function useWorkspace(api: DesktopApi) {
       setView('results');
       if (game) {
         try {
-          const records = await api.history({ gameId: game.id });
-          for (const record of records) assertOwner(record.user_id);
-          const data = await api.listAchievements(game.id);
-          assertOwner(data.user_id);
+          // Show durable local cleanup even if the later network refresh fails.
           const nextQueue = await api.getQueue(game.id);
           if (nextQueue) assertOwner(nextQueue.user_id);
-          setHistory(records);
-          setAchievements(data.achievements);
           setQueue(nextQueue);
+          const records = await api.history({ gameId: game.id });
+          for (const record of records) assertOwner(record.user_id);
+          setHistory(records);
+          const data = await api.listAchievements(game.id);
+          assertOwner(data.user_id);
+          setAchievements(data.achievements);
         } catch (failure) {
           await handleFailure(failure);
         }

@@ -140,3 +140,20 @@ it('keeps the matching draft and report visible after a failed library refresh',
   expect(result.current.queue).toBe(priorQueue);
   expect(result.current.history).toBe(priorHistory);
 });
+
+it('shows durable queue cleanup and keeps the report when the post-apply network refresh fails', async () => {
+  const { api, result } = await workspace();
+  act(() => result.current.createPreview());
+  await waitFor(() => expect(result.current.preview).not.toBeNull());
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  const apply = vi.spyOn(api, 'apply');
+  vi.spyOn(api, 'listAchievements').mockRejectedValueOnce(new Error('Achievement refresh failed.'));
+  act(() => result.current.apply());
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  expect(result.current.view).toBe('results');
+  expect(result.current.error?.message).toBe('Achievement refresh failed.');
+  expect(result.current.result?.report?.complete).toBe(true);
+  expect(result.current.queue?.items).toEqual([]);
+  expect(result.current.history).toHaveLength(1);
+  expect(apply).toHaveBeenCalledTimes(1);
+});
