@@ -892,46 +892,33 @@ small {
 .bulk-fields .field-error {
   width: 100%;
 }
-.confirmation-account {
-  padding: 4px 0 18px;
-  border-bottom: 1px solid var(--line);
+.confirmation-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 14px;
+  line-height: 1.5;
 }
-.confirmation-account h3 {
+.confirmation-warning svg {
+  margin-top: 1px;
+}
+.confirmation-game {
+  margin: 0 0 20px;
   font-size: 19px;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
-.confirmation-account p {
-  color: var(--muted);
-  margin-top: 5px;
-  font-size: 13px;
-}
-.confirmation-note {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 18px 0 24px;
-  font-size: 14px;
-}
-.confirmation-note svg {
-  flex: none;
-  color: var(--muted);
-}
 .confirmation-list-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-.confirmation-list-heading h4 {
+  margin: 0 0 8px;
   font-size: 13px;
   font-weight: 500;
-}
-.confirmation-list-heading p {
-  color: var(--muted);
-  font-size: 12px;
+  line-height: 1.4;
 }
 .confirmation-rows {
   list-style: none;
@@ -984,11 +971,6 @@ small {
   margin-top: 16px;
 }
 @media (max-width: 540px) {
-  .confirmation-list-heading {
-    flex-direction: column;
-    gap: 5px;
-    margin-bottom: 12px;
-  }
   .confirmation-row {
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 8px 12px;

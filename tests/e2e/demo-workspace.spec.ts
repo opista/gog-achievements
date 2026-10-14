@@ -203,7 +203,11 @@ test('the single apply confirmation can be dismissed without changing achievemen
   await expect(dialog.getByRole('heading', { name: CYBERPUNK, exact: true })).toBeVisible();
   await expect(dialog.getByText('The World', { exact: true })).toBeVisible();
   await expect(dialog.locator('time').first()).toHaveText('10 Oct 2026 13:30:00');
-  await expect(dialog.getByText('Unlock dates · local time', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Unlock dates · local time', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('GOG account 123456789', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('note', { name: 'Before applying' })).toHaveText(
+    'Close the game before applying.',
+  );
   expect((await savedDemo(page)).records).toHaveLength(0);
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
@@ -222,7 +226,9 @@ test('explicit apply clears confirmed requests and keeps flat achievement histor
   await signIn(page);
   await confirmApply(page);
   await expect(page.getByRole('heading', { name: 'Results confirmed', exact: true })).toBeVisible();
-  await expect(page.getByText('Confirmed', { exact: true })).toHaveCount(3);
+  await expect(
+    page.locator('.result-table tbody').getByText('Confirmed', { exact: true }),
+  ).toHaveCount(3);
   await expect(page.getByText('Queue is empty.', { exact: true })).toBeVisible();
   const history = page.getByRole('button', { name: 'History', exact: true });
   await expect(history).toBeEnabled();

@@ -89,7 +89,7 @@ export function resolveLocalDate(
       return {
         iso: null,
         choices: [],
-        error: 'This local time does not exist in your time zone.',
+        error: 'This time does not exist in your time zone.',
       };
     const offset = matches.length === 1 ? matches[0] : selectedOffset;
     if (offset === undefined || !matches.includes(offset))
@@ -117,7 +117,7 @@ export function resolveLocalDate(
       error: null,
     };
   } catch {
-    return { iso: null, choices: [], error: 'Your local time zone is unavailable.' };
+    return { iso: null, choices: [], error: 'Your time zone is unavailable.' };
   }
 }
 

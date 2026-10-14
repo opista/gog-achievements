@@ -62,7 +62,7 @@ describe('exact unlock dates', () => {
     expect(
       resolveLocalDate({ date: '2026-10-10', time: '18:30:00' }, 'Unknown/Zone', undefined, NOW)
         .error,
-    ).toMatch(/local time zone is unavailable/);
+    ).toMatch(/time zone is unavailable/);
   });
   it('matches the CLI minimum timestamp, including UTC offset conversion', () => {
     expect(

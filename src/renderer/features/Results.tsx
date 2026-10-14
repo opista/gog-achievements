@@ -44,8 +44,8 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
             <thead>
               <tr>
                 <th>Achievement</th>
-                <th>Requested (local time)</th>
-                <th>Confirmed (local time)</th>
+                <th>Requested</th>
+                <th>Confirmed</th>
               </tr>
             </thead>
             <tbody>

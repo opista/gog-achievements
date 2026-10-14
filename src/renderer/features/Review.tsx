@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import type { Achievement, Report, ReportItem } from '../../shared/api';
 import { formatTimestamp, localTimeOccurrence } from '../date-time';
 import { Dialog } from '../components/Dialog';
@@ -46,22 +46,16 @@ export function ApplyConfirmation({
         </>
       }
     >
-      <div className="confirmation-account">
-        <h3>{report.game.title}</h3>
-        <p>GOG account {report.user_id}</p>
-      </div>
-      <p className="confirmation-note">
-        <Info size={18} aria-hidden="true" />
-        Close the game before applying.
+      <p className="confirmation-warning" role="note" aria-label="Before applying">
+        <TriangleAlert size={20} aria-hidden="true" />
+        <span>Close the game before applying.</span>
       </p>
+      <h3 className="confirmation-game">{report.game.title}</h3>
       {pending.length === 0 ? (
         <p>All queued achievements are already unlocked. Existing dates are kept.</p>
       ) : (
         <>
-          <div className="confirmation-list-heading">
-            <h4>Achievements to unlock</h4>
-            <p>Unlock dates · local time</p>
-          </div>
+          <h4 className="confirmation-list-heading">Achievements to unlock</h4>
           <ul className="confirmation-rows" aria-label="Achievements to unlock">
             {pending.map((item) => {
               const achievement = achievementFor(report.game.id, item.achievement_id);

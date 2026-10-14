@@ -107,7 +107,7 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
             <p>{description || 'No description available.'}</p>
           </div>
           <label>
-            Unlock date and time (local)
+            Unlock date and time
             <input
               type="datetime-local"
               step="1"

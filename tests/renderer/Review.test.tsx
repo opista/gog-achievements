@@ -71,8 +71,11 @@ it('shows pending achievements with game-specific descriptions and exact local d
   ]);
   const dialog = screen.getByRole('dialog', { name: 'Apply 2 achievements?' });
   expect(within(dialog).getByRole('heading', { name: 'The Witcher 3: Wild Hunt' })).toBeVisible();
-  expect(within(dialog).getByText('GOG account 123456789')).toBeVisible();
-  expect(within(dialog).getByText('Unlock dates · local time')).toBeVisible();
+  expect(within(dialog).queryByText('GOG account 123456789')).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('note', { name: 'Before applying' })).toHaveTextContent(
+    'Close the game before applying.',
+  );
+  expect(within(dialog).queryByText('Unlock dates · local time')).not.toBeInTheDocument();
   const entries = within(
     within(dialog).getByRole('list', { name: 'Achievements to unlock' }),
   ).getAllByRole('listitem');
