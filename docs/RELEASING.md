@@ -2,7 +2,7 @@
 
 ## Repository setup
 
-The app releases from `metacurb/gog-achievements`. Its pinned CLI comes from `opista/gog-achievements-cli`.
+The app releases from `opista/gog-achievements`. Its pinned CLI comes from `opista/gog-achievements-cli`.
 
 Both repositories should be public for anonymous builds and installed-app update checks. While the CLI is private, set the app repository secret `CLI_RELEASE_TOKEN` to a token with read-only Contents access to that CLI repository. Do not put a token in the app. A private app repository cannot serve anonymous update checks.
 
@@ -45,7 +45,7 @@ The queue and history remain in the app's user-data folder when a new version re
 
 ## Move to another GitHub organisation
 
-The CLI is already public under `opista`. When the app moves, update:
+Both repositories are public under `opista`. If either repository moves again, update:
 
 - The app's `repository.url` in `package.json`, which is also the update source.
 - CLI repository references in `cli-release.lock.json` and `scripts/cli-artifacts.mjs`; refresh the lock with a verified release.

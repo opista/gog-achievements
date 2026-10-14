@@ -10,6 +10,10 @@ The app keeps an operation record for recovery behind the unlock history list. I
 
 Requires macOS 13.5 or later, or Windows 10/11, on ARM64 or x64. These requirements combine the [bundled CLI runtime](https://github.com/opista/gog-achievements-cli/blob/v0.3.0/README.md) and [Electron 44](https://releases.electronjs.org/release/v44.0.0).
 
+## Downloads
+
+Get installers from [GitHub Releases](https://github.com/opista/gog-achievements/releases). Use the Mac DMG or Windows EXE for your architecture: ARM64 or x64. Installed apps notify you when a newer stable release is available and open its installer in your browser.
+
 ## Run locally
 
 Use Node 24.19.0, recorded in [.node-version](.node-version).
