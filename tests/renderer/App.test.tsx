@@ -167,14 +167,14 @@ describe('desktop restoration flow', () => {
     expect(screen.queryByRole('button', { name: 'Back to achievements' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Remove Card Collector from queue' }));
     await ready();
-    expect(screen.getByRole('heading', { name: 'Achievement history' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Unlock history' })).toBeVisible();
     expect(
       within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole('listitem'),
     ).toHaveLength(4);
     await user.click(screen.getByRole('button', { name: 'Cyberpunk 2077' }));
     await ready();
     expect(screen.getByRole('heading', { name: 'Cyberpunk 2077' })).toBeVisible();
-    expect(screen.queryByRole('heading', { name: 'Achievement history' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Unlock history' })).not.toBeInTheDocument();
   });
   it('supports an empty library without stale games or apply controls', async () => {
     await connected('empty');

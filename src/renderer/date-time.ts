@@ -1,6 +1,7 @@
 /** Convert wall times to UTC without assuming a daylight-saving offset. */
 const formatters = new Map<string, Intl.DateTimeFormat>();
-const timestampFormatters = new Map<string, Intl.DateTimeFormat>();
+const displayFormatters = new Map<string, Intl.DateTimeFormat>();
+const displayLocales = new Map<string | undefined, string>();
 
 export interface LocalFields {
   date: string;
@@ -17,6 +18,8 @@ function formatter(zone: string): Intl.DateTimeFormat {
   if (!value) {
     value = new Intl.DateTimeFormat('en-GB', {
       timeZone: zone,
+      calendar: 'gregory',
+      numberingSystem: 'latn',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -138,26 +141,42 @@ export function localTimeOccurrence(iso: string, zone: string): string | null {
   }
 }
 
-export function formatTimestamp(iso: string | null, zone: string, exact = true): string {
+function displayDate(
+  iso: string | null,
+  zone: string,
+  timeStyle: 'medium' | 'short' | undefined,
+  locale?: string,
+): string {
   if (!iso) return 'Not confirmed';
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return 'Date unavailable';
-  const key = `${zone}:${exact}`;
-  let value = timestampFormatters.get(key);
+  const localeKey = displayLocales.get(locale) ?? locale ?? 'default';
+  const key = `${localeKey}:${zone}:${timeStyle ?? 'date'}`;
+  let value = displayFormatters.get(key);
   if (!value) {
-    value = new Intl.DateTimeFormat('en-GB', {
+    value = new Intl.DateTimeFormat(locale, {
       timeZone: zone,
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      ...(exact ? { second: '2-digit' as const } : {}),
-      hourCycle: 'h23',
+      dateStyle: 'medium',
+      ...(timeStyle ? { timeStyle } : {}),
     });
-    timestampFormatters.set(key, value);
+    const resolvedLocale = value.resolvedOptions().locale;
+    displayLocales.set(locale, resolvedLocale);
+    displayFormatters.set(`${resolvedLocale}:${zone}:${timeStyle ?? 'date'}`, value);
   }
-  return value.format(date).replace(',', '');
+  return value.format(date);
+}
+
+export function formatTimestamp(
+  iso: string | null,
+  zone: string,
+  exact = true,
+  locale?: string,
+): string {
+  return displayDate(iso, zone, exact ? 'medium' : 'short', locale);
+}
+
+export function formatDate(iso: string | null, zone: string, locale?: string): string {
+  return displayDate(iso, zone, undefined, locale);
 }
 
 export function detectTimeZone(): string {

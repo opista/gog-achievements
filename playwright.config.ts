@@ -15,6 +15,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:' + port,
     timezoneId: 'America/New_York',
+    locale: 'en-US',
     viewport: { width: 1440, height: 900 },
     actionTimeout: 5000,
     navigationTimeout: 10000,

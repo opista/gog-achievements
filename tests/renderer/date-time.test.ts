@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   detectTimeZone,
   formatTimestamp,
+  formatDate,
   localFields,
   localTimeOccurrence,
   offsetLabel,
@@ -95,12 +96,18 @@ describe('local time detection and formatting', () => {
   });
   it('reuses timestamp formatters while retaining exact and concise display modes', () => {
     const constructor = vi.spyOn(Intl, 'DateTimeFormat');
-    expect(formatTimestamp('2020-07-01T12:34:56Z', 'Pacific/Chatham')).toBe('02 Jul 2020 01:19:56');
-    expect(formatTimestamp('2020-07-02T12:34:56Z', 'Pacific/Chatham')).toBe('03 Jul 2020 01:19:56');
-    expect(formatTimestamp('2020-07-01T12:34:56Z', 'Pacific/Chatham', false)).toBe(
-      '02 Jul 2020 01:19',
+    expect(formatTimestamp('2020-07-01T12:34:56Z', 'Pacific/Chatham', true, 'en-GB')).toBe(
+      '2 Jul 2020, 01:19:56',
     );
-    expect(constructor).toHaveBeenCalledTimes(2);
+    expect(formatTimestamp('2020-07-02T12:34:56Z', 'Pacific/Chatham', true, 'en-GB')).toBe(
+      '3 Jul 2020, 01:19:56',
+    );
+    expect(formatTimestamp('2020-07-01T12:34:56Z', 'Pacific/Chatham', false, 'en-GB')).toBe(
+      '2 Jul 2020, 01:19',
+    );
+    expect(formatDate('2020-07-01T12:34:56Z', 'Pacific/Chatham', 'en-GB')).toBe('2 Jul 2020');
+    expect(formatDate('2020-07-02T12:34:56Z', 'Pacific/Chatham', 'en-GB')).toBe('3 Jul 2020');
+    expect(constructor).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -131,12 +138,16 @@ it('uses a valid machine-reported local zone without replacing it with UTC', () 
   });
   const zone = detectTimeZone();
   expect(zone).toBe('Pacific/Marquesas');
-  expect(formatTimestamp('2020-01-01T01:00:07Z', zone)).toBe('31 Dec 2019 15:30:07');
+  expect(formatTimestamp('2020-01-01T01:00:07Z', zone, true, 'en-GB')).toBe(
+    '31 Dec 2019, 15:30:07',
+  );
 });
 
 it('formats unavailable timestamps without exposing an invalid date', () => {
   expect(formatTimestamp(null, 'UTC')).toBe('Not confirmed');
   expect(formatTimestamp('not-a-date', 'UTC')).toBe('Date unavailable');
+  expect(formatDate(null, 'UTC')).toBe('Not confirmed');
+  expect(formatDate('not-a-date', 'UTC')).toBe('Date unavailable');
 });
 
 it.each([
@@ -156,4 +167,67 @@ it.each([
 it('does not label unavailable date or zone information as a repeated time', () => {
   expect(localTimeOccurrence('not-a-date', 'America/New_York')).toBeNull();
   expect(localTimeOccurrence('2020-11-01T05:30:00Z', 'Unknown/Zone')).toBeNull();
+});
+
+it.each([
+  ['en-US', 'Jul 1, 2020, 12:34:56 PM', 'Jul 1, 2020, 12:34 PM', 'Jul 1, 2020'],
+  ['en-GB', '1 Jul 2020, 12:34:56', '1 Jul 2020, 12:34', '1 Jul 2020'],
+  ['fr-FR', '1 juil. 2020, 12:34:56', '1 juil. 2020, 12:34', '1 juil. 2020'],
+  ['ja-JP', '2020/07/01 12:34:56', '2020/07/01 12:34', '2020/07/01'],
+] as const)(
+  'preserves %s date order, punctuation and default clock',
+  (locale, exact, concise, date) => {
+    const iso = '2020-07-01T12:34:56Z';
+    expect(formatTimestamp(iso, 'UTC', true, locale)).toBe(exact);
+    expect(formatTimestamp(iso, 'UTC', false, locale)).toBe(concise);
+    expect(formatDate(iso, 'UTC', locale)).toBe(date);
+  },
+);
+
+it('uses the default Intl locale when no display locale is supplied', () => {
+  const iso = '2020-07-01T12:34:56Z';
+  const value = new Date(iso);
+  expect(formatTimestamp(iso, 'UTC')).toBe(
+    new Intl.DateTimeFormat(undefined, {
+      timeZone: 'UTC',
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    }).format(value),
+  );
+  expect(formatDate(iso, 'UTC')).toBe(
+    new Intl.DateTimeFormat(undefined, {
+      timeZone: 'UTC',
+      dateStyle: 'medium',
+    }).format(value),
+  );
+});
+
+it('respects twelve- and twenty-four-hour locale preferences at midnight', () => {
+  const iso = '2020-07-01T00:04:07Z';
+  expect(formatTimestamp(iso, 'UTC', true, 'en-US')).toBe('Jul 1, 2020, 12:04:07 AM');
+  expect(formatTimestamp(iso, 'UTC', true, 'en-GB')).toBe('1 Jul 2020, 00:04:07');
+  expect(formatTimestamp(iso, 'UTC', true, 'en-US-u-hc-h23')).toBe('Jul 1, 2020, 00:04:07');
+});
+
+it('keeps native date fields Gregorian, Latin and h23 regardless of display locale', () => {
+  const iso = '2020-12-31T15:04:07Z';
+  formatTimestamp(iso, 'Asia/Tokyo', true, 'th-TH-u-ca-buddhist-nu-thai');
+  const fields = localFields(iso, 'Asia/Tokyo');
+  expect(fields).toEqual({ date: '2021-01-01', time: '00:04:07' });
+  expect(resolveLocalDate(fields, 'Asia/Tokyo', undefined, NOW).iso).toBe(iso);
+});
+
+it('isolates cached locales and reuses their date and time formatters', () => {
+  const iso = '2020-07-01T12:34:56Z';
+  const locales = ['en-US', 'en-GB', 'fr-FR'];
+  const expected = locales.map((locale) => [
+    formatTimestamp(iso, 'Asia/Colombo', true, locale),
+    formatDate(iso, 'Asia/Colombo', locale),
+  ]);
+  const create = vi.spyOn(Intl, 'DateTimeFormat');
+  for (const [index, locale] of locales.entries()) {
+    expect(formatTimestamp(iso, 'Asia/Colombo', true, locale)).toBe(expected[index]?.[0]);
+    expect(formatDate(iso, 'Asia/Colombo', locale)).toBe(expected[index]?.[1]);
+  }
+  expect(create).not.toHaveBeenCalled();
 });

@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueuePane } from '../../src/renderer/features/QueuePane';
+import { formatTimestamp } from '../../src/renderer/date-time';
 import { useWorkspace } from '../../src/renderer/use-workspace';
 import { createDemoApi, type DemoDesktopApi } from '../../src/shared/demo-api';
 
@@ -72,7 +73,10 @@ it('shows cached game descriptions beside calendar and remove controls without i
   );
   expect(within(witcher).getByText('The Witcher 3: Wild Hunt: description 201.')).toBeVisible();
   const calendar = within(cyber).getByRole('button', { name: 'Edit date for The World' });
-  expect(calendar).toHaveAttribute('title', '10 Oct 2026 13:30:00');
+  expect(calendar).toHaveAttribute(
+    'title',
+    formatTimestamp('2026-10-10T17:30:00Z', 'America/New_York'),
+  );
   expect(within(cyber).getByRole('button', { name: 'Remove The World from queue' })).toBeEnabled();
   expect(screen.queryByLabelText('Unlock date for The World')).not.toBeInTheDocument();
 });

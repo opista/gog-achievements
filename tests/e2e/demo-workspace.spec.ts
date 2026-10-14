@@ -185,7 +185,7 @@ test('single-item date edits stay local until Save date and persist exact second
     )
     .toBe('2020-02-02T18:14:15Z');
   expect((await savedDemo(page)).records).toHaveLength(0);
-  await expect(edit).toHaveAttribute('title', '02 Feb 2020 13:14:15');
+  await expect(edit).toHaveAttribute('title', 'Feb 2, 2020, 1:14:15 PM');
   await page.reload();
   await signIn(page);
   await edit.click();
@@ -202,7 +202,7 @@ test('the single apply confirmation can be dismissed without changing achievemen
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
   await expect(dialog.getByRole('heading', { name: CYBERPUNK, exact: true })).toBeVisible();
   await expect(dialog.getByText('The World', { exact: true })).toBeVisible();
-  await expect(dialog.locator('time').first()).toHaveText('10 Oct 2026 13:30:00');
+  await expect(dialog.locator('time').first()).toHaveText('Oct 10, 2026, 1:30:00 PM');
   await expect(dialog.getByText('Unlock dates · local time', { exact: true })).toHaveCount(0);
   await expect(dialog.getByText('GOG account 123456789', { exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('note', { name: 'Before applying' })).toHaveText(
@@ -236,9 +236,7 @@ test('explicit apply clears confirmed requests and keeps flat achievement histor
   expect(saved.records).toHaveLength(1);
   expect(saved.queues.find((queue) => queue.game.id === '1')?.items).toHaveLength(0);
   await history.click();
-  await expect(
-    page.getByRole('heading', { name: 'Achievement history', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Unlock history', exact: true })).toBeVisible();
   const unlocks = page.getByRole('list', { name: 'Unlocked achievements', exact: true });
   await expect(unlocks.getByRole('listitem')).toHaveCount(3);
   expect(await unlocks.locator('strong').allTextContents()).toEqual([
@@ -475,3 +473,27 @@ test('Use current time saves one queued date at click time without applying achi
   expect(queue?.items).toHaveLength(3);
   expect(saved.records).toHaveLength(0);
 });
+
+for (const display of [
+  { locale: 'en-US', date: 'Oct 4, 2026', timestamp: 'Oct 10, 2026, 1:30:00 PM' },
+  { locale: 'en-GB', date: '4 Oct 2026', timestamp: '10 Oct 2026, 13:30:00' },
+  { locale: 'de-DE', date: '04.10.2026', timestamp: '10.10.2026, 13:30:00' },
+]) {
+  test.describe('machine locale ' + display.locale, () => {
+    test.use({ locale: display.locale });
+    test('formats date-only badges and exact unlock times for the user locale', async ({
+      page,
+    }) => {
+      await signIn(page);
+      const unlocked = page.locator('.achievement-row').filter({ hasText: 'Full Body Conversion' });
+      await expect(unlocked.locator('.status')).toHaveText('Unlocked ' + display.date);
+      await expect(
+        page.getByRole('button', { name: 'Edit date for The World', exact: true }),
+      ).toHaveAttribute('title', display.timestamp);
+      const dialog = await confirmation(page);
+      await expect(dialog.locator('time').first()).toHaveText(display.timestamp);
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      expect((await savedDemo(page)).records).toHaveLength(0);
+    });
+  });
+}

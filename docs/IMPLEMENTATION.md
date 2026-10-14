@@ -10,6 +10,6 @@ The queue groups all saved queues for the signed-in account and remains editable
 
 Each group's Apply action runs a dry-run check and opens one final confirmation. The saved snapshot and token bind it to the exact queue, account and game. Confirmed requests are removed under an exclusive queue lock after the immutable report is saved. Failed, unconfirmed and unattempted requests remain. Concurrent edits are preserved, and housekeeping failures retain the confirmed report. Reads can reconcile older confirmed requests only with matching digest-verified snapshots.
 
-History is a flat list of confirmed achievement unlocks with game names and actual unlock dates. Existing unlocks skipped by an attempt are excluded. Failed or unknown outcomes remain visible under Needs attention. Durable operation records and snapshots stay available for recovery; history does not provide rollback or relocking.
+Unlock history is a flat list of confirmed achievement unlocks with game names and actual unlock dates. Existing unlocks skipped by an attempt are excluded. Failed or unknown outcomes remain visible under Needs attention. Durable operation records and snapshots stay available for recovery; history does not provide rollback or relocking.
 
 Native controls follow the host OS. Mobile layout supports the local browser demo; installers target desktop. Release builds still require validation on all four native targets, signing and notarization. Local Mac package checks do not prove Windows installation or public signing.

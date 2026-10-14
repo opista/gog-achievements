@@ -5,6 +5,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Achievement, Report, ReportItem } from '../../src/shared/api';
 import { ApplyConfirmation } from '../../src/renderer/features/Review';
+import { formatTimestamp } from '../../src/renderer/date-time';
 
 afterEach(cleanup);
 
@@ -82,15 +83,16 @@ it('shows pending achievements with game-specific descriptions and exact local d
   expect(entries).toHaveLength(2);
   expect(within(entries[0]!).getByText('Passed the Trial')).toBeVisible();
   expect(within(entries[0]!).getByText('Complete the Trial of the Grasses.')).toBeVisible();
-  expect(within(entries[0]!).getByText('10 Oct 2026 18:30:00')).toHaveAttribute(
-    'datetime',
-    '2026-10-10T17:30:00Z',
-  );
+  expect(
+    within(entries[0]!).getByText(formatTimestamp('2026-10-10T17:30:00Z', 'Europe/London')),
+  ).toHaveAttribute('datetime', '2026-10-10T17:30:00Z');
   expect(entries[0]?.querySelector('img')).toHaveAttribute(
     'src',
     'https://images.gog-statics.com/trial.jpg',
   );
-  expect(within(entries[1]!).getByText('12 Jan 2026 18:15:42')).toBeVisible();
+  expect(
+    within(entries[1]!).getByText(formatTimestamp('2026-01-12T18:15:42Z', 'Europe/London')),
+  ).toBeVisible();
   expect(within(dialog).queryByText(/Europe\/London|UTC[+-]/)).not.toBeInTheDocument();
   expect(within(entries[1]!).getByText('No description available.')).toBeVisible();
   expect(within(dialog).queryByText('Existing unlock')).not.toBeInTheDocument();
@@ -151,15 +153,13 @@ it('distinguishes repeated local times without restoring time zone settings', ()
   const entries = within(screen.getByRole('list', { name: 'Achievements to unlock' })).getAllByRole(
     'listitem',
   );
-  expect(within(entries[0]!).getByText('01 Nov 2020 01:30:00')).toHaveAttribute(
-    'datetime',
-    '2020-11-01T05:30:00Z',
-  );
+  expect(
+    within(entries[0]!).getByText(formatTimestamp('2020-11-01T05:30:00Z', 'America/New_York')),
+  ).toHaveAttribute('datetime', '2020-11-01T05:30:00Z');
   expect(within(entries[0]!).getByText('First occurrence')).toBeVisible();
-  expect(within(entries[1]!).getByText('01 Nov 2020 01:30:00')).toHaveAttribute(
-    'datetime',
-    '2020-11-01T06:30:00Z',
-  );
+  expect(
+    within(entries[1]!).getByText(formatTimestamp('2020-11-01T05:30:00Z', 'America/New_York')),
+  ).toHaveAttribute('datetime', '2020-11-01T06:30:00Z');
   expect(within(entries[1]!).getByText('Second occurrence')).toBeVisible();
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   expect(screen.queryByText(/UTC[+-]|America\/New_York/)).not.toBeInTheDocument();

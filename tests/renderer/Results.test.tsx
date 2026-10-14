@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Results } from '../../src/renderer/features/Results';
+import { formatTimestamp } from '../../src/renderer/date-time';
 afterEach(cleanup);
 it('does not claim requested dates were confirmed for skipped existing unlocks', () => {
   render(
@@ -44,7 +45,7 @@ it('does not claim requested dates were confirmed for skipped existing unlocks',
   expect(
     screen.queryByText('All requested unlocks and dates were confirmed.'),
   ).not.toBeInTheDocument();
-  expect(screen.getByText('04 Oct 2026 12:00:00')).toBeVisible();
+  expect(screen.getByText(formatTimestamp('2026-10-04T11:00:00Z', 'Europe/London'))).toBeVisible();
   expect(screen.getByText('Already unlocked')).toBeVisible();
 });
 

@@ -165,10 +165,10 @@ export function HistoryView({
   const { unlocks, attention } = useMemo(() => historyRows(records), [records]);
   return (
     <section className="history-view">
-      <h2>Achievement history</h2>
+      <h2>Unlock history</h2>
       {loading ? (
-        <div className="history-skeleton" role="status" aria-label="Loading achievement history">
-          <span className="sr-only">Loading achievement history…</span>
+        <div className="history-skeleton" role="status" aria-label="Loading unlock history">
+          <span className="sr-only">Loading unlock history…</span>
           {[0, 1, 2].map((row) => (
             <div className="skeleton-row" key={row} aria-hidden="true">
               <span className="skeleton-text" />
@@ -178,7 +178,7 @@ export function HistoryView({
       ) : unlocks.length === 0 && attention.length === 0 ? (
         <div className="empty-state">
           <History size={34} />
-          <p>No achievement history yet.</p>
+          <p>No unlock history yet.</p>
         </div>
       ) : (
         <>

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Eye, Plus, RefreshCw } from 'lucide-react';
 import type { Achievement } from '../../shared/api';
 import { Art } from '../components/Art';
-import { formatTimestamp } from '../date-time';
+import { formatDate, formatTimestamp } from '../date-time';
 import { AchievementSkeleton } from './AchievementSkeleton';
 
 type Filter = 'All' | 'Unlocked' | 'Locked';
@@ -156,13 +156,7 @@ export function Achievements({
                         className="status ready"
                         title={`Existing unlock: ${formatTimestamp(item.unlocked_at, zone)}. This date is read-only.`}
                       >
-                        Unlocked{' '}
-                        {item.unlocked_at
-                          ? formatTimestamp(item.unlocked_at, zone, false)
-                              .split(' ')
-                              .slice(0, 3)
-                              .join(' ')
-                          : ''}
+                        Unlocked {item.unlocked_at ? formatDate(item.unlocked_at, zone) : ''}
                       </span>
                     ) : (
                       <span className={`status ${isQueued ? 'queued' : 'neutral'}`}>

@@ -4,6 +4,7 @@ import { afterEach, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import type { OperationRecord, ReportItem } from '../../src/shared/api';
 import { HistoryView } from '../../src/renderer/features/Results';
+import { formatTimestamp } from '../../src/renderer/date-time';
 
 afterEach(cleanup);
 function row(overrides: Partial<ReportItem> = {}): ReportItem {
@@ -60,7 +61,7 @@ it('shows flat unlock rows sorted by actual unlock time with game context and lo
     row({ name: 'Middle unlock', actual_unlocked_at: '2026-10-05T12:00:00Z' }),
   ]);
   render(<HistoryView records={[oldest, newest, middle]} zone="Europe/London" />);
-  expect(screen.getByRole('heading', { name: 'Achievement history' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Unlock history' })).toBeVisible();
   const entries = within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole(
     'listitem',
   );
@@ -70,10 +71,9 @@ it('shows flat unlock rows sorted by actual unlock time with game context and lo
     'Old unlock',
   ]);
   expect(within(entries[0]!).getByText('The Witcher 3')).toBeVisible();
-  expect(within(entries[0]!).getByText('12 Oct 2026 17:00:00')).toHaveAttribute(
-    'datetime',
-    '2026-10-12T16:00:00Z',
-  );
+  expect(
+    within(entries[0]!).getByText(formatTimestamp('2026-10-12T16:00:00Z', 'Europe/London')),
+  ).toHaveAttribute('datetime', '2026-10-12T16:00:00Z');
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(screen.queryByText(/cannot undo/i)).not.toBeInTheDocument();
 });
@@ -133,7 +133,7 @@ it('keeps partial confirmed unlocks separate from unresolved results and never c
   expect(
     within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole('listitem'),
   ).toHaveLength(1);
-  expect(screen.getByText('10 Oct 2026 17:32:00')).toBeVisible();
+  expect(screen.getByText(formatTimestamp('2026-10-10T17:32:00Z', 'UTC'))).toBeVisible();
   expect(screen.getByText('Unlocked with a different date')).toBeVisible();
   expect(screen.queryByText('Existing unlock')).not.toBeInTheDocument();
   const attention = screen.getByRole('list', { name: 'Results needing attention' });
@@ -141,7 +141,9 @@ it('keeps partial confirmed unlocks separate from unresolved results and never c
   expect(within(attention).getByText('Request failed')).toBeVisible();
   expect(within(attention).getByText('Outcome uncertain')).toBeVisible();
   expect(within(attention).getByText('Not attempted')).toBeVisible();
-  expect(within(attention).getAllByText('10 Oct 2026 17:30:00')).toHaveLength(3);
+  expect(
+    within(attention).getAllByText(formatTimestamp('2026-10-10T17:30:00Z', 'UTC')),
+  ).toHaveLength(3);
   expect(within(attention).getAllByText('Cyberpunk 2077')).toHaveLength(3);
 });
 it('preserves reportless unknown and interrupted attempts without inventing achievement unlocks', () => {
@@ -159,7 +161,9 @@ it('preserves reportless unknown and interrupted attempts without inventing achi
   expect(within(attention).getByText('The Witcher 3')).toBeVisible();
   expect(within(attention).getByText('Outcome unknown')).toBeVisible();
   expect(within(attention).getByText('Operation interrupted')).toBeVisible();
-  expect(within(attention).getAllByText('14 Oct 2026 11:00:00')).toHaveLength(2);
+  expect(
+    within(attention).getAllByText(formatTimestamp('2026-10-14T10:00:00Z', 'Europe/London')),
+  ).toHaveLength(2);
 });
 it('never infers a confirmed unlock from an unknown record or a preview, and surfaces missing actual dates', () => {
   const unknown = { ...record('unknown', [row()]), state: 'unknown' as const };
@@ -177,10 +181,10 @@ it('never infers a confirmed unlock from an unknown record or a preview, and sur
 });
 it('shows a bounded loading state and an empty history without stale rows', () => {
   const view = render(<HistoryView records={[record('old', [row()])]} zone="UTC" loading />);
-  expect(screen.getByRole('status', { name: 'Loading achievement history' })).toBeVisible();
+  expect(screen.getByRole('status', { name: 'Loading unlock history' })).toBeVisible();
   expect(screen.queryByText('The World')).not.toBeInTheDocument();
-  expect(screen.queryByText('No achievement history yet.')).not.toBeInTheDocument();
+  expect(screen.queryByText('No unlock history yet.')).not.toBeInTheDocument();
   view.rerender(<HistoryView records={[]} zone="UTC" />);
-  expect(screen.getByText('No achievement history yet.')).toBeVisible();
+  expect(screen.getByText('No unlock history yet.')).toBeVisible();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
