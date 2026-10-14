@@ -200,6 +200,9 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
   }
   return {
     isDemo: true,
+    async checkForUpdates() {
+      throw problem('DESKTOP_REQUIRED', 'Update checks are available in the installed app.');
+    },
     async initialize() {
       return {
         version: '0.1.0-demo',

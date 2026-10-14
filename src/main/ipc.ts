@@ -1,5 +1,5 @@
 import type { IpcMain, IpcMainInvokeEvent, BrowserWindow } from 'electron';
-import type { DesktopApi, ApiMethod, IpcResult } from '../shared/api';
+import type { DesktopApi, WorkspaceApi, ApiMethod, IpcResult } from '../shared/api';
 import { IPC_REQUEST } from '../shared/api';
 import { ipcSchemas } from '../shared/schemas';
 import { publicError, DesktopError } from './errors';
@@ -13,9 +13,15 @@ export function trustedSender(
     event.senderFrame === window.webContents.mainFrame
   );
 }
-export function installIpc(ipcMain: IpcMain, window: BrowserWindow, api: DesktopApi): void {
+export function installIpc(
+  ipcMain: IpcMain,
+  window: BrowserWindow,
+  api: WorkspaceApi,
+  appActions: Pick<DesktopApi, 'checkForUpdates'>,
+): void {
   const handlers: Record<ApiMethod, (payload: unknown) => Promise<unknown>> = {
     initialize: () => api.initialize(),
+    checkForUpdates: () => appActions.checkForUpdates(),
     login: () => api.login(),
     logout: () => api.logout(),
     listGames: () => api.listGames(),

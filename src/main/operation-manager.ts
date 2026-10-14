@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   AuthStatus,
-  DesktopApi,
+  WorkspaceApi,
   OperationState,
   OperationRecord,
   Queue,
@@ -41,7 +41,7 @@ interface Preview {
   queue: Queue;
   report: Report;
 }
-export class OperationManager implements DesktopApi {
+export class OperationManager implements WorkspaceApi {
   readonly isDemo = false;
   private operation: OperationState = { kind: 'idle' };
   private listeners = new Set<(state: OperationState) => void>();

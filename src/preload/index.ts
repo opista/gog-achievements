@@ -26,6 +26,7 @@ async function invoke<T>(method: ApiMethod, payload?: unknown): Promise<T> {
 const api: DesktopApi = {
   isDemo: process.argv.includes('--gog-achievements-demo'),
   initialize: () => invoke('initialize'),
+  checkForUpdates: () => invoke('checkForUpdates'),
   login: () => invoke('login'),
   logout: () => invoke('logout'),
   listGames: () => invoke('listGames'),

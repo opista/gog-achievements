@@ -495,3 +495,19 @@ for (const display of [
     });
   });
 }
+
+test('account menu offers update checks before and after GOG sign-in', async ({ page }) => {
+  await page.getByLabel('Account menu').click();
+  const check = page.getByRole('button', { name: 'Check for updates…', exact: true });
+  await expect(check).toBeEnabled();
+  await check.click();
+  await expect(page.locator('.account-popover').getByRole('alert')).toHaveText(
+    'Update checks are available in the installed app.',
+  );
+  await expect(page.locator('.error-banner')).toHaveCount(0);
+  await page.getByLabel('Account menu').click();
+  await signIn(page);
+  await page.getByLabel('Account menu').click();
+  await expect(check).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
+});

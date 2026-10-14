@@ -1,17 +1,9 @@
 import { useState, type CSSProperties } from 'react';
-import {
-  CircleAlert,
-  Gamepad2,
-  History,
-  LoaderCircle,
-  LogOut,
-  RefreshCw,
-  UserRound,
-  X,
-} from 'lucide-react';
+import { CircleAlert, Gamepad2, History, LoaderCircle, RefreshCw, X } from 'lucide-react';
 import type { DesktopApi } from '../shared/api';
 import type { DemoDesktopApi, DemoScenario } from '../shared/demo-api';
 import { Art } from './components/Art';
+import { AccountMenu } from './components/AccountMenu';
 import { Achievements } from './features/Achievements';
 import { AchievementSkeleton } from './features/AchievementSkeleton';
 import { ApplyConfirmation } from './features/Review';
@@ -78,33 +70,20 @@ export function App({ api }: { api: DesktopApi }) {
         ) : null}
         <div className="account-controls">
           {w.auth.authenticated ? (
-            <>
-              <button className="history-button" disabled={w.busy} onClick={w.showHistory}>
-                <History size={17} />
-                History
-              </button>
-              <details className="account-menu">
-                <summary aria-label="Account menu" title="Account">
-                  <UserRound size={18} aria-hidden="true" />
-                  <span className="caret" />
-                </summary>
-                <div className="account-popover">
-                  <small>Account ID: {w.auth.user_id}</small>
-                  <button disabled={w.busy} onClick={w.logout}>
-                    <LogOut size={17} />
-                    Sign out
-                  </button>
-                  <small>
-                    App {w.versions.app}
-                    <br />
-                    CLI {w.versions.cli}
-                  </small>
-                </div>
-              </details>
-            </>
+            <button className="history-button" disabled={w.busy} onClick={w.showHistory}>
+              <History size={17} />
+              History
+            </button>
           ) : (
             <span className="muted">Not signed in</span>
           )}
+          <AccountMenu
+            api={api}
+            auth={w.auth}
+            versions={w.versions}
+            busy={w.busy}
+            onLogout={w.logout}
+          />
         </div>
       </header>
       {w.error ? (
