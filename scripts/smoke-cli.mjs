@@ -16,8 +16,8 @@ import {
 
 const execute = promisify(execFile);
 
-export async function smokeCli(directory, lock, name, run = execute) {
-  selectTarget(name, process, true);
+export async function smokeCli(directory, lock, name, run = execute, host = process) {
+  selectTarget(name, host, true);
   await validateDistribution(directory, lock, name);
   const executable = join(
     directory,

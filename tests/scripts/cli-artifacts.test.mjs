@@ -325,37 +325,46 @@ test('package commands request exactly one architecture and cannot publish', () 
   }
 });
 
-test('smoke checks execute only JSON help and an offline queue read', async (t) => {
-  const name = selectTarget();
-  const root = await temporary(t);
-  const { bytes, lock } = fixture(name);
-  await extractCliArchive(bytes, root, lock, name);
-  const calls = [];
-  await smokeCli(root, lock, name, async (_executable, args, options) => {
-    calls.push(args);
-    assert.equal(options.windowsHide, true);
-    assert.equal(options.env.NODE_OPTIONS, undefined);
-    assert.equal(options.env.NODE_PATH, undefined);
-    if (args[0] === '--help')
-      return {
-        stderr: '',
-        stdout: JSON.stringify({
-          ok: true,
-          data: { name: 'gog-achievements', version: VERSION },
-        }),
-      };
-    const queue = JSON.parse(await readFile(args[3], 'utf8'));
-    return { stderr: '', stdout: JSON.stringify({ ok: true, data: queue }) };
-  });
-  assert.deepEqual(
-    calls.map((args) => args.slice(0, 2)),
-    [
-      ['--help', '--json'],
-      ['queue', 'show'],
-    ],
-  );
-  assert.equal(calls.length, 2);
-  assert.ok(calls.every((args) => !args.includes('--yes') && !args.includes('login')));
+test('smoke checks execute only JSON help and an offline queue read on every target', async (t) => {
+  for (const [name, target] of Object.entries(TARGETS)) {
+    await t.test(name, async (t) => {
+      const root = await temporary(t);
+      const { bytes, lock } = fixture(name);
+      await extractCliArchive(bytes, root, lock, name);
+      const calls = [];
+      await smokeCli(
+        root,
+        lock,
+        name,
+        async (_executable, args, options) => {
+          calls.push(args);
+          assert.equal(options.windowsHide, true);
+          assert.equal(options.env.NODE_OPTIONS, undefined);
+          assert.equal(options.env.NODE_PATH, undefined);
+          if (args[0] === '--help')
+            return {
+              stderr: '',
+              stdout: JSON.stringify({
+                ok: true,
+                data: { name: 'gog-achievements', version: VERSION },
+              }),
+            };
+          const queue = JSON.parse(await readFile(args[3], 'utf8'));
+          return { stderr: '', stdout: JSON.stringify({ ok: true, data: queue }) };
+        },
+        { platform: target.platform, arch: target.architecture },
+      );
+      assert.deepEqual(
+        calls.map((args) => args.slice(0, 2)),
+        [
+          ['--help', '--json'],
+          ['queue', 'show'],
+        ],
+      );
+      assert.equal(calls.length, 2);
+      assert.ok(calls.every((args) => !args.includes('--yes') && !args.includes('login')));
+    });
+  }
 });
 
 test('private release downloads resolve exact API assets and remove tokens before CDN redirects', async (t) => {
