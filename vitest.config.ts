@@ -6,6 +6,9 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     restoreMocks: true,
+    // Keep jsdom workers within hosted runners' CPU and memory limits.
+    maxWorkers: 4,
+    setupFiles: ['tests/setup.ts'],
     testTimeout: 10000,
   },
 });
