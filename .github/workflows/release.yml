@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+    secrets:
+      CLI_RELEASE_TOKEN:
+        description: Optional read-only token for the CLI repository while it is private
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag to build or retry
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.pin.outputs.commit }}
+    steps:
+      - name: Pin the existing draft release tag
+        id: pin
+        uses: actions/github-script@v8
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            if (!/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(tag)) {
+              throw new Error('Use an existing version tag, such as v0.1.0.');
+            }
+            const { data: release } = await github.rest.repos.getReleaseByTag({ ...context.repo, tag });
+            if (!release.draft) throw new Error('Only draft releases can be built for publication.');
+            const { data: commit } = await github.rest.repos.getCommit({ ...context.repo, ref: 'refs/tags/' + tag });
+            core.setOutput('commit', commit.sha);
+
+  build:
+    needs: prepare
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.prepare.outputs.commit }}
+      release-tag: ${{ inputs.tag }}
+    secrets:
+      CLI_RELEASE_TOKEN: ${{ secrets.CLI_RELEASE_TOKEN }}
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: distribution-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify versions, all packages and SHA-256 checksums
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/verify-release.mjs "$RELEASE_TAG" --directory release-assets
+      - name: Confirm the release tag still names the built commit
+        uses: actions/github-script@v8
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            const { data: release } = await github.rest.repos.getReleaseByTag({ ...context.repo, tag });
+            if (!release.draft) throw new Error('Only draft releases can be published.');
+            const { data: commit } = await github.rest.repos.getCommit({ ...context.repo, ref: 'refs/tags/' + tag });
+            if (commit.sha !== process.env.RELEASE_COMMIT) throw new Error('The release tag moved during this build.');
+      - name: Attach all verified packages and publish
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release upload "$RELEASE_TAG" release-assets/*.dmg release-assets/*.zip release-assets/*.exe release-assets/*.sha256 --clobber
+          gh release edit "$RELEASE_TAG" --draft=false

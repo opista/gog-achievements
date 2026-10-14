@@ -23,7 +23,7 @@ function applyButton(page: Page, title = CYBERPUNK) {
 }
 
 async function signIn(page: Page) {
-  await expect(page.getByRole('heading', { name: 'Your GOG achievements' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Get unlocking' })).toBeVisible();
   const login = page.getByRole('button', { name: 'Sign in with GOG', exact: true });
   await expect(login).toBeEnabled();
   await login.click();
@@ -138,7 +138,7 @@ test('compact library keeps game art, plain achievement details and existing unl
   await summary.click();
   await expect(page.locator('.account-popover')).toContainText('123456789');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Your GOG achievements' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Get unlocking' })).toBeVisible();
   await expect(page.locator('.queue-game-group')).toHaveCount(0);
 });
 
@@ -436,9 +436,7 @@ test('a browser without the explicit demo flag cannot pretend to have a desktop 
 test('signed-out layout has a blank library and no queue or time zone controls', async ({
   page,
 }, testInfo) => {
-  await expect(
-    page.getByRole('heading', { name: 'Your GOG achievements', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Get unlocking', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in with GOG', exact: true })).toBeEnabled();
   await expect(
     page.getByRole('complementary', { name: 'Achievement queue', exact: true }),

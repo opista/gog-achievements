@@ -53,5 +53,9 @@
     "vite": "7.3.7",
     "vitest": "5.0.4",
     "yauzl": "3.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/metacurb/gog-achievements.git"
   }
 }

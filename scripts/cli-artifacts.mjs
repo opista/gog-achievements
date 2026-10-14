@@ -77,7 +77,7 @@ export async function readReleaseLock(path = join(PROJECT_ROOT, 'cli-release.loc
 export function validateReleaseLock(lock) {
   if (
     lock?.schema_version !== 1 ||
-    lock.repository !== 'metacurb/gog-achievements-cli' ||
+    lock.repository !== 'opista/gog-achievements-cli' ||
     !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(lock.version) ||
     lock.tag !== 'v' + lock.version ||
     !/^[a-f0-9]{40}$/.test(lock.commit) ||

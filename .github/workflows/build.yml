@@ -1,0 +1,118 @@
+name: Build and test
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ''
+      release-tag:
+        type: string
+        default: ''
+      target:
+        type: string
+        default: all
+      package:
+        type: boolean
+        default: true
+    secrets:
+      CLI_RELEASE_TOKEN:
+        description: Optional read-only token for the CLI repository while it is private
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint, types and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npx --no-install electron-vite build
+      - name: Check the release version before packaging
+        if: inputs.release-tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: node scripts/verify-release.mjs --version-only "$RELEASE_TAG"
+
+  demo-e2e:
+    name: Offline demo browser flow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: demo-e2e-failures
+          path: /tmp/gog-achievements-e2e/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package:
+    name: ${{ matrix.target }}
+    needs: [checks, demo-e2e]
+    if: inputs.package && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(inputs.target == 'all' && '["macos-arm64","macos-x64","windows-arm64","windows-x64"]' || format('["{0}"]', inputs.target)) }}
+    runs-on: ${{ fromJSON('{"macos-arm64":"macos-15","macos-x64":"macos-15-intel","windows-x64":"windows-2025","windows-arm64":"windows-11-arm"}')[matrix.target] }}
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      PACKAGE_DIRECTORY: ${{ fromJSON('{"macos-arm64":"dist/mac-arm64/GOG Achievements.app","macos-x64":"dist/mac/GOG Achievements.app","windows-arm64":"dist/win-arm64-unpacked","windows-x64":"dist/win-unpacked"}')[matrix.target] }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - name: Build the package with its pinned CLI
+        env:
+          # Public CLI releases need no token. Private releases require this secret.
+          GH_TOKEN: ${{ secrets.CLI_RELEASE_TOKEN }}
+        run: npm run package -- --target=${{ matrix.target }}
+      - name: Verify the CLI inside the packaged application
+        shell: bash
+        run: node scripts/verify-package.mjs --target=${{ matrix.target }} --directory="$PACKAGE_DIRECTORY"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: distribution-${{ matrix.target }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 7

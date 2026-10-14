@@ -255,7 +255,7 @@ it('uses one sign-in action and hides the queue and time zone while signed out',
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Sign in with GOG' })).toBeEnabled(),
   );
-  expect(screen.getByRole('heading', { name: 'Your GOG achievements' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Get unlocking' })).toBeVisible();
   expect(
     screen.queryByRole('complementary', { name: 'Achievement queue' }),
   ).not.toBeInTheDocument();

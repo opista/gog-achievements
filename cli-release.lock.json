@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "repository": "metacurb/gog-achievements-cli",
+  "repository": "opista/gog-achievements-cli",
   "version": "0.3.0",
   "tag": "v0.3.0",
   "commit": "a102216760b555b2a864ed18c853f256ef484920",

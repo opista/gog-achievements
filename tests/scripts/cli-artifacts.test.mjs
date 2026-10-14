@@ -103,7 +103,7 @@ function fixture(name = 'macos-arm64', extra = [], metadataOverride = {}) {
   const bytes = zip([...entries, ...extra]);
   const lock = {
     schema_version: 1,
-    repository: 'metacurb/gog-achievements-cli',
+    repository: 'opista/gog-achievements-cli',
     version: VERSION,
     tag: 'v' + VERSION,
     commit: 'a'.repeat(40),
@@ -270,7 +270,7 @@ test('download uses the pinned URL and verified cache, preserves other targets a
   const directory = await downloadCli(name, { root, lock, request });
   assert.equal(
     urls[0],
-    'https://github.com/metacurb/gog-achievements-cli/releases/download/v0.3.0/' +
+    'https://github.com/opista/gog-achievements-cli/releases/download/v0.3.0/' +
       rootFolder(name) +
       '.zip',
   );
@@ -382,11 +382,11 @@ test('private release downloads resolve exact API assets and remove tokens befor
   await downloadCli(name, { root, lock, request, token: 'fixture-build-token' });
   assert.equal(
     calls[0].url,
-    'https://api.github.com/repos/metacurb/gog-achievements-cli/releases/tags/v0.3.0',
+    'https://api.github.com/repos/opista/gog-achievements-cli/releases/tags/v0.3.0',
   );
   assert.equal(
     calls[1].url,
-    'https://api.github.com/repos/metacurb/gog-achievements-cli/releases/assets/456',
+    'https://api.github.com/repos/opista/gog-achievements-cli/releases/assets/456',
   );
   assert.equal(calls[1].headers.Authorization, 'Bearer fixture-build-token');
   assert.equal(calls[1].headers.Accept, 'application/octet-stream');

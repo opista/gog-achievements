@@ -5,3 +5,5 @@ dist-web
 resources/cli
 .cache
 package-lock.json
+CHANGELOG.md
+.release-please-manifest.json

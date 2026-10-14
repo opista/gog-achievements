@@ -9,6 +9,8 @@ module.exports = {
   appId: 'com.metacurb.gogachievements',
   productName: 'GOG Achievements',
   asar: true,
+  // Updates use browser downloads. Do not generate an automatic update feed.
+  publish: null,
   directories: { output: 'dist', buildResources: 'resources' },
   files: ['out/**/*', 'package.json'],
   extraResources: [{ from: `resources/cli/${target}`, to: 'cli', filter: ['**/*'] }],

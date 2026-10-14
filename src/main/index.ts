@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
@@ -9,6 +9,8 @@ import { installIpc } from './ipc';
 import { createDemoApi } from '../shared/demo-api';
 import { IPC_OPERATION, type DesktopApi, type OperationState } from '../shared/api';
 import { DesktopError } from './errors';
+import { installUpdates } from './update-menu';
+import packageMetadata from '../../package.json';
 const mainDirectory = dirname(fileURLToPath(import.meta.url));
 const demo = process.env.GOG_ACHIEVEMENTS_DEMO === '1';
 let window: BrowserWindow | null = null;
@@ -16,6 +18,7 @@ let operation: OperationState = { kind: 'idle' };
 let guardDialog = false;
 let manager: OperationManager | undefined;
 let recoveryTimer: ReturnType<typeof setInterval> | undefined;
+let updates: ReturnType<typeof installUpdates> | undefined;
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => {
@@ -81,9 +84,19 @@ else {
         },
       });
       const currentWindow = window;
+      updates = installUpdates({
+        app,
+        dialog,
+        Menu,
+        shell,
+        getWindow: () => window,
+        isBusy: () => operation.kind !== 'idle',
+        repository: new URL(packageMetadata.repository.url).pathname.replace(/^\/|\.git$/g, ''),
+      });
       installIpc(ipcMain, currentWindow, api);
       const unsubscribe = api.onOperation((state) => {
         operation = state;
+        if (state.kind === 'idle') updates?.onIdle();
         if (!currentWindow.isDestroyed()) currentWindow.webContents.send(IPC_OPERATION, state);
       });
       currentWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -135,6 +148,7 @@ else {
     }
   });
   app.on('will-quit', () => {
+    updates?.cleanup();
     if (recoveryTimer) clearInterval(recoveryTimer);
   });
   app.on('window-all-closed', () => {
