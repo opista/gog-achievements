@@ -17,7 +17,7 @@ test('the native probe finds a real fake child and does not treat identity misma
   const folder = await mkdtemp(join(tmpdir(), 'gog-probe-'));
   const snapshot = join(folder, 'private snapshot.json');
   const script = join(folder, 'fake-cli.mjs');
-  await writeFile(script, 'setTimeout(() => {}, 30000);');
+  await writeFile(script, 'setTimeout(() => {}, 60000);');
   const child = spawn(
     process.execPath,
     [script, 'queue', 'apply', '--file', snapshot, '--yes', '--json'],
@@ -46,4 +46,4 @@ test('the native probe finds a real fake child and does not treat identity misma
     });
     await rm(folder, { recursive: true, force: true });
   }
-});
+}, 45000);

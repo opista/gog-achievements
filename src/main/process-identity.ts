@@ -32,7 +32,8 @@ export class NativeProcessProbe implements ProcessProbe {
             '-Command',
             'Get-CimInstance Win32_Process | Select-Object ProcessId,CreationDate,CommandLine,Name | ConvertTo-Json -Compress',
           ],
-          { timeout: 3000, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
+          // A cold PowerShell/CIM start can exceed three seconds on Windows.
+          { timeout: 10000, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
         );
         const raw: unknown = JSON.parse(result.stdout || '[]');
         const values = Array.isArray(raw) ? raw : [raw];
