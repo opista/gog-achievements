@@ -617,16 +617,6 @@ small {
 .queue-actions > button {
   min-height: 44px;
 }
-.action-hint,
-.saved-state {
-  font-size: 12px;
-  color: var(--muted);
-}
-.saved-state {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
 .connect-state {
   min-height: 100%;
   display: flex;

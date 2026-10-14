@@ -131,7 +131,7 @@ function SignedInQueuePane({ workspace: w, zone, demo, onZone, width, onResize }
                 {saving ? (
                   <p className="queue-progress" role="status">
                     <LoaderCircle className="spinner" size={16} />
-                    Saving draft…
+                    Saving queue…
                   </p>
                 ) : null}
               </section>
@@ -156,16 +156,10 @@ function SignedInQueuePane({ workspace: w, zone, demo, onZone, width, onResize }
             ))}
           </select>
         </label>
-        {w.saved ? (
-          <p className="saved-state" role="status">
-            <Check size={16} />
-            Draft saved
-          </p>
-        ) : null}
         {w.error && w.auth.authenticated ? (
           <p className="field-error">
             <Info size={16} />
-            The last request did not complete. Your report or draft is kept.
+            The last request did not complete. Your queue and results are kept.
           </p>
         ) : null}
       </div>

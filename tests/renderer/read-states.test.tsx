@@ -151,7 +151,7 @@ it('shows selected achievements in the queue before persistence resolves', async
   await user.click(screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }));
   const queue = screen.getByRole('complementary', { name: 'Achievement queue' });
   expect(within(queue).getByText('Legend of The Afterlife')).toBeVisible();
-  expect(within(queue).getByRole('status')).toHaveTextContent('Saving draft…');
+  expect(within(queue).getByRole('status')).toHaveTextContent('Saving queue…');
   expect(
     within(queue).getByRole('button', { name: 'Remove Legend of The Afterlife from queue' }),
   ).toBeDisabled();
@@ -162,7 +162,7 @@ it('shows selected achievements in the queue before persistence resolves', async
       within(queue).getByRole('button', { name: 'Remove Legend of The Afterlife from queue' }),
     ).toBeEnabled(),
   );
-  expect(screen.getByText('Draft saved')).toBeVisible();
+  expect((await api.getQueue('1'))?.items.some((item) => item.achievement_id === '4')).toBe(true);
   expect(apply).not.toHaveBeenCalled();
 });
 
@@ -182,7 +182,6 @@ it('rolls back provisional additions when both persistence and draft reload fail
   expect(within(queue).getByText('Passed the Trial')).toBeVisible();
   expect(screen.getByText('4 achievements · 2 games')).toBeVisible();
   expect(screen.getByRole('alert')).toHaveTextContent('Draft save failed.');
-  expect(screen.queryByText('Draft saved')).not.toBeInTheDocument();
 });
 
 it('ends queue loading with a local retry when both the initial library and saved drafts fail', async () => {

@@ -56,7 +56,6 @@ export function useWorkspace(api: DesktopApi) {
   const [previewGameId, setPreviewGameId] = useState<string | null>(null);
   const [error, setError] = useState<Notice | null>(null);
   const [operation, setOperation] = useState<OperationState>({ kind: 'idle' });
-  const [saved, setSaved] = useState(false);
   const [versions, setVersions] = useState({ app: '', cli: '' });
   const generation = useRef(0);
   const working = useRef(false);
@@ -71,7 +70,6 @@ export function useWorkspace(api: DesktopApi) {
   const queue = queues.find((item) => item.game.id === game?.id) ?? null;
   function invalidate() {
     setPreview(null);
-    setSaved(false);
   }
   function clearGameState() {
     generation.current += 1;
@@ -377,7 +375,6 @@ export function useWorkspace(api: DesktopApi) {
       try {
         const value = await task();
         updateQueue(gameId, value);
-        setSaved(true);
         succeeded = true;
       } catch (failure) {
         if (!['ACCOUNT_CHANGED', 'ACCOUNT_MISMATCH'].includes(notice(failure).code ?? '')) {
@@ -522,7 +519,6 @@ export function useWorkspace(api: DesktopApi) {
     previewGameId,
     error,
     operation,
-    saved,
     versions,
     busy,
     active,
