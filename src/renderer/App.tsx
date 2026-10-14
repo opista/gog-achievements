@@ -84,9 +84,8 @@ export function App({ api }: { api: DesktopApi }) {
                 History
               </button>
               <details className="account-menu">
-                <summary>
-                  <UserRound size={18} />
-                  My account
+                <summary aria-label="Account menu" title="Account">
+                  <UserRound size={18} aria-hidden="true" />
                   <span className="caret" />
                 </summary>
                 <div className="account-popover">
@@ -124,7 +123,7 @@ export function App({ api }: { api: DesktopApi }) {
         </div>
       ) : null}
       <main
-        className="workspace"
+        className={`workspace ${!w.auth.authenticated ? 'signed-out' : ''}`}
         style={
           {
             '--library-width': libraryWidth ? `${libraryWidth}px` : undefined,
@@ -158,8 +157,7 @@ export function App({ api }: { api: DesktopApi }) {
               <span className="connect-mark">
                 <Gamepad2 size={54} />
               </span>
-              <h2>Connect GOG</h2>
-              <p>Sign in to load your games and achievements.</p>
+              <h2>Get unlocking</h2>
               <button className="primary" disabled={w.busy} onClick={w.login}>
                 {w.loading ? (
                   <>
@@ -167,14 +165,9 @@ export function App({ api }: { api: DesktopApi }) {
                     {w.loading}
                   </>
                 ) : (
-                  'Sign in to GOG'
+                  'Sign in with GOG'
                 )}
               </button>
-              <p className="muted">
-                {api.isDemo
-                  ? 'Demo sign-in uses sample data only.'
-                  : 'Sign-in opens in a GOG window.'}
-              </p>
             </div>
           ) : (
             <>
@@ -236,12 +229,8 @@ export function App({ api }: { api: DesktopApi }) {
                   <HistoryView
                     records={w.history}
                     zone={zone}
-                    onView={w.viewRecord}
                     loading={w.loadingTarget === 'history' && w.loading !== null}
                   />
-                  <button disabled={w.busy} onClick={() => w.setView('browse')}>
-                    Back to achievements
-                  </button>
                 </>
               ) : w.game && !w.achievementsLoaded ? (
                 w.loadingTarget === 'achievements' && w.loading ? (
@@ -259,7 +248,6 @@ export function App({ api }: { api: DesktopApi }) {
                   queued={new Set(w.queue?.items.map((item) => item.achievement_id) ?? [])}
                   busy={w.busy}
                   loading={w.loading !== null && w.loadingTarget === 'achievements'}
-                  adding={w.queueAction?.kind === 'add' && w.queueAction.gameId === w.game.id}
                   demo={api.isDemo}
                   zone={zone}
                   onAdd={w.add}
@@ -268,7 +256,11 @@ export function App({ api }: { api: DesktopApi }) {
               ) : (
                 <div className="empty-state">
                   <Gamepad2 size={40} />
-                  <h3>{w.libraryLoaded ? 'No GOG games found' : 'Choose a game'}</h3>
+                  <h3>
+                    {w.libraryLoaded && w.games.length === 0
+                      ? 'No GOG games found'
+                      : 'Choose a game'}
+                  </h3>
                   {!w.busy ? (
                     <button onClick={w.refreshLibrary}>
                       {w.libraryLoaded ? 'Refresh library' : 'Retry library'}

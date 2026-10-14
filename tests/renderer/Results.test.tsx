@@ -47,3 +47,20 @@ it('does not claim requested dates were confirmed for skipped existing unlocks',
   expect(screen.getByText('04 Oct 2026 12:00:00')).toBeVisible();
   expect(screen.getByText('Already unlocked')).toBeVisible();
 });
+
+it('keeps immediate unknown apply feedback separate from the history feed', () => {
+  render(
+    <Results
+      zone="UTC"
+      result={{
+        operationId: 'unknown',
+        state: 'unknown',
+        report: null,
+        error: { code: 'INTERRUPTED', message: 'The write ended without a confirmed report.' },
+      }}
+    />,
+  );
+  expect(screen.getByRole('heading', { name: 'Outcome unknown' })).toBeVisible();
+  expect(screen.getByText('The write ended without a confirmed report.')).toBeVisible();
+  expect(screen.getByText(/cannot prove which operation caused an unlock/)).toBeVisible();
+});

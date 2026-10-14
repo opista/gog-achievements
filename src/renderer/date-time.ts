@@ -171,3 +171,22 @@ function supportedTimeZones(): string[] {
 
 // Build once; rendering the zone menu must not format hundreds of timestamps.
 export const TIME_ZONES = [...new Set(['UTC', detectTimeZone(), ...supportedTimeZones()])].sort();
+
+export interface TimeZoneOption {
+  value: string;
+  label: string;
+}
+const optionReferenceDate = new Date().toISOString();
+const zoneOptions = new Map<string, TimeZoneOption>();
+
+/** All option offsets use one instant, and each label is formatted once. */
+export function timeZoneOptions(zones: readonly string[] = TIME_ZONES): TimeZoneOption[] {
+  return zones.map((zone) => {
+    let option = zoneOptions.get(zone);
+    if (!option) {
+      option = { value: zone, label: zoneLabel(zone, optionReferenceDate).replaceAll('_', ' ') };
+      zoneOptions.set(zone, option);
+    }
+    return option;
+  });
+}

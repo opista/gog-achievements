@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CircleAlert, History, Info } from 'lucide-react';
 import type { ApplyResult, OperationRecord } from '../../shared/api';
 import { formatTimestamp, zoneLabel } from '../date-time';
@@ -83,56 +84,151 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
     </section>
   );
 }
+interface HistoryUnlock {
+  key: string;
+  name: string;
+  game: string;
+  unlockedAt: string;
+  time: number;
+  differentDate: boolean;
+}
+interface HistoryAttention {
+  key: string;
+  name: string;
+  game?: string;
+  status: string;
+  timestamp: string;
+  dateLabel: 'Requested' | 'Attempted';
+}
+function historyRows(records: OperationRecord[]): {
+  unlocks: HistoryUnlock[];
+  attention: HistoryAttention[];
+} {
+  const unlocks = new Map<string, HistoryUnlock>();
+  const attention: HistoryAttention[] = [];
+  const attempts = records.toSorted(
+    (left, right) => Date.parse(right.started_at) - Date.parse(left.started_at),
+  );
+  for (const record of attempts) {
+    const report = record.report;
+    if (record.state !== 'complete' || !report) {
+      attention.push({
+        key: `${record.id}:unknown`,
+        name: record.game_title,
+        status: record.state === 'running' ? 'Operation interrupted' : 'Outcome unknown',
+        timestamp: record.started_at,
+        dateLabel: 'Attempted',
+      });
+      continue;
+    }
+    if (report.dry_run) continue;
+    for (const item of report.results) {
+      if (item.status === 'skipped_already_unlocked') continue;
+      const time = item.actual_unlocked_at ? Date.parse(item.actual_unlocked_at) : Number.NaN;
+      const restored = item.status === 'restored' || item.status === 'restored_with_different_date';
+      if (restored && Number.isFinite(time) && item.actual_unlocked_at) {
+        const key = `${report.game.id}:${item.achievement_id}:${time}`;
+        if (!unlocks.has(key))
+          unlocks.set(key, {
+            key,
+            name: item.name,
+            game: report.game.title,
+            unlockedAt: item.actual_unlocked_at,
+            time,
+            differentDate: item.status === 'restored_with_different_date',
+          });
+      } else {
+        attention.push({
+          key: `${record.id}:${item.achievement_id}`,
+          name: item.name,
+          game: report.game.title,
+          status: restored ? 'Unlock date unavailable' : STATUS_LABELS[item.status],
+          timestamp: item.requested_unlocked_at,
+          dateLabel: 'Requested',
+        });
+      }
+    }
+  }
+  return {
+    unlocks: [...unlocks.values()].sort((left, right) => right.time - left.time),
+    attention,
+  };
+}
 export function HistoryView({
   records,
   zone,
-  onView,
   loading = false,
 }: {
   records: OperationRecord[];
   zone: string;
-  onView(record: OperationRecord): void;
   loading?: boolean;
 }) {
+  const { unlocks, attention } = useMemo(() => historyRows(records), [records]);
   return (
     <section className="history-view">
-      <h2>Operation history</h2>
-      <p className="muted">Saved reports are read-only. They cannot undo an unlock.</p>
+      <h2>Achievement history</h2>
+      <p className="muted">Unlock dates · {zone}</p>
       {loading ? (
-        <div className="history-skeleton" role="status" aria-label="Loading operation history">
-          <span className="sr-only">Loading operation history…</span>
+        <div className="history-skeleton" role="status" aria-label="Loading achievement history">
+          <span className="sr-only">Loading achievement history…</span>
           {[0, 1, 2].map((row) => (
             <div className="skeleton-row" key={row} aria-hidden="true">
               <span className="skeleton-text" />
             </div>
           ))}
         </div>
-      ) : records.length === 0 ? (
+      ) : unlocks.length === 0 && attention.length === 0 ? (
         <div className="empty-state">
           <History size={34} />
-          <p>No saved operations yet.</p>
+          <p>No achievement history yet.</p>
         </div>
       ) : (
-        <ul className="history-list">
-          {records.map((record) => (
-            <li key={record.id}>
-              <div>
-                <strong>{record.game_title}</strong>
-                <span>{formatTimestamp(record.started_at, zone)}</span>
-                <span className="status neutral">
-                  {record.state === 'unknown'
-                    ? 'Outcome unknown'
-                    : record.state === 'running'
-                      ? 'Operation interrupted'
-                      : record.report?.complete
-                        ? 'Completed'
-                        : 'Needs attention'}
-                </span>
-              </div>
-              <button onClick={() => onView(record)}>View report</button>
-            </li>
-          ))}
-        </ul>
+        <>
+          {unlocks.length > 0 ? (
+            <ul className="history-unlocks" aria-label="Unlocked achievements">
+              {unlocks.map((entry) => (
+                <li className="history-unlock-row" key={entry.key}>
+                  <div className="history-entry-copy">
+                    <strong>{entry.name}</strong>
+                    <span>{entry.game}</span>
+                    {entry.differentDate ? <small>Unlocked with a different date</small> : null}
+                  </div>
+                  <time
+                    className="history-unlock-date"
+                    dateTime={entry.unlockedAt}
+                    title={`${zoneLabel(zone, entry.unlockedAt)} · ${entry.unlockedAt}`}
+                  >
+                    {formatTimestamp(entry.unlockedAt, zone)}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No confirmed unlocks yet.</p>
+          )}
+          {attention.length > 0 ? (
+            <section className="history-attention" aria-label="Needs attention">
+              <h3>Needs attention</h3>
+              <ul className="history-attention-list" aria-label="Results needing attention">
+                {attention.map((entry) => (
+                  <li className="history-attention-row" key={entry.key}>
+                    <div className="history-entry-copy">
+                      <strong>{entry.name}</strong>
+                      {entry.game ? <span>{entry.game}</span> : null}
+                      <small>{entry.status}</small>
+                    </div>
+                    <span className="history-unlock-date">
+                      {entry.dateLabel}{' '}
+                      <time dateTime={entry.timestamp}>
+                        {formatTimestamp(entry.timestamp, zone)}
+                      </time>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
       )}
     </section>
   );

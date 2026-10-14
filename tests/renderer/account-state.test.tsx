@@ -21,6 +21,7 @@ function expectAccountDataCleared(value: ReturnType<typeof useWorkspace>) {
   expect(value.games).toEqual([]);
   expect(value.game).toBeNull();
   expect(value.achievements).toEqual([]);
+  expect(value.achievementFor('1', '1')).toBeUndefined();
   expect(value.queue).toBeNull();
   expect(value.queues).toEqual([]);
   expect(value.history).toEqual([]);

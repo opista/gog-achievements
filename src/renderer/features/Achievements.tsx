@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Eye, LoaderCircle, Plus, RefreshCw } from 'lucide-react';
+import { Eye, Plus, RefreshCw } from 'lucide-react';
 import type { Achievement } from '../../shared/api';
 import { Art } from '../components/Art';
 import { formatTimestamp } from '../date-time';
@@ -11,7 +11,6 @@ interface Props {
   queued: Set<string>;
   busy: boolean;
   loading?: boolean;
-  adding?: boolean;
   demo: boolean;
   zone: string;
   onAdd(ids: string[]): void;
@@ -37,15 +36,13 @@ export function Achievements({
   queued,
   busy,
   loading = false,
-  adding = false,
   demo,
   zone,
   onAdd,
   onRefresh,
 }: Props) {
-  const controlsBlocked = busy || loading || adding;
+  const controlsBlocked = busy || loading;
   const [filter, setFilter] = useState<Filter>('All');
-  const [selected, setSelected] = useState(new Set<string>());
   const [revealed, setRevealed] = useState(new Set<string>());
   const revealTarget = useRef<string | null>(null);
   const filtered = achievements
@@ -56,23 +53,6 @@ export function Achievements({
         (filter === 'Unlocked' && item.unlocked) ||
         (filter === 'Locked' && !item.unlocked),
     );
-  const additions = achievements
-    .filter(
-      (item) =>
-        selected.has(item.id) &&
-        !queued.has(item.id) &&
-        !item.unlocked &&
-        (!item.hidden || revealed.has(item.id)),
-    )
-    .map((item) => item.id);
-  function toggle(id: string) {
-    setSelected((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
   function reveal(id: string) {
     revealTarget.current = id;
     setRevealed((previous) => new Set(previous).add(id));
@@ -93,18 +73,6 @@ export function Achievements({
             </button>
           ))}
         </div>
-        <button
-          className="achievement-add-button"
-          aria-busy={adding}
-          disabled={controlsBlocked || additions.length === 0}
-          onClick={() => {
-            onAdd(additions);
-            setSelected(new Set());
-          }}
-        >
-          {adding ? <LoaderCircle className="spinner" size={18} /> : <Plus size={18} />}
-          {adding ? 'Saving…' : 'Add selected'}
-        </button>
         <button
           className="icon-button mobile-refresh"
           disabled={controlsBlocked}
@@ -133,21 +101,6 @@ export function Achievements({
                 aria-label={name}
               >
                 <div className="achievement-main">
-                  {!item.unlocked && !concealed ? (
-                    <input
-                      ref={(element) => {
-                        if (element && revealTarget.current === item.id && !element.disabled) {
-                          element.focus();
-                          revealTarget.current = null;
-                        }
-                      }}
-                      type="checkbox"
-                      aria-label={`Select ${name}`}
-                      checked={isQueued || selected.has(item.id)}
-                      disabled={controlsBlocked || isQueued}
-                      onChange={() => toggle(item.id)}
-                    />
-                  ) : null}
                   <Art
                     name={name}
                     kind="achievement"
@@ -176,6 +129,23 @@ export function Achievements({
                     ) : null}
                   </div>
                   <div className="achievement-status">
+                    {!item.unlocked && !concealed && !isQueued ? (
+                      <button
+                        className="icon-button achievement-add"
+                        aria-label={`Add ${name} to queue`}
+                        title={`Add ${name} to queue`}
+                        disabled={controlsBlocked}
+                        onClick={() => onAdd([item.id])}
+                        ref={(element) => {
+                          if (element && revealTarget.current === item.id && !element.disabled) {
+                            element.focus();
+                            revealTarget.current = null;
+                          }
+                        }}
+                      >
+                        <Plus size={19} />
+                      </button>
+                    ) : null}
                     {concealed ? (
                       <button disabled={controlsBlocked} onClick={() => reveal(item.id)}>
                         <Eye size={16} />

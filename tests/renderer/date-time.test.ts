@@ -4,6 +4,8 @@ import {
   detectTimeZone,
   formatTimestamp,
   localFields,
+  offsetLabel,
+  timeZoneOptions,
   resolveLocalDate,
   zoneLabel,
 } from '../../src/renderer/date-time';
@@ -110,4 +112,27 @@ describe('display time zones', () => {
     );
     expect(constructor).toHaveBeenCalledTimes(2);
   });
+});
+
+it('formats UTC offsets with a sign and fixed hour/minute digits', () => {
+  expect(offsetLabel(0)).toBe('UTC+00:00');
+  expect(offsetLabel(19800)).toBe('UTC+05:30');
+  expect(offsetLabel(20700)).toBe('UTC+05:45');
+  expect(offsetLabel(-12600)).toBe('UTC-03:30');
+  expect(zoneLabel('America/New_York', '2020-01-01T12:00:00Z')).toBe(
+    'America/New_York (UTC-05:00)',
+  );
+});
+
+it('uses human-readable zone option labels with consistent offsets and caches formatting', () => {
+  const zones = ['America/New_York', 'Asia/Kathmandu', 'UTC'];
+  const first = timeZoneOptions(zones);
+  expect(first[0]?.label).toMatch(/^America\/New York \(UTC-\d{2}:\d{2}\)$/);
+  expect(first[1]).toEqual({ value: 'Asia/Kathmandu', label: 'Asia/Kathmandu (UTC+05:45)' });
+  expect(first[2]).toEqual({ value: 'UTC', label: 'UTC (UTC+00:00)' });
+  const format = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts');
+  const repeated = timeZoneOptions(zones);
+  expect(repeated[0]).toBe(first[0]);
+  expect(repeated[1]).toBe(first[1]);
+  expect(format).not.toHaveBeenCalled();
 });

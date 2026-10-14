@@ -40,6 +40,8 @@ export function useWorkspace(api: DesktopApi) {
   const [game, setGame] = useState<Game | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [queues, setQueues] = useState<Queue[]>([]);
+  const [achievementCache, setAchievementCache] = useState<Record<string, Achievement[]>>({});
+  const [queueDetailsLoading, setQueueDetailsLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
   const [resultGame, setResultGame] = useState<QueueGame | null>(null);
@@ -88,6 +90,7 @@ export function useWorkspace(api: DesktopApi) {
     setQueues([]);
     setQueuesLoaded(false);
     setHistory([]);
+    setAchievementCache({});
     gameMetadata.current.clear();
     clearGameState();
   }
@@ -156,6 +159,33 @@ export function useWorkspace(api: DesktopApi) {
     for (const value of values) assertOwner(value.user_id);
     setQueues(values);
     setQueuesLoaded(true);
+    return values;
+  }
+  async function loadQueueDetails(values: Queue[]) {
+    const missing = values.filter(
+      (value) =>
+        value.items.length &&
+        value.game.id !== currentGame.current?.id &&
+        !achievementCache[value.game.id],
+    );
+    if (!missing.length) return;
+    setLoadingTarget('queue');
+    setQueueDetailsLoading(true);
+    try {
+      for (const value of missing) {
+        try {
+          const data = await api.listAchievements(value.game.id);
+          assertOwner(data.user_id);
+          setAchievementCache((previous) => ({ ...previous, [value.game.id]: data.achievements }));
+        } catch (failure) {
+          if (['ACCOUNT_CHANGED', 'ACCOUNT_MISMATCH'].includes(notice(failure).code ?? ''))
+            throw failure;
+          // Saved requests stay usable when optional descriptions cannot be read.
+        }
+      }
+    } finally {
+      setQueueDetailsLoading(false);
+    }
   }
   async function loadHistory() {
     const records = await api.history({});
@@ -186,6 +216,7 @@ export function useWorkspace(api: DesktopApi) {
     currentGame.current = next;
     setGame(next);
     setAchievements(data.achievements);
+    setAchievementCache((previous) => ({ ...previous, [next.id]: data.achievements }));
     setAchievementsLoaded(true);
   }
   async function loadLibrary(preferredId?: string) {
@@ -219,11 +250,12 @@ export function useWorkspace(api: DesktopApi) {
     assertOwner(data.user_id);
     setGames(data.games);
     setLibraryLoaded(true);
-    await loadQueues();
+    const savedQueues = await loadQueues();
     await loadHistory();
     const first = data.games.find((item) => item.id === preferredId) ?? data.games[0];
     if (!first) clearGameState();
     else if (currentGame.current?.id !== first.id || !achievementsLoaded) await loadGame(first);
+    await loadQueueDetails(savedQueues);
   }
   const handleOperation = useEffectEvent((state: OperationState) => {
     const previous = latestOperation.current;
@@ -291,10 +323,18 @@ export function useWorkspace(api: DesktopApi) {
     });
   }
   function selectGame(next: Game) {
-    void run('Loading achievements…', 'achievements', () => loadGame(next));
+    void run('Loading achievements…', 'achievements', async () => {
+      setView('browse');
+      setResult(null);
+      setResultGame(null);
+      await loadGame(next);
+    });
   }
   function refreshQueues() {
-    void run('Loading queue…', 'queue', loadQueues);
+    void run('Loading queue…', 'queue', async () => {
+      const values = await loadQueues();
+      await loadQueueDetails(values);
+    });
   }
   function refreshLibrary() {
     void run('Loading library…', 'library', () => loadLibrary(game?.id));
@@ -318,6 +358,7 @@ export function useWorkspace(api: DesktopApi) {
         const nextQueue = await api.getQueue(selected.id);
         updateQueue(selected.id, nextQueue);
         setAchievements(data.achievements);
+        setAchievementCache((previous) => ({ ...previous, [selected.id]: data.achievements }));
       },
     );
   }
@@ -444,6 +485,7 @@ export function useWorkspace(api: DesktopApi) {
           const data = await api.listAchievements(report.game.id);
           assertOwner(data.user_id);
           setAchievements(data.achievements);
+          setAchievementCache((previous) => ({ ...previous, [report.game.id]: data.achievements }));
         }
       } catch (failure) {
         await handleFailure(failure);
@@ -456,18 +498,6 @@ export function useWorkspace(api: DesktopApi) {
       await loadHistory();
     });
   }
-  function viewRecord(record: OperationRecord) {
-    setResult({
-      operationId: record.id,
-      state: record.state === 'complete' ? 'complete' : 'unknown',
-      report: record.report,
-      error: record.error,
-    });
-    setResultGame(
-      record.report?.game ?? { id: record.game_id, title: record.game_title, client_id: '' },
-    );
-    setView('results');
-  }
   return {
     auth,
     games,
@@ -477,6 +507,9 @@ export function useWorkspace(api: DesktopApi) {
     game,
     achievements,
     queues,
+    queueDetailsLoading,
+    achievementFor: (gameId: string, achievementId: string) =>
+      achievementCache[gameId]?.find((item) => item.id === achievementId),
     queue,
     preview,
     result,
@@ -506,7 +539,6 @@ export function useWorkspace(api: DesktopApi) {
     apply,
     showHistory,
     setView,
-    viewRecord,
     cancelPreview: () => setPreview(null),
     clearError: () => setError(null),
   };

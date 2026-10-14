@@ -1,0 +1,41 @@
+.queue-date-dialog {
+  display: contents;
+}
+.queue-date-dialog .dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+.queue-date-dialog .dialog-footer {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.queue-date-dialog .dialog-footer button {
+  padding: 8px 11px;
+  font-size: 13px;
+}
+.queue-date-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.queue-date-item strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.queue-date-item p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.queue-date-modal input,
+.queue-date-modal select {
+  width: 100%;
+  min-width: 0;
+}
+.queue-date-modal small {
+  color: var(--muted);
+}
+.queue-date-modal .field-error,
+.queue-date-modal [role='status'] {
+  font-size: 12px;
+}

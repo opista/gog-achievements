@@ -1,5 +1,5 @@
 import { useDeferredValue, useRef, useState } from 'react';
-import { Gamepad2, RefreshCw, Search, X } from 'lucide-react';
+import { RefreshCw, Search, X } from 'lucide-react';
 import type { Game } from '../../shared/api';
 import { Art } from '../components/Art';
 import { PaneResize } from '../components/PaneResize';
@@ -76,12 +76,7 @@ export function Library({
         ) : null}
       </div>
       <div className="library-list">
-        {!signedIn ? (
-          <div className="library-placeholder">
-            <Gamepad2 size={34} />
-            <p>Sign in to load your games.</p>
-          </div>
-        ) : loading ? (
+        {!signedIn ? null : loading ? (
           <div className="library-skeleton">
             <p className="sr-only" role="status">
               Loading games…

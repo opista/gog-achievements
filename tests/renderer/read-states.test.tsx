@@ -47,13 +47,13 @@ it('separates pending and failed game reads from an empty achievement list and r
   expect(screen.getByText('Loading achievements…').closest('.achievement-skeleton')).not.toBeNull();
   expect(screen.queryByText('No achievements available for this game.')).not.toBeInTheDocument();
   expect(screen.queryByText('Loading queue…')).not.toBeInTheDocument();
-  expect(screen.getByText('3 achievements · 1 games')).toBeVisible();
+  expect(screen.getByText('3 achievements · 1 game')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeDisabled();
   await act(async () => request.reject(new Error('Achievement request failed.')));
   await screen.findByText('Game data could not be loaded.');
   expect(screen.queryByText('No achievements available for this game.')).not.toBeInTheDocument();
   expect(screen.queryByText('Queue could not be loaded.')).not.toBeInTheDocument();
-  expect(screen.getByText('3 achievements · 1 games')).toBeVisible();
+  expect(screen.getByText('3 achievements · 1 game')).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Retry game data' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeEnabled(),
@@ -88,7 +88,9 @@ async function connected(otherGame = false) {
   const user = userEvent.setup();
   const rendered = render(<App api={api} />);
   await waitFor(() =>
-    expect(screen.getByRole('checkbox', { name: 'Select Legend of The Afterlife' })).toBeEnabled(),
+    expect(
+      screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }),
+    ).toBeEnabled(),
   );
   return { api, user, games, achievements, ...rendered };
 }
@@ -133,7 +135,7 @@ it('uses a local achievement skeleton on refresh while keeping library and queue
   const next = structuredClone(achievements);
   next.achievements[0]!.description = 'Refreshed sample description.';
   await act(async () => request.resolve(next));
-  await screen.findByText('Refreshed sample description.');
+  expect(await screen.findAllByText('Refreshed sample description.')).toHaveLength(2);
   expect(container.querySelector('.achievement-skeleton')).toBeNull();
 });
 
@@ -146,11 +148,10 @@ it('shows selected achievements in the queue before persistence resolves', async
     return original(input);
   });
   const apply = vi.spyOn(api, 'apply');
-  await user.click(screen.getByRole('checkbox', { name: 'Select Legend of The Afterlife' }));
-  await user.click(screen.getByRole('button', { name: 'Add selected' }));
+  await user.click(screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }));
   const queue = screen.getByRole('complementary', { name: 'Achievement queue' });
   expect(within(queue).getByText('Legend of The Afterlife')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+  expect(within(queue).getByRole('status')).toHaveTextContent('Saving draft…');
   expect(
     within(queue).getByRole('button', { name: 'Remove Legend of The Afterlife from queue' }),
   ).toBeDisabled();
@@ -170,8 +171,7 @@ it('rolls back provisional additions when both persistence and draft reload fail
   const request = deferred<never>();
   vi.spyOn(api, 'addAchievements').mockImplementationOnce(() => request.promise);
   vi.spyOn(api, 'listQueues').mockRejectedValueOnce(new Error('Draft reload failed.'));
-  await user.click(screen.getByRole('checkbox', { name: 'Select Legend of The Afterlife' }));
-  await user.click(screen.getByRole('button', { name: 'Add selected' }));
+  await user.click(screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }));
   const queue = screen.getByRole('complementary', { name: 'Achievement queue' });
   expect(within(queue).getByText('Legend of The Afterlife')).toBeVisible();
   await act(async () => request.reject(new Error('Draft save failed.')));
@@ -205,4 +205,18 @@ it('ends queue loading with a local retry when both the initial library and save
   expect(queues).toHaveBeenCalledTimes(2);
   expect(screen.queryByText('Queue could not be loaded.')).not.toBeInTheDocument();
   expect(screen.queryByText('Loading queue…')).not.toBeInTheDocument();
+});
+
+it('does not call a populated library empty while its saved queues load', async () => {
+  const api = createDemoApi({ delayMs: 0 });
+  await api.login();
+  const queues = await api.listQueues();
+  const request = deferred<typeof queues>();
+  const read = vi.spyOn(api, 'listQueues').mockImplementationOnce(() => request.promise);
+  render(<App api={api} />);
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('No GOG games found')).not.toBeInTheDocument();
+  expect(screen.getByText('Choose a game')).toBeVisible();
+  await act(async () => request.resolve(queues));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
 });

@@ -1,9 +1,11 @@
-import { Check, FileText, Info, LoaderCircle, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CalendarDays, Check, FileText, Info, LoaderCircle, X } from 'lucide-react';
+import type { QueueItem } from '../../shared/api';
 import type { Workspace } from '../use-workspace';
 import { Art } from '../components/Art';
 import { PaneResize } from '../components/PaneResize';
-import { TIME_ZONES, zoneLabel } from '../date-time';
-import { QueueDatePicker } from './QueueDatePicker';
+import { TIME_ZONES, formatTimestamp, timeZoneOptions, zoneLabel } from '../date-time';
+import { QueueDateModal } from './QueueDateModal';
 interface Props {
   workspace: Workspace;
   zone: string;
@@ -12,7 +14,13 @@ interface Props {
   width?: number;
   onResize(width: number): void;
 }
-export function QueuePane({ workspace: w, zone, demo, onZone, width, onResize }: Props) {
+export function QueuePane(props: Props) {
+  return props.workspace.auth.authenticated ? <SignedInQueuePane {...props} /> : null;
+}
+
+function SignedInQueuePane({ workspace: w, zone, demo, onZone, width, onResize }: Props) {
+  const [editing, setEditing] = useState<{ gameId: string; item: QueueItem } | null>(null);
+  const zones = useMemo(() => timeZoneOptions([...new Set([zone, ...TIME_ZONES])]), [zone]);
   const groups = w.queues
     .filter((item) => item.items.length > 0)
     .toSorted(
@@ -30,17 +38,13 @@ export function QueuePane({ workspace: w, zone, demo, onZone, width, onResize }:
         <div>
           <h2>Queue</h2>
           <p className="muted">
-            {total} achievements · {groups.length} games
+            {total} achievement{total === 1 ? '' : 's'} · {groups.length} game
+            {groups.length === 1 ? '' : 's'}
           </p>
         </div>
       </div>
       <div className="queue-body">
-        {!w.auth.authenticated ? (
-          <div className="empty-state">
-            <FileText size={34} />
-            <p>Choose achievements after sign-in.</p>
-          </div>
-        ) : !w.queuesLoaded && w.busy ? (
+        {!w.queuesLoaded && w.busy ? (
           <div className="queue-skeleton" role="status" aria-label="Loading queue">
             <span className="sr-only">Loading queue…</span>
             {[0, 1, 2].map((row) => (
@@ -57,11 +61,7 @@ export function QueuePane({ workspace: w, zone, demo, onZone, width, onResize }:
         ) : groups.length === 0 ? (
           <div className="empty-state">
             <FileText size={34} />
-            <p>
-              {w.result
-                ? 'Queue is clear. Results are saved in history.'
-                : 'Select achievements you have already earned.'}
-            </p>
+            <p>Queue is empty.</p>
           </div>
         ) : (
           groups.map((group) => {
@@ -78,41 +78,46 @@ export function QueuePane({ workspace: w, zone, demo, onZone, width, onResize }:
                   <span className="muted">{group.items.length}</span>
                 </div>
                 <div className="queue-items">
-                  {group.items.map((item) => (
-                    <div className="queue-row" key={item.achievement_id}>
-                      <Art
-                        name={item.name}
-                        kind="achievement"
-                        image={
-                          group.game.id === w.game?.id
-                            ? w.achievements.find((entry) => entry.id === item.achievement_id)
-                                ?.image_locked
-                            : null
-                        }
-                        demo={demo}
-                      />
-                      <div className="queue-row-content">
-                        <strong>{item.name}</strong>
-                        <QueueDatePicker
-                          key={`${group.game.id}:${item.achievement_id}:${zone}:${item.unlocked_at}`}
-                          item={item}
-                          zone={zone}
-                          busy={w.busy}
-                          onSave={(iso) =>
-                            w.saveDates(group.game.id, { [item.achievement_id]: iso })
-                          }
+                  {group.items.map((item) => {
+                    const achievement = w.achievementFor(group.game.id, item.achievement_id);
+                    const description = achievement?.description || 'No description available.';
+                    const savedDate = `${formatTimestamp(item.unlocked_at, zone)} · ${zoneLabel(zone, item.unlocked_at).replaceAll('_', ' ')}`;
+                    return (
+                      <div className="queue-row" key={item.achievement_id}>
+                        <Art
+                          name={item.name}
+                          kind="achievement"
+                          image={achievement?.image_locked}
+                          demo={demo}
                         />
+                        <div className="queue-row-content">
+                          <strong title={item.name}>{item.name}</strong>
+                          <p className="queue-description" title={description}>
+                            {description}
+                          </p>
+                        </div>
+                        <div className="queue-row-controls">
+                          <button
+                            className="icon-button"
+                            aria-label={`Edit date for ${item.name}`}
+                            title={savedDate}
+                            disabled={w.busy}
+                            onClick={() => setEditing({ gameId: group.game.id, item })}
+                          >
+                            <CalendarDays size={18} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            aria-label={`Remove ${item.name} from queue`}
+                            disabled={w.busy}
+                            onClick={() => w.remove(group.game.id, [item.achievement_id])}
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        className="icon-button"
-                        aria-label={`Remove ${item.name} from queue`}
-                        disabled={w.busy}
-                        onClick={() => w.remove(group.game.id, [item.achievement_id])}
-                      >
-                        <X size={19} />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <button
                   className="primary queue-group-apply"
@@ -144,14 +149,13 @@ export function QueuePane({ workspace: w, zone, demo, onZone, width, onResize }:
         <label className="zone-control">
           Time zone
           <select value={zone} onChange={(event) => onZone(event.target.value)} disabled={w.busy}>
-            {[...new Set([zone, ...TIME_ZONES])].map((value) => (
-              <option value={value} key={value}>
-                {value.replaceAll('_', ' ')}
+            {zones.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
         </label>
-        <small className="muted">{zoneLabel(zone)}</small>
         {w.saved ? (
           <p className="saved-state" role="status">
             <Check size={16} />
@@ -165,6 +169,16 @@ export function QueuePane({ workspace: w, zone, demo, onZone, width, onResize }:
           </p>
         ) : null}
       </div>
+      {editing ? (
+        <QueueDateModal
+          item={editing.item}
+          description={w.achievementFor(editing.gameId, editing.item.achievement_id)?.description}
+          zone={zone}
+          busy={w.busy}
+          onClose={() => setEditing(null)}
+          onSave={(iso) => w.saveDates(editing.gameId, { [editing.item.achievement_id]: iso })}
+        />
+      ) : null}
     </aside>
   );
 }

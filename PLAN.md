@@ -16,8 +16,8 @@ Use Electron, React and strict TypeScript. Use electron-vite for development and
 
 1. **Connect GOG.** Check the bundled CLI and saved login. Sign in through the CLI's native GOG window. Show sign-in, cancellation and credential-store errors clearly. Sign out through the CLI.
 2. **Choose a game.** Show owned GOG games, with local search and an explicit Refresh action. Handle an empty library and unavailable game metadata.
-3. **Choose achievements.** Show names, descriptions, lock status and unlock dates. Filter by all, locked and unlocked. Allow multiple selections, then add them in one CLI command. Preserve existing unlocks. Hide locked hidden-achievement details until the user chooses to reveal them.
-4. **Edit the queue.** Group saved drafts by game in one queue that stays visible across game switches and history. Remove individual rows and edit their dates with inline date/time controls. Save through CLI queue commands and show the returned values. Restore drafts after restart.
+3. **Choose achievements.** Show names, descriptions, lock status and unlock dates. Filter by all, locked and unlocked. Give each eligible locked achievement a direct Add to queue action. Preserve existing unlocks. Hide locked hidden-achievement details until the user chooses to reveal them.
+4. **Edit the queue.** Group saved drafts by game in one queue that stays visible across game switches and history. Remove individual rows and use a compact per-achievement date dialog to choose a date or use the current time. Save through CLI queue commands and show the returned values. Restore drafts after restart.
 5. **Check changes.** A game group's Apply button runs the dry-run check automatically. Then show the game, account and exact requested dates in one final confirmation. Remind the user to close the game before applying.
 6. **Apply and review.** Require an explicit final confirmation. Show an active operation while the CLI runs, then show each result and its confirmed date. Refresh achievements after completion. Preserve the report and any items that still need attention.
 
@@ -27,7 +27,7 @@ Use one main window: a game list and search on the left, achievements in the cen
 
 **A — Desktop workspace** is the selected design. The [design notes and concepts](docs/design/README.md) retain all three mockups for reference. Each uses sample content and generated artwork.
 
-Use A's three-pane layout: library at left, achievements in the centre, and the queue at right. Use inline per-row date/time fields in the queue. Keep browsing and the grouped queue together. The later workspace reviews supersede the original bulk date-table concept.
+Use A's three-pane layout: library at left, achievements in the centre, and the queue at right. Use a calendar button on each queued row and a compact date dialog. Keep browsing and the grouped queue together. The later workspace reviews supersede the original bulk date-table concept.
 
 The [screen and interaction design](docs/design/WORKFLOW.md) now covers sign-in, date editing, preview, final confirmation, active apply, complete and partial results, and A's dark appearance. It also defines loading, empty, error and recovery states. Keep existing unlocks read-only and run the dry-run check automatically before final confirmation. The minimum-window and theme checks remain implementation acceptance checks.
 
@@ -76,7 +76,7 @@ The app reuses the CLI's saved login. Signing out removes that shared local CLI 
 
 ## Attempt history
 
-Keep a local audit record for each apply: the requested dates, confirmed results and uncertain outcomes. This record supports inspection after failures or interruptions. It cannot roll back unlocks, relock achievements or change an existing unlock date.
+Keep a local audit record for each apply: the requested dates, confirmed results and uncertain outcomes. This record supports inspection after failures or interruptions. The UI presents individual confirmed unlocks with their game and date, plus unresolved outcomes, without operation drilldown. It cannot roll back unlocks, relock achievements or change an existing unlock date.
 
 ## Drafts and unlock dates
 
@@ -142,7 +142,7 @@ Define command construction, IPC validation and result mapping once. Keep GOG ru
 
 - Test command arguments, all error envelopes, exit 6 reports, string IDs, large output, missing binaries and version mismatches with a fake CLI.
 - Test IPC validation, account changes, stale results, duplicate clicks, queue locks and rejected stale preview tokens.
-- Test date offsets, leap days, daylight-saving changes, future dates and failed inline date saves.
+- Test date offsets, leap days, daylight-saving changes, future dates and failed date saves.
 - Test every report status, an interrupted operation, a surviving child and recovery without an automatic write.
 - Test the full UI flow with a fake CLI, including proof that preview never sends `--yes` and that cancelling final confirmation starts no write.
 - Smoke-test real packaged apps with the released CLI: version, JSON help, an offline fixture queue and native availability. Cover paths with spaces, a read-only installation folder, a cold helper cache and machines without system Node or .NET.
@@ -154,7 +154,7 @@ Define command construction, IPC validation and result mapping once. Keep GOG ru
 | ---------------------- | -------------------------------------------------------------------------------------------------- |
 | 1. Packaged foundation | Electron shell, typed bridge, CLI lock/downloader and packaged CLI smoke proof on all four targets |
 | 2. Login and browsing  | Saved login check, native sign-in, library search, achievements and useful empty/error states      |
-| 3. Persistent queues   | Bulk selection, queue edits, date controls and account-specific draft restoration                  |
+| 3. Persistent queues   | Direct queue actions, date controls and account-specific draft restoration                         |
 | 4. Preview and apply   | Bound previews, final confirmation, complete and partial reports, quit guard and crash recovery    |
 | 5. Release readiness   | Native CI, installer and signing proof, versioned releases, checksums and user documentation       |
 

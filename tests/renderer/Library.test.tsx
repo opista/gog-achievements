@@ -92,3 +92,9 @@ it('shows local loading placeholders before treating a loaded empty library as e
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
   expect(screen.getByText('No GOG games found.')).toBeVisible();
 });
+
+it('leaves the signed-out library blank without a repeated sign-in prompt', () => {
+  const { container } = library({ signedIn: false, games: [], loaded: false });
+  expect(container.querySelector('.library-list')).toBeEmptyDOMElement();
+  expect(screen.getByRole('textbox', { name: 'Search your library' })).toBeDisabled();
+});

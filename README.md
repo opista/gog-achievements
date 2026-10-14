@@ -2,11 +2,11 @@
 
 An Electron app for macOS and Windows that restores GOG achievements you have already earned. It bundles [CLI v0.3.0](https://github.com/metacurb/gog-achievements-cli/releases/tag/v0.3.0).
 
-Sign in, choose a game and add locked achievements to the queue. Edit dates inline, then apply one game group at a time. The app checks the group before final confirmation. Existing unlocks keep their dates.
+Sign in, choose a game and add locked achievements to the queue. Use the calendar button to edit a date or set the current time, then apply one game group at a time. The app checks the group before final confirmation. Existing unlocks keep their dates.
 
-The queue stays visible across games and on the history page. History shows all saved attempts for the signed-in account. Time zones come from the system list, with your current zone selected automatically.
+The queue stays visible across games and on the history page. History lists confirmed unlocks with game names and unlock dates, with uncertain results shown separately. Time zones come from the system list, with your current zone selected automatically.
 
-**History is an attempt log.** It records requested dates, confirmed results and uncertain outcomes. It cannot undo an unlock, relock an achievement or change an existing unlock date. Queue edits are local until you confirm Apply.
+The app keeps an operation record for recovery behind the achievement history list. It cannot undo an unlock, relock an achievement or change an existing unlock date. Queue edits are local until you confirm Apply.
 
 Requires macOS 13.5 or later, or Windows 10/11, on ARM64 or x64. These requirements combine the [bundled CLI runtime](https://github.com/metacurb/gog-achievements-cli/blob/v0.3.0/README.md) and [Electron 44](https://releases.electronjs.org/release/v44.0.0).
 

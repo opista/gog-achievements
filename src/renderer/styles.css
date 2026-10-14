@@ -1717,3 +1717,175 @@ small {
   gap: 12px;
   margin-top: 24px;
 }
+
+/* Keep the signed-out screen focused on its one sign-in action. */
+.workspace.signed-out {
+  grid-template-columns: var(--library-width, 248px) minmax(0, 1fr);
+}
+.account-menu summary {
+  min-width: 60px;
+  justify-content: center;
+  gap: 12px;
+}
+.achievement-main {
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+}
+.achievement-main > .art {
+  grid-column: 1;
+}
+.achievement-copy {
+  grid-column: 2;
+}
+.achievement-main > .achievement-status {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.achievement-add {
+  order: 1;
+  flex: none;
+}
+.achievement-column-labels {
+  padding-left: 70px;
+}
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.queue-row-content h3 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.queue-row-content p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+.queue-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: none;
+}
+.queue-row-actions .icon-button {
+  flex: none;
+}
+@media (max-width: 1200px) {
+  .achievement-main {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+}
+@media (max-width: 760px) {
+  .workspace.signed-out {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .achievement-main {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .achievement-main > .achievement-status {
+    grid-column: 3;
+    grid-row: 1;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .queue-row {
+    align-items: center;
+  }
+  .queue-row-content {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.achievement-skeleton .skeleton-row {
+  grid-template-columns: 52px minmax(0, 1fr) 100px;
+}
+.achievement-skeleton .skeleton-icon {
+  grid-column: 1;
+}
+.achievement-skeleton .skeleton-copy {
+  grid-column: 2;
+}
+.achievement-skeleton .skeleton-status {
+  grid-column: 3;
+}
+@media (max-width: 1200px) {
+  .achievement-skeleton .skeleton-row {
+    grid-template-columns: 42px minmax(0, 1fr) 78px;
+    gap: 10px;
+  }
+}
+@media (max-width: 760px) {
+  .achievement-skeleton .skeleton-row {
+    grid-template-columns: 40px minmax(0, 1fr) 70px;
+    gap: 8px;
+  }
+}
+
+.queue-row-content {
+  gap: 0;
+}
+.queue-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.history-unlocks,
+.history-attention-list {
+  list-style: none;
+  margin: 20px 0;
+  padding: 0;
+}
+.history-unlock-row,
+.history-attention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.history-entry-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.history-entry-copy strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.history-entry-copy span,
+.history-entry-copy small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.history-unlock-date {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.history-attention {
+  margin-top: 28px;
+}
+@media (max-width: 760px) {
+  .history-unlock-row,
+  .history-attention-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .history-unlock-date {
+    text-align: left;
+  }
+}

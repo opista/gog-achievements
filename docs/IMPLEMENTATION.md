@@ -1,23 +1,15 @@
 # Implementation notes
 
-Use [A's desktop workspace](design/desktop-workspace.png) and the [state concepts](design/WORKFLOW.md) as the UI reference. The layout is three panes with one modal date editor and one final confirmation.
+The workspace follows [A's three-pane layout](design/desktop-workspace.png), with the later UI reviews taking precedence over the original [state concepts](design/WORKFLOW.md). Signed-out users see a blank library and one sign-in action; the queue and time-zone controls are hidden. The account menu uses a profile icon and arrow.
 
-Operation history records requested dates, confirmed results and uncertain outcomes. It supports inspection after a failure or interruption. It does not provide rollback, relocking or editing an existing unlock date.
+The released CLI owns authentication, queue validation and GOG writes. Game and achievement images use trusted GOG image hosts. The CLI currently exposes landscape library thumbnails; portrait metadata lookups would require another request, so artwork remains unchanged under the user's constraint. Demo assets are sample content only, and demo mode never invokes the CLI.
 
-The browser preview uses explicit demo mode. Its sample data and simulated apply results never invoke the CLI. The installed Electron app uses the pinned released CLI.
+Locked achievements come first, hidden locked achievements next, and unlocked achievements last with newest unlocks first. Descriptions appear below titles. Each eligible row has a direct Add to queue action; hidden details stay concealed until revealed. Game titles use ellipsis and full hover text. Library and achievement reads use local skeletons without a shared loading banner.
 
-Real game covers and achievement images use the CLI's image fields and trusted GOG hosts. Generated demo art supports visual review. Missing production artwork has a clear icon fallback.
+The queue groups all saved drafts for the signed-in account and remains editable in history. Queued rows show title and description, with calendar and remove controls at the right. Achievement metadata is cached per account and loaded for saved groups without changing the selected game. A compact date dialog supports an explicit date or the current time, preserves seconds, rejects future or invalid times, and requires a chosen offset for repeated local times. The time-zone input lists all runtime-supported zones with signed UTC offsets and starts with the system zone.
 
-Native window controls follow the host OS; the renderer does not draw the Windows title-bar controls from the concepts. The account menu, report-history access and demo indicator are necessary UI additions. Mobile browser layout supports local preview; installers target desktop.
+Each group's Apply action runs a dry-run check and opens one final confirmation. The saved snapshot and token bind it to the exact queue, account and game. Confirmed requests are removed under an exclusive queue lock after the immutable report is saved. Failed, unconfirmed and unattempted requests remain. Concurrent edits are preserved, and housekeeping failures retain the confirmed report. Reads can reconcile older confirmed requests only with matching digest-verified snapshots.
 
-Release builds need validation on all four native targets. Local development smoke tests do not prove public signing, notarization or Windows installation.
+History is a flat list of confirmed achievement unlocks with game names and actual unlock dates. Existing unlocks skipped by an attempt are excluded. Failed or unknown outcomes remain visible under Needs attention. Durable operation records and snapshots stay available for recovery; history does not provide rollback or relocking.
 
-The reviewed workspace uses compact game rows with full-title tooltips, a clear-search action, inline achievement descriptions, and a single skeleton status during initial game reads. Covers use the GOG CDN's thumbnail variant. Visible locked achievements come first, hidden locked achievements next, and unlocked achievements last with newest unlocks first. Existing unlocks have no selection control.
-
-The released CLI exposes account IDs but no account name or email. The header shows My account; its menu retains the ID.
-
-After each apply, confirmed items are removed from the mutable draft under an exclusive queue lock. Failed, unconfirmed and unattempted items remain. The saved report and immutable snapshot retain the complete attempt. Concurrent draft additions or changes are preserved; housekeeping failures keep the confirmed report and show a warning.
-
-On queue reads, saved terminal reports can also clear confirmed requests left by earlier app versions. This requires a matching, digest-verified snapshot. Newer edits or unresolved attempts remain; missing evidence and busy locks leave the readable draft available.
-
-The queue now shows all saved game drafts for the signed-in account. Each game group has its own Apply button; this runs a dry-run check and opens final confirmation, without a separate preview page. History is account-wide, and the queue remains editable there. Date fields are inline, bulk queue selection is removed, all runtime-supported time zones are offered, and the initial zone is detected from the system. Library and achievement refreshes use skeletons in their own panes. New queue rows appear immediately while their validated draft is saved; failed provisional saves reload or restore the prior draft.
+Native controls follow the host OS. Mobile layout supports the local browser demo; installers target desktop. Release builds still require validation on all four native targets, signing and notarization. Local Mac package checks do not prove Windows installation or public signing.

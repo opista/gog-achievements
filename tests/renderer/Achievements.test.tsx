@@ -17,8 +17,8 @@ function achievement(id: string, name: string, options: Partial<Achievement> = {
     unlocked: false,
     unlocked_at: null,
     hidden: false,
-    image_locked: 'https://images.gog-statics.com/achievement.jpg',
-    image_unlocked: 'https://images.gog-statics.com/achievement.jpg',
+    image_locked: null,
+    image_unlocked: null,
     rarity: null,
     ...options,
   };
@@ -27,7 +27,6 @@ const input = [
   achievement('old', 'Older unlock', { unlocked: true, unlocked_at: '2024-01-01T12:00:00Z' }),
   achievement('secret', 'Secret title', { hidden: true, description: 'Secret description' }),
   achievement('locked-b', 'Locked B'),
-  achievement('unknown', 'Unknown date unlock', { unlocked: true }),
   achievement('new', 'Newest unlock', { unlocked: true, unlocked_at: '2025-01-01T12:00:00Z' }),
   achievement('locked-a', 'Locked A'),
 ];
@@ -36,7 +35,7 @@ function show(
   overrides: Partial<ComponentProps<typeof Achievements>> = {},
 ) {
   const onAdd = vi.fn();
-  const props: ComponentProps<typeof Achievements> = {
+  const props = {
     achievements: input,
     queued,
     busy: false,
@@ -46,16 +45,13 @@ function show(
     onRefresh: vi.fn(),
     ...overrides,
   };
-  const view = render(<Achievements {...props} />);
-  return { onAdd, props, ...view };
+  return { onAdd, props, ...render(<Achievements {...props} />) };
 }
-function rowNames(): string[] {
-  return screen
-    .getAllByRole('article')
-    .map((row) => within(row).getByRole('heading').textContent ?? '');
+function rowNames() {
+  return screen.getAllByRole('article').map((row) => within(row).getByRole('heading').textContent);
 }
-it('shows descriptions directly and sorts locked, hidden, then newest unlocks without mutating input', () => {
-  const order = input.map((item) => item.id);
+it('shows descriptions and keeps locked, hidden, newest unlocked order without mutating input', () => {
+  const original = input.map((item) => item.id);
   show();
   expect(rowNames()).toEqual([
     'Locked B',
@@ -63,145 +59,75 @@ it('shows descriptions directly and sorts locked, hidden, then newest unlocks wi
     'Hidden achievement',
     'Newest unlock',
     'Older unlock',
-    'Unknown date unlock',
   ]);
   expect(screen.getByText('Locked B description')).toBeVisible();
-  expect(screen.getByText('Newest unlock description')).toBeVisible();
-  expect(screen.queryByRole('button', { name: /Details for/ })).not.toBeInTheDocument();
-  expect(input.map((item) => item.id)).toEqual(order);
+  expect(input.map((item) => item.id)).toEqual(original);
 });
-it('omits unlocked and concealed checkboxes, preserves reveal, and focuses its new selection', async () => {
+it('adds one achievement directly without checkboxes or a bulk action', async () => {
   const user = userEvent.setup();
-  const { container } = show();
-  expect(screen.queryByRole('checkbox', { name: 'Select Newest unlock' })).not.toBeInTheDocument();
+  const { onAdd } = show();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Add selected' })).not.toBeInTheDocument();
+  const add = screen.getByRole('button', { name: 'Add Locked A to queue' });
+  expect(add).toHaveAttribute('title', 'Add Locked A to queue');
+  await user.click(add);
+  expect(onAdd).toHaveBeenCalledExactlyOnceWith(['locked-a']);
+});
+it('omits actions for queued and unlocked rows and blocks saves during other work', () => {
+  const { props, rerender } = show(new Set(['locked-b']));
+  expect(screen.queryByRole('button', { name: 'Add Locked B to queue' })).not.toBeInTheDocument();
   expect(
-    screen.queryByRole('checkbox', { name: 'Select Hidden achievement' }),
+    within(screen.getByRole('article', { name: 'Locked B' })).getByText('Queued'),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Add Newest unlock to queue' }),
   ).not.toBeInTheDocument();
+  rerender(<Achievements {...props} busy />);
+  expect(screen.getByRole('button', { name: 'Add Locked A to queue' })).toBeDisabled();
+});
+it('conceals hidden information and focuses the direct add action after reveal', async () => {
+  const user = userEvent.setup();
+  show();
   expect(screen.queryByText('Secret title')).not.toBeInTheDocument();
   expect(screen.queryByText('Secret description')).not.toBeInTheDocument();
-  expect(container.querySelector('.achievement-row img')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Reveal' }));
   expect(screen.getByText('Secret description')).toBeVisible();
-  const selection = screen.getByRole('checkbox', { name: 'Select Secret title' });
-  expect(selection).toBeEnabled();
-  expect(selection).toHaveFocus();
-  expect(rowNames()).toEqual([
-    'Locked B',
-    'Locked A',
-    'Secret title',
-    'Newest unlock',
-    'Older unlock',
-    'Unknown date unlock',
-  ]);
+  expect(screen.getByRole('button', { name: 'Add Secret title to queue' })).toHaveFocus();
 });
-it('keeps focus on a revealed queued achievement without enabling duplicate selection', async () => {
+it('focuses a revealed queued title without a duplicate add action', async () => {
   const user = userEvent.setup();
   show(new Set(['secret']));
   await user.click(screen.getByRole('button', { name: 'Reveal' }));
-  expect(screen.getByRole('checkbox', { name: 'Select Secret title' })).toBeDisabled();
   expect(screen.getByRole('heading', { name: 'Secret title' })).toHaveFocus();
+  expect(
+    screen.queryByRole('button', { name: 'Add Secret title to queue' }),
+  ).not.toBeInTheDocument();
 });
-it('adds only selected eligible achievements and keeps queued additions unavailable', async () => {
+it('keeps filters and refresh stable while skeleton rows load', async () => {
   const user = userEvent.setup();
-  const { onAdd } = show(new Set(['locked-b']));
-  expect(screen.queryByRole('button', { name: 'Queued' })).not.toBeInTheDocument();
-  const queuedRow = screen.getByRole('article', { name: 'Locked B' });
-  expect(within(queuedRow).getByText('Queued')).toBeVisible();
-  expect(screen.getByRole('checkbox', { name: 'Select Locked B' })).toBeDisabled();
-  expect(screen.getByRole('checkbox', { name: 'Select Locked B' })).toBeChecked();
-  await user.click(screen.getByRole('checkbox', { name: 'Select Locked A' }));
-  await user.click(screen.getByRole('button', { name: 'Add selected' }));
-  expect(onAdd).toHaveBeenCalledExactlyOnceWith(['locked-a']);
-  expect(screen.getByRole('button', { name: 'Add selected' })).toBeDisabled();
+  const { props, rerender } = show();
+  const locked = screen.getByRole('button', { name: 'Locked' });
+  await user.click(locked);
+  const refresh = screen.getByRole('button', { name: 'Refresh achievements' });
+  rerender(<Achievements {...props} loading />);
+  expect(screen.getByRole('button', { name: 'Locked' })).toBe(locked);
+  expect(locked).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Refresh achievements' })).toBe(refresh);
+  expect(screen.getAllByRole('status')).toHaveLength(1);
+  expect(screen.queryByRole('article')).not.toBeInTheDocument();
+  rerender(<Achievements {...props} />);
+  expect(rowNames()).toEqual(['Locked B', 'Locked A', 'Hidden achievement']);
 });
-it('does not retain an eligible addition when refresh removes the selected achievement', async () => {
-  const user = userEvent.setup();
-  const { onAdd, rerender } = show();
-  await user.click(screen.getByRole('checkbox', { name: 'Select Locked A' }));
-  expect(screen.getByRole('button', { name: 'Add selected' })).toBeEnabled();
-  rerender(
-    <Achievements
-      achievements={input.filter((item) => item.id !== 'locked-a')}
-      queued={new Set()}
-      busy={false}
-      demo={false}
-      zone="UTC"
-      onAdd={onAdd}
-      onRefresh={vi.fn()}
-    />,
-  );
-  expect(screen.getByRole('button', { name: 'Add selected' })).toBeDisabled();
-  expect(onAdd).not.toHaveBeenCalled();
-});
-it('preserves descending unlock dates when filtering to unlocked achievements', async () => {
+it('keeps unlocked filtering read-only and newest first', async () => {
   const user = userEvent.setup();
   show();
   await user.click(screen.getByRole('button', { name: 'Unlocked' }));
-  expect(rowNames()).toEqual(['Newest unlock', 'Older unlock', 'Unknown date unlock']);
-  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(rowNames()).toEqual(['Newest unlock', 'Older unlock']);
+  expect(screen.queryByRole('button', { name: /Add .* to queue/ })).not.toBeInTheDocument();
 });
-it('announces one skeleton loading state and hides placeholder rows from assistive controls', () => {
+it('announces skeleton status without placeholder controls', () => {
   const { container } = render(<AchievementSkeleton />);
   expect(screen.getAllByRole('status')).toHaveLength(1);
-  expect(screen.getByRole('status')).toHaveTextContent('Loading achievements…');
-  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(container.querySelector('.skeleton-content')).toHaveAttribute('aria-hidden', 'true');
-});
-
-it('keeps toolbar, filter and selection state while loading only the achievement list', async () => {
-  const user = userEvent.setup();
-  const { props, rerender, container } = show();
-  const lockedFilter = screen.getByRole('button', { name: 'Locked' });
-  const add = screen.getByRole('button', { name: 'Add selected' });
-  const refresh = screen.getByRole('button', { name: 'Refresh achievements' });
-  const refreshIcon = refresh.querySelector('svg');
-  await user.click(lockedFilter);
-  await user.click(screen.getByRole('checkbox', { name: 'Select Locked A' }));
-  rerender(<Achievements {...props} loading />);
-  expect(screen.getByRole('button', { name: 'Locked' })).toBe(lockedFilter);
-  expect(lockedFilter).toHaveAttribute('aria-pressed', 'true');
-  expect(screen.getByRole('button', { name: 'Add selected' })).toBe(add);
-  expect(add).toBeDisabled();
-  expect(refresh.querySelector('svg')).toBe(refreshIcon);
-  expect(refreshIcon).toHaveClass('spinner');
-  expect(screen.getAllByRole('status')).toHaveLength(1);
-  expect(screen.getByRole('status')).toHaveTextContent('Loading achievements…');
-  expect(screen.queryByRole('article')).not.toBeInTheDocument();
-  expect(container.querySelector('.achievement-list .achievement-skeleton')).toBeInTheDocument();
-  expect(screen.queryByText('No achievements available for this game.')).not.toBeInTheDocument();
-  rerender(<Achievements {...props} loading={false} />);
-  expect(screen.queryByRole('status')).not.toBeInTheDocument();
-  expect(screen.getByRole('checkbox', { name: 'Select Locked A' })).toBeChecked();
-  expect(screen.queryByRole('article', { name: 'Newest unlock' })).not.toBeInTheDocument();
-  expect(add).toBeEnabled();
-});
-it('shows a stable saving button and prevents repeated additions during an optimistic save', async () => {
-  const user = userEvent.setup();
-  const { props, onAdd, rerender } = show();
-  await user.click(screen.getByRole('checkbox', { name: 'Select Locked A' }));
-  const add = screen.getByRole('button', { name: 'Add selected' });
-  await user.click(add);
-  expect(onAdd).toHaveBeenCalledExactlyOnceWith(['locked-a']);
-  rerender(<Achievements {...props} queued={new Set(['locked-a'])} adding />);
-  const saving = screen.getByRole('button', { name: 'Saving…' });
-  expect(saving).toBe(add);
-  expect(saving).toHaveClass('achievement-add-button');
-  expect(saving).toHaveAttribute('aria-busy', 'true');
-  expect(saving.querySelector('svg')).toHaveClass('spinner');
-  expect(saving).toBeDisabled();
-  expect(screen.getByRole('checkbox', { name: 'Select Locked A' })).toBeChecked();
-  expect(screen.getByRole('checkbox', { name: 'Select Locked A' })).toBeDisabled();
-  await user.click(saving);
-  expect(onAdd).toHaveBeenCalledOnce();
-  rerender(<Achievements {...props} queued={new Set(['locked-a'])} adding={false} />);
-  expect(screen.getByRole('button', { name: 'Add selected' })).toBe(add);
-  expect(add).toHaveAttribute('aria-busy', 'false');
-  expect(add).toBeDisabled();
-});
-it('supports a specific loading label without replacing the real toolbar', () => {
-  const { container } = render(<AchievementSkeleton label="Refreshing achievements…" />);
-  expect(screen.getAllByRole('status')).toHaveLength(1);
-  expect(screen.getByRole('status')).toHaveTextContent('Refreshing achievements…');
-  expect(container.querySelector('.skeleton-toolbar')).not.toBeInTheDocument();
 });

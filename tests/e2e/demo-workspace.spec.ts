@@ -23,8 +23,8 @@ function applyButton(page: Page, title = CYBERPUNK) {
 }
 
 async function signIn(page: Page) {
-  await expect(page.getByRole('heading', { name: 'Connect GOG' })).toBeVisible();
-  const login = page.getByRole('button', { name: 'Sign in to GOG', exact: true });
+  await expect(page.getByRole('heading', { name: 'Your GOG achievements' })).toBeVisible();
+  const login = page.getByRole('button', { name: 'Sign in with GOG', exact: true });
   await expect(login).toBeEnabled();
   await login.click();
   await expect(
@@ -88,7 +88,11 @@ test('compact library keeps game art, plain achievement details and existing unl
   await expect(world.getByText('The World', { exact: true })).toBeVisible();
   await expect(world.getByText(/Sample achievement description/)).toBeVisible();
   await expect(world.getByRole('button')).toHaveCount(0);
-  await expect(unlocked.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await expect(unlocked.getByRole('button')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add Legend of The Afterlife to queue', exact: true }),
+  ).toBeEnabled();
   await expect(page.getByRole('button', { name: /^Details for / })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Queued', exact: true })).toHaveCount(0);
   await expect(applyButton(page)).toBeEnabled();
@@ -124,37 +128,49 @@ test('compact library keeps game art, plain achievement details and existing unl
   await expect(page.getByRole('button', { name: CYBERPUNK, exact: true })).toBeVisible();
 
   const summary = page.locator('.account-menu summary');
-  await expect(summary).toHaveText('My account');
+  await expect(summary).toHaveAttribute('aria-label', 'Account menu');
+  await expect(summary).toHaveText('');
   await expect(summary).not.toContainText('123456789');
   await summary.click();
   await expect(page.locator('.account-popover')).toContainText('123456789');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Connect GOG' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your GOG achievements' })).toBeVisible();
   await expect(page.locator('.queue-game-group')).toHaveCount(0);
 });
 
-test('queue selection and inline date edits save the draft without an apply', async ({ page }) => {
+test('single-item date edits stay local until Save date and persist exact seconds', async ({
+  page,
+}) => {
   await signIn(page);
-  await page.getByRole('checkbox', { name: 'Select Legend of The Afterlife', exact: true }).check();
-  await page.getByRole('button', { name: 'Add selected', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add Legend of The Afterlife to queue', exact: true })
+    .click();
   const remove = page.getByRole('button', { name: 'Remove Legend of The Afterlife from queue' });
   await expect(remove).toBeEnabled();
   await remove.click();
   await expect(remove).toHaveCount(0);
   await useUtc(page);
-  const date = page.getByLabel('Unlock date for The World', { exact: true });
+  const edit = page.getByRole('button', { name: 'Edit date for The World', exact: true });
+  const originalTitle = await edit.getAttribute('title');
+  await edit.click();
+  const dialog = page.getByRole('dialog', { name: 'Edit unlock date', exact: true });
+  const date = dialog.getByLabel('Unlock date for The World', { exact: true });
   await expect(date).toHaveAttribute('type', 'datetime-local');
   await expect(date).toHaveAttribute('step', '1');
   await date.fill('2099-01-01T13:14:15');
-  await page.getByRole('heading', { name: 'Queue', exact: true }).click();
-  await expect(gameQueue(page).getByText(/Unlock dates must not be in the future/)).toBeVisible();
+  await expect(dialog.getByText(/Unlock dates must not be in the future/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Save date', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(edit).toHaveAttribute('title', originalTitle!);
+  await edit.click();
+  await date.fill('2020-02-02T13:14:15');
+  await dialog.getByRole('heading', { name: 'Edit unlock date', exact: true }).click();
   expect(
     (await savedDemo(page)).queues.find((queue) => queue.game.id === '1')?.items[0]?.unlocked_at,
   ).toBe('2026-10-10T17:30:00Z');
-  await date.press('Escape');
-  await expect(date).toHaveValue('2026-10-10T17:30');
-  await date.fill('2020-02-02T13:14:15');
-  await page.getByRole('heading', { name: 'Queue', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save date', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await expect
     .poll(
       async () =>
@@ -163,21 +179,14 @@ test('queue selection and inline date edits save the draft without an apply', as
           ?.items.find((item) => item.achievement_id === '1')?.unlocked_at,
     )
     .toBe('2020-02-02T13:14:15Z');
-  await expect(page.getByText('Draft saved', { exact: true })).toBeVisible();
-  const saved = await savedDemo(page);
-  expect(
-    saved.queues
-      .find((queue) => queue.game.id === '1')
-      ?.items.find((item) => item.achievement_id === '1')?.unlocked_at,
-  ).toBe('2020-02-02T13:14:15Z');
-  expect(saved.records).toHaveLength(0);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await savedDemo(page)).records).toHaveLength(0);
+  await expect(edit).toHaveAttribute('title', '02 Feb 2020 13:14:15 · UTC (UTC+00:00)');
   await page.reload();
   await signIn(page);
   await useUtc(page);
-  await expect(page.getByLabel('Unlock date for The World', { exact: true })).toHaveValue(
-    '2020-02-02T13:14:15',
-  );
+  await edit.click();
+  await expect(date).toHaveValue('2020-02-02T13:14:15');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect((await savedDemo(page)).records).toHaveLength(0);
 });
 
@@ -195,43 +204,58 @@ test('the single apply confirmation can be dismissed without changing achievemen
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Review changes', exact: true })).toHaveCount(0);
   await expect(gameQueue(page).locator('.queue-row')).toHaveCount(3);
-  await expect(page.getByLabel('Unlock date for The World', { exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Edit date for The World', exact: true }),
+  ).toBeEnabled();
   await expect(applyButton(page)).toBeEnabled();
   expect((await savedDemo(page)).records).toHaveLength(0);
 });
 
-test('explicit apply confirms once, clears only confirmed requests and retains history after reload', async ({
+test('explicit apply clears confirmed requests and keeps flat achievement history after reload', async ({
   page,
 }) => {
   await signIn(page);
   await confirmApply(page);
   await expect(page.getByRole('heading', { name: 'Results confirmed', exact: true })).toBeVisible();
   await expect(page.getByText('Confirmed', { exact: true })).toHaveCount(3);
-  await expect(
-    page.getByText('Queue is clear. Results are saved in history.', { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText('Queue is empty.', { exact: true })).toBeVisible();
   const history = page.getByRole('button', { name: 'History', exact: true });
   await expect(history).toBeEnabled();
   const saved = await savedDemo(page);
   expect(saved.records).toHaveLength(1);
   expect(saved.queues.find((queue) => queue.game.id === '1')?.items).toHaveLength(0);
   await history.click();
-  await expect(page.getByRole('heading', { name: 'Operation history' })).toBeVisible();
   await expect(
-    page.getByText('Saved reports are read-only. They cannot undo an unlock.'),
+    page.getByRole('heading', { name: 'Achievement history', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'View report', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Results confirmed', exact: true })).toBeVisible();
-  expect((await savedDemo(page)).records).toHaveLength(1);
+  const unlocks = page.getByRole('list', { name: 'Unlocked achievements', exact: true });
+  await expect(unlocks.getByRole('listitem')).toHaveCount(3);
+  expect(await unlocks.locator('strong').allTextContents()).toEqual([
+    'The Wandering Fool',
+    'Frequent Flyer',
+    'The World',
+  ]);
+  await expect(
+    unlocks.getByRole('listitem').filter({ hasText: 'The World' }).locator('time'),
+  ).toHaveAttribute('datetime', '2026-10-10T17:30:00Z');
+  await expect(page.getByRole('button', { name: 'View report', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Back to achievements', exact: true })).toHaveCount(
+    0,
+  );
   await page.reload();
   await signIn(page);
   await history.click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Back to achievements', exact: true }).click();
-  await expect(page.getByLabel('Unlock date for The World', { exact: true })).toHaveCount(0);
+  await expect(unlocks.getByRole('listitem')).toHaveCount(3);
+  await page.getByRole('button', { name: CYBERPUNK, exact: true }).click();
+  await expect(
+    page.locator('.game-heading').getByRole('heading', { name: CYBERPUNK, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Edit date for The World', exact: true }),
+  ).toHaveCount(0);
   await expect(applyButton(page)).toHaveCount(0);
   await expect(
-    page.locator('.achievement-row').filter({ hasText: 'The World' }).getByRole('checkbox'),
+    page.locator('.achievement-row').filter({ hasText: 'The World' }).getByRole('button'),
   ).toHaveCount(0);
   const reopened = await savedDemo(page);
   expect(reopened.records).toHaveLength(1);
@@ -240,7 +264,7 @@ test('explicit apply confirms once, clears only confirmed requests and retains h
 
 for (const scenario of ['partial', 'unknown'] as const) {
   test(
-    scenario + ' outcomes retain unresolved requests and never replay during recovery reads',
+    scenario + ' outcomes retain unresolved requests and never replay from flat history',
     async ({ page }) => {
       await signIn(page);
       await page.getByRole('combobox', { name: 'Demo scenario' }).selectOption(scenario);
@@ -265,9 +289,19 @@ for (const scenario of ['partial', 'unknown'] as const) {
       const history = page.getByRole('button', { name: 'History', exact: true });
       await expect(history).toBeEnabled();
       await history.click();
-      await expect(page.getByRole('button', { name: 'View report', exact: true })).toBeVisible();
+      const attention = page.getByRole('list', { name: 'Results needing attention', exact: true });
+      await expect(attention.getByRole('listitem')).toHaveCount(scenario === 'partial' ? 2 : 1);
+      const unlocks = page.getByRole('list', { name: 'Unlocked achievements', exact: true });
+      if (scenario === 'partial') {
+        await expect(unlocks.getByRole('listitem')).toHaveCount(1);
+        await expect(unlocks.getByText('The World', { exact: true })).toBeVisible();
+        await expect(attention.getByText('Outcome uncertain', { exact: true })).toBeVisible();
+      } else {
+        await expect(unlocks).toHaveCount(0);
+        await expect(attention.getByText('Outcome unknown', { exact: true })).toBeVisible();
+      }
       await expect(
-        page.getByLabel('Unlock date for Frequent Flyer', { exact: true }),
+        page.getByRole('button', { name: 'Edit date for Frequent Flyer', exact: true }),
       ).toBeEnabled();
       const saved = await savedDemo(page);
       expect(saved.records).toHaveLength(1);
@@ -276,12 +310,17 @@ for (const scenario of ['partial', 'unknown'] as const) {
           .find((queue) => queue.game.id === '1')
           ?.items.map((item) => item.achievement_id),
       ).toEqual(scenario === 'partial' ? ['2', '3'] : ['1', '2', '3']);
-      await page.getByRole('button', { name: 'Back to achievements', exact: true }).click();
+      await page.getByRole('button', { name: CYBERPUNK, exact: true }).click();
+      await expect(
+        page.locator('.game-heading').getByRole('heading', { name: CYBERPUNK, exact: true }),
+      ).toBeVisible();
       await expect(applyButton(page)).toBeEnabled();
       await expect(page.getByRole('dialog')).toHaveCount(0);
       expect((await savedDemo(page)).records).toHaveLength(1);
       if (scenario === 'partial')
-        await expect(page.getByLabel('Unlock date for The World', { exact: true })).toHaveCount(0);
+        await expect(
+          page.getByRole('button', { name: 'Edit date for The World', exact: true }),
+        ).toHaveCount(0);
     },
   );
 }
@@ -291,10 +330,9 @@ test('per-game apply retains the other global queue across selection, history an
 }) => {
   await signIn(page);
   await page.getByRole('button', { name: WITCHER, exact: true }).click();
-  const passed = page.getByRole('checkbox', { name: 'Select Passed the Trial', exact: true });
+  const passed = page.getByRole('button', { name: 'Add Passed the Trial to queue', exact: true });
   await expect(passed).toBeEnabled();
-  await passed.check();
-  await page.getByRole('button', { name: 'Add selected', exact: true }).click();
+  await passed.click();
   await expect(applyButton(page, WITCHER)).toBeEnabled();
   await expect(gameQueue(page).locator('.queue-row')).toHaveCount(3);
   await expect(gameQueue(page, WITCHER).locator('.queue-row')).toHaveCount(1);
@@ -302,7 +340,9 @@ test('per-game apply retains the other global queue across selection, history an
   await expect(
     page.locator('.game-heading').getByRole('heading', { name: CYBERPUNK, exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel('Unlock date for Passed the Trial', { exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Edit date for Passed the Trial', exact: true }),
+  ).toBeEnabled();
   await page.reload();
   await signIn(page);
   await expect(gameQueue(page).locator('.queue-row')).toHaveCount(3);
@@ -324,8 +364,12 @@ test('per-game apply retains the other global queue across selection, history an
   ).toEqual(['1', '2', '3']);
   expect(saved.queues.find((queue) => queue.game.id === '2')?.items).toHaveLength(0);
   await page.getByRole('button', { name: 'History', exact: true }).click();
-  await expect(page.locator('.history-list')).toContainText(WITCHER);
-  await expect(page.getByLabel('Unlock date for The World', { exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('list', { name: 'Unlocked achievements', exact: true }),
+  ).toContainText(WITCHER);
+  await expect(
+    page.getByRole('button', { name: 'Edit date for The World', exact: true }),
+  ).toBeEnabled();
   await page.reload();
   await signIn(page);
   await expect(gameQueue(page).locator('.queue-row')).toHaveCount(3);
@@ -333,7 +377,7 @@ test('per-game apply retains the other global queue across selection, history an
   expect((await savedDemo(page)).records).toHaveLength(1);
 });
 
-test('desktop, minimum desktop and mobile workspaces keep inline dates and confirmation within viewport', async ({
+test('desktop, minimum desktop and mobile workspaces keep date and apply modals within viewport', async ({
   page,
 }, testInfo) => {
   await signIn(page);
@@ -351,9 +395,19 @@ test('desktop, minimum desktop and mobile workspaces keep inline dates and confi
     expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport + 1);
     await page.screenshot({ path: testInfo.outputPath('workspace-' + viewport.width + '.png') });
   }
-  const date = page.getByLabel('Unlock date for The World', { exact: true });
-  await expect(date).toHaveAttribute('type', 'datetime-local');
-  expect((await date.boundingBox())?.width).toBeLessThanOrEqual(390);
+  await page
+    .getByRole('complementary', { name: 'Achievement queue', exact: true })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('queue-390.png') });
+  await page.getByRole('button', { name: 'Edit date for The World', exact: true }).click();
+  const dateDialog = page.getByRole('dialog', { name: 'Edit unlock date', exact: true });
+  await expect(dateDialog).toBeVisible();
+  expect((await dateDialog.boundingBox())?.width).toBeLessThanOrEqual(390);
+  await expect(
+    dateDialog.getByRole('button', { name: 'Use current time', exact: true }),
+  ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('date-modal-390.png') });
+  await dateDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   const dialog = await confirmation(page);
   expect((await dialog.boundingBox())?.width).toBeLessThanOrEqual(390);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
@@ -367,5 +421,46 @@ test('a browser without the explicit demo flag cannot pretend to have a desktop 
   await page.goto('/');
   await expect(page.getByText(/The desktop bridge is unavailable/)).toBeVisible();
   await expect(page.getByText('DEMO DATA', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Sign in to GOG', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Sign in with GOG', exact: true })).toHaveCount(0);
+});
+
+test('signed-out layout has a blank library and no queue or time zone controls', async ({
+  page,
+}, testInfo) => {
+  await expect(
+    page.getByRole('heading', { name: 'Your GOG achievements', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in with GOG', exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('complementary', { name: 'Achievement queue', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: /^Time zone/ })).toHaveCount(0);
+  await expect(page.getByLabel('Search your library', { exact: true })).toBeDisabled();
+  await expect(page.locator('.library-pane .game-row')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'History', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('signed-out-1586.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+  await page.screenshot({ path: testInfo.outputPath('signed-out-390.png') });
+});
+
+test('Use current time saves one queued date at click time without applying achievements', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Edit date for The World', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit unlock date', exact: true });
+  const before = await page.evaluate(() => Math.floor(Date.now() / 1000));
+  await dialog.getByRole('button', { name: 'Use current time', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const after = await page.evaluate(() => Math.floor(Date.now() / 1000));
+  const saved = await savedDemo(page);
+  const queue = saved.queues.find((item) => item.game.id === '1');
+  const iso = queue?.items.find((item) => item.achievement_id === '1')?.unlocked_at;
+  expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  const seconds = Date.parse(iso!) / 1000;
+  expect(seconds).toBeGreaterThanOrEqual(before);
+  expect(seconds).toBeLessThanOrEqual(after);
+  expect(queue?.items).toHaveLength(3);
+  expect(saved.records).toHaveLength(0);
 });
