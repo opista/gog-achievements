@@ -49,10 +49,31 @@ const NAMES = [
   'Full Body Conversion',
   'A sample hidden achievement',
 ];
-function initialAchievements(): Achievement[] {
-  return NAMES.map((name, index) => ({
-    id: String(index + 1),
-    key: `demo_${index + 1}`,
+const WITCHER_NAMES = [
+  'Passed the Trial',
+  'Lilac and Gooseberries',
+  'Geralt: The Professional',
+  'Card Collector',
+  'The King Is Dead',
+  'A sample hidden Witcher achievement',
+];
+function initialAchievements(gameId: string): Achievement[] {
+  const names =
+    gameId === '1'
+      ? NAMES
+      : gameId === '2'
+        ? WITCHER_NAMES
+        : [
+            'First steps',
+            'Explorer',
+            'Challenge complete',
+            'Collector',
+            'Mastery',
+            'A sample hidden achievement',
+          ];
+  return names.map((name, index) => ({
+    id: String(gameId === '1' ? index + 1 : Number(gameId) * 100 + index + 1),
+    key: gameId === '1' ? `demo_${index + 1}` : `demo_${gameId}_${index + 1}`,
     name,
     description:
       index === 5
@@ -122,7 +143,7 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
   function list(gameId: string): Achievement[] {
     game(gameId);
     if (!achievements.has(gameId)) {
-      const source = initialAchievements();
+      const source = initialAchievements(gameId);
       for (const record of records.filter((item) => item.game_id === gameId).toReversed()) {
         for (const result of record.report?.results ?? []) {
           if (!isConfirmedUnlock(result)) continue;
@@ -228,6 +249,20 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
     async getQueue(gameId) {
       requireAuth();
       return run('read', () => structuredClone(queue(gameId)), gameId);
+    },
+    async listQueues() {
+      requireAuth();
+      return run('read', () => {
+        if (scenario !== 'empty') queue('1');
+        const saved = [...queues.values()].filter((item) => item.items.length);
+        return structuredClone(
+          saved.sort(
+            (left, right) =>
+              left.game.title.localeCompare(right.game.title) ||
+              left.game.id.localeCompare(right.game.id),
+          ),
+        );
+      });
     },
     async addAchievements(input) {
       requireAuth();
@@ -416,7 +451,10 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
       requireAuth();
       return run(
         'read',
-        () => structuredClone(records.filter((item) => item.game_id === input.gameId)),
+        () =>
+          structuredClone(
+            records.filter((item) => input.gameId === undefined || item.game_id === input.gameId),
+          ),
         input.gameId,
       );
     },

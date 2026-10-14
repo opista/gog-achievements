@@ -1,148 +1,174 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import type { OperationState } from '../../src/shared/api';
 import { App } from '../../src/renderer/App';
 import { createDemoApi, type DemoDesktopApi, type DemoScenario } from '../../src/shared/demo-api';
-
 afterEach(cleanup);
+async function ready() {
+  await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
+}
 async function connected(scenario: DemoScenario = 'complete') {
   const api = createDemoApi({ delayMs: 0, scenario });
   const user = userEvent.setup();
   render(<App api={api} />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Sign in to GOG' })).toBeEnabled());
   await user.click(screen.getByRole('button', { name: 'Sign in to GOG' }));
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeEnabled(),
-  );
+  await ready();
   return { api, user };
 }
-async function previewAndConfirm(api: DemoDesktopApi, user: ReturnType<typeof userEvent.setup>) {
+async function confirm(
+  api: DemoDesktopApi,
+  user: ReturnType<typeof userEvent.setup>,
+  game = 'Cyberpunk 2077',
+) {
   const apply = vi.spyOn(api, 'apply');
-  await user.click(screen.getByRole('button', { name: 'Preview changes' }));
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Continue to apply' })).toBeEnabled(),
-  );
+  await user.click(screen.getByRole('button', { name: `Apply changes for ${game}` }));
+  await screen.findByRole('dialog');
   expect(apply).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Continue to apply' }));
   return apply;
 }
-
 describe('desktop restoration flow', () => {
-  it('keeps account ID in its menu and removes the shared-login warning', async () => {
+  it('shows My account with its ID only in the menu', async () => {
     const { user } = await connected();
-    expect(screen.getByText('GOG account', { exact: true })).toBeVisible();
+    await user.click(screen.getByText('My account', { exact: true }));
+    expect(screen.getByText('Account ID: 123456789')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
     expect(
       screen.queryByText("Signing out also removes the CLI's saved login."),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByText('GOG account', { exact: true }));
-    expect(screen.getByText('Account ID: 123456789')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
   });
-  it('starts signed out with explicit demo data and protects existing unlocks', async () => {
+  it('protects existing unlocks and removes bulk dates and Queued filter', async () => {
     const { user } = await connected();
-    expect(screen.getByText('DEMO DATA')).toBeVisible();
     expect(
       screen.queryByRole('checkbox', { name: 'Select Full Body Conversion' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Set date for selected' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Queued' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview changes' })).not.toBeInTheDocument();
     expect(screen.queryByText('A sample hidden achievement')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reveal' }));
-    expect(screen.getByRole('heading', { name: 'A sample hidden achievement' })).toBeVisible();
     expect(
       screen.getByRole('checkbox', { name: 'Select A sample hidden achievement' }),
     ).toBeEnabled();
   });
-  it('never writes on preview or dismissed final confirmation', async () => {
+  it('checks automatically and never writes before final confirmation', async () => {
     const { api, user } = await connected();
-    const apply = await previewAndConfirm(api, user);
+    const apply = await confirm(api, user);
     const dialog = screen.getByRole('dialog', { name: 'Apply 3 achievements?' });
-    expect(within(dialog).getByRole('button', { name: 'Back to preview' })).toHaveFocus();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Continue to apply' }));
+    await user.click(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' }));
+    await screen.findByRole('dialog');
     await user.click(screen.getByRole('button', { name: 'Apply 3 achievements' }));
     await screen.findByRole('heading', { name: 'Results confirmed' });
+    await ready();
     expect(apply).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
     expect(screen.getByText('Queue is clear. Results are saved in history.')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Back to achievements' }));
     expect(
-      screen.queryByRole('button', { name: 'Edit date for The World' }),
+      screen.queryByRole('button', { name: 'Apply changes for Cyberpunk 2077' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeDisabled();
   });
-  it('date editing saves the queue without applying and prevents future dates', async () => {
+  it('edits one date inline without applying and blocks future dates', async () => {
     const { api, user } = await connected();
     const apply = vi.spyOn(api, 'apply');
     const setDates = vi.spyOn(api, 'setDates');
-    await user.click(screen.getByRole('button', { name: 'Edit date for The World' }));
-    const dialog = screen.getByRole('dialog', { name: 'Queue dates' });
-    const date = within(dialog).getByLabelText('Unlock date for The World');
-    await user.clear(date);
-    await user.type(date, '2099-01-01');
-    expect(within(dialog).getByRole('button', { name: 'Save dates' })).toBeDisabled();
-    await user.clear(date);
-    await user.type(date, '2026-10-09');
-    await user.click(within(dialog).getByRole('button', { name: 'Save dates' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(setDates).toHaveBeenCalledWith({ gameId: '1', dates: { '1': '2026-10-09T17:30:00Z' } });
+    await user.selectOptions(screen.getByLabelText('Time zone', { exact: true }), 'UTC');
+    const date = screen.getByLabelText('Unlock date for The World');
+    fireEvent.change(date, { target: { value: '2099-01-01T13:14:15' } });
+    fireEvent.blur(date);
+    expect(screen.getByText('Unlock dates must not be in the future.')).toBeVisible();
+    expect(setDates).not.toHaveBeenCalled();
+    fireEvent.change(date, { target: { value: '2020-02-02T13:14:15' } });
+    fireEvent.keyDown(date, { key: 'Enter' });
+    await waitFor(() =>
+      expect(setDates).toHaveBeenCalledWith({
+        gameId: '1',
+        dates: { '1': '2020-02-02T13:14:15Z' },
+      }),
+    );
+    await ready();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
     expect(screen.getByText('Draft saved')).toBeVisible();
   });
-  it('reports partial outcomes without automatic retries or editable existing dates', async () => {
-    const { api, user } = await connected('partial');
-    const apply = await previewAndConfirm(api, user);
-    await user.click(screen.getByRole('button', { name: 'Apply 3 achievements' }));
-    await screen.findByRole('heading', { name: 'Results need attention' });
-    expect(screen.getByText('Unlocked with a different date')).toBeVisible();
-    expect(screen.getByText('Outcome uncertain')).toBeVisible();
-    expect(screen.getByText('Not attempted')).toBeVisible();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Review queue' })).toBeEnabled());
-    await user.click(screen.getByRole('button', { name: 'Review queue' }));
-    expect(
-      screen.queryByRole('button', { name: 'Edit date for The World' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit date for Frequent Flyer' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled();
+  it.each(['partial', 'unknown'] as const)(
+    'keeps %s outcomes without automatic retries',
+    async (scenario) => {
+      const { api, user } = await connected(scenario);
+      const apply = await confirm(api, user);
+      await user.click(screen.getByRole('button', { name: 'Apply 3 achievements' }));
+      await screen.findByRole('heading', {
+        name: scenario === 'partial' ? 'Results need attention' : 'Outcome unknown',
+      });
+      await ready();
+      if (scenario === 'partial') {
+        expect(screen.getByText('Unlocked with a different date')).toBeVisible();
+        expect(screen.getByText('Outcome uncertain')).toBeVisible();
+        expect(screen.queryByLabelText('Unlock date for The World')).not.toBeInTheDocument();
+      }
+      expect(screen.getByLabelText('Unlock date for Frequent Flyer')).toBeEnabled();
+      await user.click(screen.getByRole('button', { name: 'Check current state' }));
+      await ready();
+      await user.click(screen.getByRole('button', { name: 'History' }));
+      await ready();
+      expect(screen.getByRole('button', { name: 'View report' })).toBeEnabled();
+      expect(screen.getByLabelText('Unlock date for Frequent Flyer')).toBeEnabled();
+      expect(apply).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('keeps all game groups visible and applies only the chosen group', async () => {
+    const { api, user } = await connected();
+    await user.click(screen.getByRole('button', { name: 'The Witcher 3: Wild Hunt' }));
+    await ready();
+    await user.click(screen.getByRole('checkbox', { name: 'Select Passed the Trial' }));
+    await user.click(screen.getByRole('button', { name: 'Add selected' }));
+    await ready();
+    expect(screen.getByLabelText('Queue for Cyberpunk 2077')).toBeVisible();
+    expect(screen.getByLabelText('Queue for The Witcher 3: Wild Hunt')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Cyberpunk 2077' }));
+    await ready();
+    const apply = await confirm(api, user, 'The Witcher 3: Wild Hunt');
+    await user.click(screen.getByRole('button', { name: 'Apply 1 achievements' }));
+    await screen.findByRole('heading', { name: 'Results confirmed' });
+    await ready();
+    expect(screen.getByLabelText('Queue for Cyberpunk 2077')).toBeVisible();
+    expect(screen.queryByLabelText('Queue for The Witcher 3: Wild Hunt')).not.toBeInTheDocument();
+    expect((await api.getQueue('1'))?.items).toHaveLength(3);
+    expect((await api.history({}))[0]?.game_id).toBe('2');
     expect(apply).toHaveBeenCalledTimes(1);
   });
-  it('preserves unknown outcomes and exposes only read-only recovery/history actions', async () => {
-    const { api, user } = await connected('unknown');
-    const apply = await previewAndConfirm(api, user);
-    await user.click(screen.getByRole('button', { name: 'Apply 3 achievements' }));
-    await screen.findByRole('heading', { name: 'Outcome unknown' });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Check current state' })).toBeEnabled(),
-    );
-    await user.click(screen.getByRole('button', { name: 'Check current state' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
-    await user.click(screen.getByRole('button', { name: 'History' }));
-    expect(
-      screen.getByText('Saved reports are read-only. They cannot undo an unlock.'),
-    ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'View report' })).toBeEnabled();
-    expect(apply).toHaveBeenCalledTimes(1);
-  });
-  it('supports an empty library without presenting stale sample games', async () => {
-    const api = createDemoApi({ delayMs: 0, scenario: 'empty' });
+  it('shows history across games and permits queue edits there', async () => {
+    const api = createDemoApi({ delayMs: 0 });
+    await api.login();
+    await api.apply({ previewToken: (await api.preview({ gameId: '1' })).token });
+    await api.addAchievements({ gameId: '2', achievementIds: ['201'] });
+    await api.apply({ previewToken: (await api.preview({ gameId: '2' })).token });
+    await api.addAchievements({ gameId: '2', achievementIds: ['204'] });
     const user = userEvent.setup();
     render(<App api={api} />);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Sign in to GOG' })).toBeEnabled(),
-    );
-    await user.click(screen.getByRole('button', { name: 'Sign in to GOG' }));
-    await waitFor(() =>
-      expect(screen.getAllByText('No GOG games found.').length).toBeGreaterThan(0),
-    );
-    expect(screen.queryByText('Cyberpunk 2077')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeDisabled();
+    await ready();
+    await user.click(screen.getByRole('button', { name: 'History' }));
+    await ready();
+    expect(screen.getAllByRole('button', { name: 'View report' })).toHaveLength(2);
+    expect(screen.getByLabelText('Unlock date for Card Collector')).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Remove Card Collector from queue' }));
+    await ready();
+    expect(screen.getByRole('heading', { name: 'Operation history' })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'View report' })).toHaveLength(2);
   });
-  it('initializes once under StrictMode and supports normal sign-in', async () => {
+  it('supports an empty library without stale games or apply controls', async () => {
+    await connected('empty');
+    expect(screen.getByRole('heading', { name: 'No GOG games found' })).toBeVisible();
+    expect(screen.queryByText('Cyberpunk 2077')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Apply changes for/ })).not.toBeInTheDocument();
+  });
+  it('initializes once under StrictMode', async () => {
     const api = createDemoApi({ delayMs: 0 });
     const initialize = vi.spyOn(api, 'initialize');
     render(
@@ -155,44 +181,22 @@ describe('desktop restoration flow', () => {
     );
     expect(initialize).toHaveBeenCalledTimes(1);
   });
-  it('adds and removes queue entries without starting a write', async () => {
+  it('adds and removes entries without applying', async () => {
     const { api, user } = await connected();
     const apply = vi.spyOn(api, 'apply');
     await user.click(screen.getByRole('checkbox', { name: 'Select Legend of The Afterlife' }));
     await user.click(screen.getByRole('button', { name: 'Add selected' }));
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Remove Legend of The Afterlife from queue' }),
-      ).toBeEnabled(),
-    );
+    await ready();
     await user.click(
       screen.getByRole('button', { name: 'Remove Legend of The Afterlife from queue' }),
     );
-    await waitFor(() =>
-      expect(
-        screen.queryByRole('button', { name: 'Remove Legend of The Afterlife from queue' }),
-      ).not.toBeInTheDocument(),
-    );
+    await ready();
+    expect(
+      screen.queryByLabelText('Unlock date for Legend of The Afterlife'),
+    ).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
   });
-  it('invalidates a reviewed queue after an edit and traps dialog focus', async () => {
-    const { user } = await connected();
-    await user.click(screen.getByRole('button', { name: 'Preview changes' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Back to queue' })).toBeEnabled(),
-    );
-    await user.click(screen.getByRole('button', { name: 'Back to queue' }));
-    await user.click(screen.getByRole('button', { name: 'Edit date for The World' }));
-    const dialog = screen.getByRole('dialog', { name: 'Queue dates' });
-    within(dialog).getByRole('button', { name: 'Save dates' }).focus();
-    await user.keyboard('{Tab}');
-    expect(within(dialog).getByRole('button', { name: 'Close Queue dates' })).toHaveFocus();
-    await user.click(within(dialog).getByRole('button', { name: 'Save dates' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(screen.getByText('Queue changed — preview again.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled();
-  });
-  it('blocks reads while a previous writer survives and rechecks auth when it exits', async () => {
+  it('blocks reads while a previous writer survives and checks auth after it exits', async () => {
     const fixture = createDemoApi({ delayMs: 0 });
     await fixture.login();
     const initialize = vi
@@ -226,9 +230,7 @@ describe('desktop restoration flow', () => {
     await screen.findByRole('heading', { name: 'Checking an interrupted operation…' });
     expect(listGames).not.toHaveBeenCalled();
     await act(async () => listener?.({ kind: 'idle' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Preview changes' })).toBeEnabled(),
-    );
+    await ready();
     expect(initialize).toHaveBeenCalledTimes(2);
     expect(listGames).toHaveBeenCalledTimes(1);
   });

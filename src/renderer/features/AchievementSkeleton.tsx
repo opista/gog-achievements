@@ -1,17 +1,11 @@
 /** Visual placeholders have no controls or account data; only the status is announced. */
-export function AchievementSkeleton() {
+export function AchievementSkeleton({ label = 'Loading achievements…' }: { label?: string }) {
   return (
     <div className="achievement-skeleton">
       <p className="sr-only" role="status">
-        Loading achievements…
+        {label}
       </p>
       <div aria-hidden="true" className="skeleton-content">
-        <div className="skeleton-toolbar">
-          <span className="skeleton-block skeleton-filter" />
-          <span className="skeleton-block skeleton-filter" />
-          <span className="skeleton-block skeleton-filter" />
-          <span className="skeleton-block skeleton-action" />
-        </div>
         {Array.from({ length: 6 }, (_, index) => (
           <div key={index} className="skeleton-row">
             <span className="skeleton-block skeleton-icon" />

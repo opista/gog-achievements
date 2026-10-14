@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Library } from '../../src/renderer/features/Library';
+import type { ComponentProps } from 'react';
 import type { Game } from '../../src/shared/api';
 afterEach(cleanup);
 const games: Game[] = [
@@ -14,22 +15,22 @@ const games: Game[] = [
     image: null,
   },
 ];
-function library() {
+function library(overrides: Partial<ComponentProps<typeof Library>> = {}) {
   const onSelect = vi.fn();
-  const view = render(
-    <Library
-      games={games}
-      gameId="1"
-      signedIn
-      loaded
-      busy={false}
-      demo={false}
-      onSelect={onSelect}
-      onRefresh={vi.fn()}
-      onResize={vi.fn()}
-    />,
-  );
-  return { onSelect, ...view };
+  const props: ComponentProps<typeof Library> = {
+    games,
+    gameId: '1',
+    signedIn: true,
+    loaded: true,
+    busy: false,
+    demo: false,
+    onSelect,
+    onRefresh: vi.fn(),
+    onResize: vi.fn(),
+    ...overrides,
+  };
+  const view = render(<Library {...props} />);
+  return { onSelect, props, ...view };
 }
 it('retains compact cover artwork and exposes complete game titles and selection', async () => {
   const user = userEvent.setup();
@@ -55,4 +56,39 @@ it('clears search with an accessible X and returns focus to the search field', a
   expect(search).toHaveFocus();
   expect(screen.getByRole('button', { name: games[1]!.title })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Clear library search' })).not.toBeInTheDocument();
+});
+
+it('keeps the search and refresh controls in place while refreshing the library', async () => {
+  const user = userEvent.setup();
+  const { container, props, rerender } = library();
+  const search = screen.getByRole('textbox', { name: 'Search your library' });
+  const refresh = screen.getByRole('button', { name: 'Refresh library' });
+  const refreshIcon = refresh.querySelector('svg');
+  await user.type(search, 'cyber');
+  rerender(<Library {...props} loading />);
+  expect(screen.getByRole('textbox', { name: 'Search your library' })).toBe(search);
+  expect(search).toHaveValue('cyber');
+  expect(screen.getByRole('button', { name: 'Refresh library' })).toBe(refresh);
+  expect(refresh.querySelector('svg')).toBe(refreshIcon);
+  expect(refreshIcon).toHaveClass('spinner');
+  expect(refresh).toBeDisabled();
+  expect(screen.getAllByRole('status')).toHaveLength(1);
+  expect(screen.getByRole('status')).toHaveTextContent('Loading games…');
+  expect(container.querySelector('.library-skeleton')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Cyberpunk 2077' })).not.toBeInTheDocument();
+  expect(screen.queryByText('No GOG games found.')).not.toBeInTheDocument();
+  rerender(<Library {...props} loading={false} />);
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(refreshIcon).not.toHaveClass('spinner');
+  expect(screen.getByRole('button', { name: 'Cyberpunk 2077' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: games[1]!.title })).not.toBeInTheDocument();
+});
+it('shows local loading placeholders before treating a loaded empty library as empty', () => {
+  const { props, rerender } = library({ games: [], loaded: false, loading: true });
+  expect(screen.getByRole('status')).toHaveTextContent('Loading games…');
+  expect(screen.queryByText('Library could not be loaded.')).not.toBeInTheDocument();
+  expect(screen.queryByText('No GOG games found.')).not.toBeInTheDocument();
+  rerender(<Library {...props} loaded loading={false} />);
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.getByText('No GOG games found.')).toBeVisible();
 });

@@ -170,6 +170,7 @@ export const datesSchema = z
     (value) => Object.keys(value.dates).length > 0 && Object.keys(value.dates).length <= 1000,
   );
 export const gameInputSchema = z.object({ gameId: idSchema }).strict();
+export const historyInputSchema = z.object({ gameId: idSchema.optional() }).strict();
 export const applyInputSchema = z.object({ previewToken: tokenSchema }).strict();
 export const ipcSchemas = {
   initialize: z.undefined(),
@@ -178,11 +179,12 @@ export const ipcSchemas = {
   listGames: z.undefined(),
   listAchievements: idSchema,
   getQueue: idSchema,
+  listQueues: z.undefined(),
   addAchievements: selectionSchema,
   removeAchievements: selectionSchema,
   setDates: datesSchema,
   preview: gameInputSchema,
   apply: applyInputSchema,
-  history: gameInputSchema,
+  history: historyInputSchema,
   checkCurrentState: gameInputSchema,
 } as const;

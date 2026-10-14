@@ -91,3 +91,23 @@ test('a dry-run or report for another account cannot remove draft rows', () => {
   report.user_id = '998877';
   expect(remainingQueueItems(reviewed, reviewed, report)).toEqual(reviewed.items);
 });
+
+test('draft discovery validates filenames, queue metadata and account ownership without changing files', async () => {
+  const { store, file, queue } = await fixture();
+  const folder = dirname(file);
+  await writeFile(join(folder, '101.json'), 'invalid JSON');
+  await writeFile(
+    join(folder, '102.json'),
+    JSON.stringify({ ...queue, user_id: '998877', game: { ...queue.game, id: '102' } }),
+  );
+  await writeFile(join(folder, '103.json'), JSON.stringify(queue));
+  await writeFile(join(folder, '104.json.tmp'), JSON.stringify(queue));
+  await writeFile(`${file}.lock`, '{"pid":98765}');
+  const foreignFile = await store.draftPath('998877', gameId);
+  await writeFile(foreignFile, JSON.stringify({ ...queue, user_id: '998877' }));
+  expect(await store.drafts(userId)).toEqual([queue]);
+  expect((await store.drafts('998877'))[0]?.user_id).toBe('998877');
+  expect(await readFile(join(folder, '101.json'), 'utf8')).toBe('invalid JSON');
+  expect(await readFile(`${file}.lock`, 'utf8')).toBe('{"pid":98765}');
+  expect(await store.drafts('554433')).toEqual([]);
+});

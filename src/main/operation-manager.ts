@@ -24,6 +24,7 @@ import {
   selectionSchema,
   datesSchema,
   tokenSchema,
+  historyInputSchema,
 } from '../shared/schemas';
 import { QueueStore, digestBytes, type StoredOperation } from './queue-store';
 import type { CliRunner, CliCommand } from './cli-client';
@@ -261,8 +262,26 @@ export class OperationManager implements DesktopApi {
       gameId,
     );
   }
-  private async reconcileSavedResults(draft: Queue): Promise<boolean> {
-    const records = await this.store.operations(draft.user_id).catch(() => []);
+  async listQueues(): Promise<Queue[]> {
+    return this.run('read', async () => {
+      const account = await this.account();
+      const drafts = await this.store.drafts(account);
+      const records = drafts.some((queue) => queue.items.length)
+        ? await this.store.operations(account).catch(() => [])
+        : [];
+      let cleaned = false;
+      for (const draft of drafts.filter((queue) => queue.items.length))
+        cleaned = (await this.reconcileSavedResults(draft, records)) || cleaned;
+      return (cleaned ? await this.store.drafts(account) : drafts).filter(
+        (queue) => queue.items.length,
+      );
+    });
+  }
+  private async reconcileSavedResults(
+    draft: Queue,
+    savedRecords?: StoredOperation[],
+  ): Promise<boolean> {
+    const records = savedRecords ?? (await this.store.operations(draft.user_id).catch(() => []));
     const current = new Map(draft.items.map((item) => [item.achievement_id, item]));
     const seen = new Set<string>();
     let cleaned = false;
@@ -538,13 +557,14 @@ export class OperationManager implements DesktopApi {
       };
     });
   }
-  async history({ gameId }: { gameId: string }): Promise<OperationRecord[]> {
+  async history(input: { gameId?: string }): Promise<OperationRecord[]> {
+    const { gameId } = historyInputSchema.parse(input);
     return this.run(
       'read',
       async () => {
         const account = await this.account();
         return (await this.store.operations(account))
-          .filter((record) => record.game_id === idSchema.parse(gameId))
+          .filter((record) => gameId === undefined || record.game_id === gameId)
           .map((record) => this.store.publicRecord(record));
       },
       gameId,

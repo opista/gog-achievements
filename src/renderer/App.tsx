@@ -14,8 +14,8 @@ import type { DemoDesktopApi, DemoScenario } from '../shared/demo-api';
 import { Art } from './components/Art';
 import { Achievements } from './features/Achievements';
 import { AchievementSkeleton } from './features/AchievementSkeleton';
-import { ApplyConfirmation, PreviewRows } from './features/Review';
-import { DateEditor } from './features/DateEditor';
+import { ApplyConfirmation } from './features/Review';
+import { detectTimeZone } from './date-time';
 import { HistoryView, Results } from './features/Results';
 import { Library } from './features/Library';
 import { QueuePane } from './features/QueuePane';
@@ -25,42 +25,18 @@ export function App({ api }: { api: DesktopApi }) {
   const w = useWorkspace(api);
   const [libraryWidth, setLibraryWidth] = useState<number>();
   const [queueWidth, setQueueWidth] = useState<number>();
-  const [zone, setZone] = useState(() =>
-    api.isDemo ? 'Europe/London' : Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-  );
-  const [selection, setSelection] = useState<{ gameId: string; ids: Set<string> } | null>(null);
-  const [dateEdit, setDateEdit] = useState<{ gameId: string; ids: string[] } | null>(null);
-  const [confirmationToken, setConfirmationToken] = useState<string | null>(null);
+  const [zone, setZone] = useState(detectTimeZone);
   const [scenario, setScenario] = useState<DemoScenario>(() =>
     'getScenario' in api ? (api as DemoDesktopApi).getScenario() : 'complete',
   );
-  const queueSelected =
-    selection && selection.gameId === w.game?.id
-      ? selection.ids
-      : new Set(w.queue?.items.map((item) => item.achievement_id) ?? []);
-  const dateIds = dateEdit?.gameId === w.game?.id ? dateEdit?.ids : null;
-  const confirm = confirmationToken !== null && confirmationToken === w.preview?.token;
-  function setDateIds(ids: string[] | null) {
-    setDateEdit(ids && w.game ? { gameId: w.game.id, ids } : null);
-  }
-  function setConfirm(value: boolean) {
-    setConfirmationToken(value ? (w.preview?.token ?? null) : null);
-  }
-  const editingItems =
-    w.queue?.items.filter(
-      (item) =>
-        dateIds?.includes(item.achievement_id) &&
-        !w.achievements.find((achievement) => achievement.id === item.achievement_id)?.unlocked,
-    ) ?? [];
-  function toggleQueue(id: string) {
-    const next = new Set(queueSelected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelection({ gameId: w.game?.id ?? '', ids: next });
-  }
   const needsLogin = !w.auth.authenticated || /AUTH|LOGIN|TOKEN/.test(w.error?.code ?? '');
   const applying =
     w.view === 'applying' || w.operation.kind === 'apply' || w.operation.kind === 'recovery';
+  const reportView = w.view === 'results' || applying;
+  const headingGame = reportView ? w.games.find((item) => item.id === w.resultGame?.id) : w.game;
+  const headingTitle = reportView
+    ? (w.resultGame?.title ?? w.game?.title)
+    : (w.game?.title ?? 'Your games');
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -103,18 +79,14 @@ export function App({ api }: { api: DesktopApi }) {
         <div className="account-controls">
           {w.auth.authenticated ? (
             <>
-              <button
-                className="history-button"
-                disabled={w.busy || !w.game}
-                onClick={() => w.setView('history')}
-              >
+              <button className="history-button" disabled={w.busy} onClick={w.showHistory}>
                 <History size={17} />
                 History
               </button>
               <details className="account-menu">
                 <summary>
                   <UserRound size={18} />
-                  GOG account
+                  My account
                   <span className="caret" />
                 </summary>
                 <div className="account-popover">
@@ -166,6 +138,7 @@ export function App({ api }: { api: DesktopApi }) {
           signedIn={w.auth.authenticated}
           loaded={w.libraryLoaded}
           busy={w.busy}
+          loading={w.loading !== null && w.loadingTarget === 'library'}
           demo={api.isDemo}
           onSelect={w.selectGame}
           onRefresh={w.refreshLibrary}
@@ -205,32 +178,32 @@ export function App({ api }: { api: DesktopApi }) {
             </div>
           ) : (
             <>
-              <div className="game-heading">
-                {w.game ? (
-                  <Art large image={w.game.image} name={w.game.title} demo={api.isDemo} />
-                ) : null}
-                <div>
-                  <h2>{w.game?.title ?? 'Your games'}</h2>
-                  {w.view === 'preview' ? <h3 className="muted">Review changes</h3> : null}
+              {w.view !== 'history' ? (
+                <div className="game-heading">
+                  {headingGame ? (
+                    <Art
+                      large
+                      image={headingGame.image}
+                      name={headingTitle ?? 'Game'}
+                      demo={api.isDemo}
+                    />
+                  ) : null}
+                  <h2>{headingTitle}</h2>
+                  {w.game && w.view === 'browse' ? (
+                    <button
+                      className="desktop-refresh"
+                      disabled={w.busy}
+                      onClick={() => w.refreshAchievements()}
+                      aria-label="Refresh achievements"
+                    >
+                      <RefreshCw
+                        size={19}
+                        className={w.loadingTarget === 'achievements' && w.loading ? 'spinner' : ''}
+                      />
+                      Refresh
+                    </button>
+                  ) : null}
                 </div>
-                {w.game && w.view === 'browse' ? (
-                  <button
-                    className="desktop-refresh"
-                    disabled={w.busy}
-                    onClick={() => w.refreshAchievements()}
-                  >
-                    <RefreshCw size={19} />
-                    Refresh
-                  </button>
-                ) : null}
-              </div>
-              {w.loading &&
-              !applying &&
-              (w.view !== 'browse' || (w.libraryLoaded && w.achievementsLoaded)) ? (
-                <p className="loading-line" role="status">
-                  <LoaderCircle size={18} className="spinner" />
-                  {w.loading}
-                </p>
               ) : null}
               {applying ? (
                 <div className="active-state" role="status">
@@ -239,20 +212,39 @@ export function App({ api }: { api: DesktopApi }) {
                   <p>Keep the app open until the result is available.</p>
                   <p className="muted">The operation cannot be cancelled.</p>
                 </div>
-              ) : w.view === 'preview' && w.preview ? (
-                <>
-                  <p className="preview-intro">
-                    Review the requested dates before applying. GOG account{' '}
-                    {w.preview.report.user_id}.
-                  </p>
-                  <PreviewRows report={w.preview.report} zone={zone} />
-                </>
               ) : w.view === 'results' && w.result ? (
-                <Results result={w.result} zone={zone} />
+                <>
+                  <Results result={w.result} zone={zone} />
+                  <div className="results-actions">
+                    <button disabled={w.busy} onClick={() => w.setView('browse')}>
+                      Back to achievements
+                    </button>
+                    <button
+                      disabled={w.busy}
+                      onClick={() => {
+                        const target = w.games.find((item) => item.id === w.resultGame?.id);
+                        if (target && target.id !== w.game?.id) w.selectGame(target);
+                        else w.refreshAchievements(true);
+                      }}
+                    >
+                      Check current state
+                    </button>
+                  </div>
+                </>
               ) : w.view === 'history' ? (
-                <HistoryView records={w.history} zone={zone} onView={w.viewRecord} />
+                <>
+                  <HistoryView
+                    records={w.history}
+                    zone={zone}
+                    onView={w.viewRecord}
+                    loading={w.loadingTarget === 'history' && w.loading !== null}
+                  />
+                  <button disabled={w.busy} onClick={() => w.setView('browse')}>
+                    Back to achievements
+                  </button>
+                </>
               ) : w.game && !w.achievementsLoaded ? (
-                w.busy ? (
+                w.loadingTarget === 'achievements' && w.loading ? (
                   <AchievementSkeleton />
                 ) : (
                   <div className="empty-state" role="status">
@@ -266,6 +258,8 @@ export function App({ api }: { api: DesktopApi }) {
                   achievements={w.achievements}
                   queued={new Set(w.queue?.items.map((item) => item.achievement_id) ?? [])}
                   busy={w.busy}
+                  loading={w.loading !== null && w.loadingTarget === 'achievements'}
+                  adding={w.queueAction?.kind === 'add' && w.queueAction.gameId === w.game.id}
                   demo={api.isDemo}
                   zone={zone}
                   onAdd={w.add}
@@ -274,13 +268,7 @@ export function App({ api }: { api: DesktopApi }) {
               ) : (
                 <div className="empty-state">
                   <Gamepad2 size={40} />
-                  <h3>
-                    {w.busy
-                      ? 'Loading your library…'
-                      : w.libraryLoaded
-                        ? 'No GOG games found'
-                        : 'Library could not be loaded.'}
-                  </h3>
+                  <h3>{w.libraryLoaded ? 'No GOG games found' : 'Choose a game'}</h3>
                   {!w.busy ? (
                     <button onClick={w.refreshLibrary}>
                       {w.libraryLoaded ? 'Refresh library' : 'Retry library'}
@@ -295,35 +283,18 @@ export function App({ api }: { api: DesktopApi }) {
           workspace={w}
           zone={zone}
           demo={api.isDemo}
-          selected={queueSelected}
-          onToggle={toggleQueue}
-          onDate={setDateIds}
           onZone={setZone}
-          onConfirm={() => setConfirm(true)}
           width={queueWidth}
           onResize={setQueueWidth}
         />
       </main>
-      {dateIds && editingItems.length > 0 ? (
-        <DateEditor
-          items={editingItems}
-          zone={zone}
-          busy={w.busy}
-          onClose={() => setDateIds(null)}
-          onSave={w.saveDates}
-          onZone={setZone}
-        />
-      ) : null}
-      {confirm && w.preview ? (
+      {w.preview ? (
         <ApplyConfirmation
           report={w.preview.report}
           zone={zone}
           busy={w.busy}
-          onClose={() => setConfirm(false)}
-          onApply={() => {
-            setConfirm(false);
-            w.apply();
-          }}
+          onClose={w.cancelPreview}
+          onApply={w.apply}
         />
       ) : null}
     </div>

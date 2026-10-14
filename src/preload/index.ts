@@ -31,6 +31,7 @@ const api: DesktopApi = {
   listGames: () => invoke('listGames'),
   listAchievements: (id) => invoke('listAchievements', id),
   getQueue: (id) => invoke('getQueue', id),
+  listQueues: () => invoke('listQueues'),
   addAchievements: (input) => invoke('addAchievements', input),
   removeAchievements: (input) => invoke('removeAchievements', input),
   setDates: (input) => invoke('setDates', input),

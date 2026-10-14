@@ -133,12 +133,13 @@ export interface DesktopApi {
   listGames(): Promise<GamesData>;
   listAchievements(gameId: string): Promise<AchievementsData>;
   getQueue(gameId: string): Promise<Queue | null>;
+  listQueues(): Promise<Queue[]>;
   addAchievements(input: SelectionInput): Promise<Queue>;
   removeAchievements(input: SelectionInput): Promise<Queue>;
   setDates(input: DatesInput): Promise<Queue>;
   preview(input: { gameId: string }): Promise<PreviewResult>;
   apply(input: { previewToken: string }): Promise<ApplyResult>;
-  history(input: { gameId: string }): Promise<OperationRecord[]>;
+  history(input: { gameId?: string }): Promise<OperationRecord[]>;
   checkCurrentState(input: { gameId: string }): Promise<AchievementsData>;
   onOperation(listener: (state: OperationState) => void): () => void;
 }

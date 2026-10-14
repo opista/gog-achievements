@@ -14,8 +14,10 @@ Release builds need validation on all four native targets. Local development smo
 
 The reviewed workspace uses compact game rows with full-title tooltips, a clear-search action, inline achievement descriptions, and a single skeleton status during initial game reads. Covers use the GOG CDN's thumbnail variant. Visible locked achievements come first, hidden locked achievements next, and unlocked achievements last with newest unlocks first. Existing unlocks have no selection control.
 
-The released CLI exposes account IDs but no account name or email. The header shows GOG account; its menu retains the ID.
+The released CLI exposes account IDs but no account name or email. The header shows My account; its menu retains the ID.
 
 After each apply, confirmed items are removed from the mutable draft under an exclusive queue lock. Failed, unconfirmed and unattempted items remain. The saved report and immutable snapshot retain the complete attempt. Concurrent draft additions or changes are preserved; housekeeping failures keep the confirmed report and show a warning.
 
 On queue reads, saved terminal reports can also clear confirmed requests left by earlier app versions. This requires a matching, digest-verified snapshot. Newer edits or unresolved attempts remain; missing evidence and busy locks leave the readable draft available.
+
+The queue now shows all saved game drafts for the signed-in account. Each game group has its own Apply button; this runs a dry-run check and opens final confirmation, without a separate preview page. History is account-wide, and the queue remains editable there. Date fields are inline, bulk queue selection is removed, all runtime-supported time zones are offered, and the initial zone is detected from the system. Library and achievement refreshes use skeletons in their own panes. New queue rows appear immediately while their validated draft is saved; failed provisional saves reload or restore the prior draft.

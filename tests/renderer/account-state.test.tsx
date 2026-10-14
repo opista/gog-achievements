@@ -7,6 +7,9 @@ const OTHER_USER = '987654321';
 afterEach(cleanup);
 async function workspace() {
   const api = createDemoApi({ delayMs: 0 });
+  await api.login();
+  await api.addAchievements({ gameId: '2', achievementIds: ['201'] });
+  await api.logout();
   const hook = renderHook(() => useWorkspace(api));
   await waitFor(() => expect(hook.result.current.busy).toBe(false));
   act(() => hook.result.current.login());
@@ -19,16 +22,19 @@ function expectAccountDataCleared(value: ReturnType<typeof useWorkspace>) {
   expect(value.game).toBeNull();
   expect(value.achievements).toEqual([]);
   expect(value.queue).toBeNull();
+  expect(value.queues).toEqual([]);
   expect(value.history).toEqual([]);
   expect(value.preview).toBeNull();
   expect(value.result).toBeNull();
 }
 it('clears the old account before a new-account library request can fail', async () => {
   const { api, result } = await workspace();
-  act(() => result.current.createPreview());
+  act(() => result.current.prepareApply('1'));
   await waitFor(() => expect(result.current.preview).not.toBeNull());
   await waitFor(() => expect(result.current.busy).toBe(false));
   vi.spyOn(api, 'login').mockResolvedValue({ authenticated: true, user_id: OTHER_USER });
+  vi.spyOn(api, 'listQueues').mockResolvedValue([]);
+  vi.spyOn(api, 'history').mockResolvedValue([]);
   vi.spyOn(api, 'listGames').mockRejectedValue(
     new Error('New account library could not be loaded.'),
   );
@@ -60,6 +66,7 @@ it('rechecks auth before committing a library response from a different account'
     achievements: [],
   });
   vi.spyOn(api, 'getQueue').mockResolvedValue(null);
+  vi.spyOn(api, 'listQueues').mockResolvedValue([]);
   vi.spyOn(api, 'history').mockResolvedValue([]);
   act(() => result.current.refreshLibrary());
   await waitFor(() => expect(result.current.busy).toBe(false));
@@ -121,29 +128,30 @@ it.each(['ACCOUNT_CHANGED', 'ACCOUNT_MISMATCH'])(
     expectAccountDataCleared(result.current);
   },
 );
-it('keeps the matching draft and report visible after a failed library refresh', async () => {
+it('keeps remaining drafts and the report visible after a failed library refresh', async () => {
   const { api, result } = await workspace();
-  act(() => result.current.createPreview());
+  act(() => result.current.prepareApply('1'));
   await waitFor(() => expect(result.current.preview).not.toBeNull());
   await waitFor(() => expect(result.current.busy).toBe(false));
   act(() => result.current.apply());
   await waitFor(() => expect(result.current.view).toBe('results'));
   await waitFor(() => expect(result.current.busy).toBe(false));
   const priorResult = result.current.result;
-  const priorQueue = result.current.queue;
+  const priorQueues = result.current.queues.filter((queue) => queue.items.length);
   const priorHistory = result.current.history;
-  vi.spyOn(api, 'listAchievements').mockRejectedValue(new Error('Read failed.'));
+  vi.spyOn(api, 'listGames').mockRejectedValue(new Error('Read failed.'));
   act(() => result.current.refreshLibrary());
   await waitFor(() => expect(result.current.error?.message).toBe('Read failed.'));
   expect(result.current.view).toBe('results');
   expect(result.current.result).toBe(priorResult);
-  expect(result.current.queue).toBe(priorQueue);
-  expect(result.current.history).toBe(priorHistory);
+  expect(result.current.queues.filter((queue) => queue.items.length)).toEqual(priorQueues);
+  expect(result.current.queue?.items ?? []).toEqual([]);
+  expect(result.current.history).toEqual(priorHistory);
 });
 
 it('shows durable queue cleanup and keeps the report when the post-apply network refresh fails', async () => {
   const { api, result } = await workspace();
-  act(() => result.current.createPreview());
+  act(() => result.current.prepareApply('1'));
   await waitFor(() => expect(result.current.preview).not.toBeNull());
   await waitFor(() => expect(result.current.busy).toBe(false));
   const apply = vi.spyOn(api, 'apply');
@@ -155,5 +163,48 @@ it('shows durable queue cleanup and keeps the report when the post-apply network
   expect(result.current.result?.report?.complete).toBe(true);
   expect(result.current.queue?.items).toEqual([]);
   expect(result.current.history).toHaveLength(1);
+  expect(
+    result.current.queues.filter((queue) => queue.items.length).map((queue) => queue.game.id),
+  ).toEqual(['2']);
   expect(apply).toHaveBeenCalledTimes(1);
+});
+
+it('clears account-wide drafts before displaying a queue response owned by another account', async () => {
+  const { api, result } = await workspace();
+  const other = (await api.getQueue('2'))!;
+  other.user_id = OTHER_USER;
+  vi.spyOn(api, 'listQueues').mockResolvedValue([other]);
+  vi.spyOn(api, 'initialize').mockResolvedValue({
+    version: '0.1.0',
+    cliVersion: '0.3.0',
+    auth: { authenticated: true, user_id: OTHER_USER },
+    operation: { kind: 'idle' },
+  });
+  act(() => result.current.refreshLibrary());
+  await waitFor(() => expect(result.current.error?.code).toBe('ACCOUNT_CHANGED'));
+  expect(result.current.auth.user_id).toBe(OTHER_USER);
+  expectAccountDataCleared(result.current);
+});
+
+it('applies one queued game group while preserving the selected game and other drafts', async () => {
+  const { api, result } = await workspace();
+  const original = result.current.queue;
+  const achievements = vi.spyOn(api, 'listAchievements');
+  const preview = vi.spyOn(api, 'preview');
+  const apply = vi.spyOn(api, 'apply');
+  act(() => result.current.prepareApply('2'));
+  await waitFor(() => expect(result.current.preview?.report.game.id).toBe('2'));
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  act(() => result.current.apply());
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  expect(preview).toHaveBeenCalledWith({ gameId: '2' });
+  expect(apply).toHaveBeenCalledTimes(1);
+  expect(result.current.game?.id).toBe('1');
+  expect(result.current.queue).toBe(original);
+  expect(
+    result.current.queues.filter((queue) => queue.items.length).map((queue) => queue.game.id),
+  ).toEqual(['1']);
+  expect(result.current.resultGame?.id).toBe('2');
+  expect(result.current.history[0]?.game_id).toBe('2');
+  expect(achievements).not.toHaveBeenCalled();
 });

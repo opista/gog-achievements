@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir, open, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Dirent } from 'node:fs';
 import { z } from 'zod';
 import type { OperationRecord, Queue, Report } from '../shared/api';
 import { idSchema, tokenSchema, reportSchema, queueSchema } from '../shared/schemas';
@@ -66,6 +67,34 @@ export class QueueStore {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
       throw error;
     }
+  }
+  async drafts(userId: string): Promise<Queue[]> {
+    const account = idSchema.parse(userId);
+    const folder = join(this.accountFolder(account), 'drafts');
+    let files: Dirent[];
+    try {
+      files = await readdir(folder, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
+    const queues: Queue[] = [];
+    for (const file of files) {
+      if (!file.isFile() || !/^[1-9]\d{0,29}\.json$/.test(file.name)) continue;
+      try {
+        const queue = queueSchema.parse(
+          JSON.parse((await this.bytes(join(folder, file.name))).toString('utf8')),
+        ) as Queue;
+        if (queue.user_id === account && file.name === `${queue.game.id}.json`) queues.push(queue);
+      } catch {
+        // One unreadable draft must not hide other valid saved queues.
+      }
+    }
+    return queues.sort(
+      (left, right) =>
+        left.game.title.localeCompare(right.game.title) ||
+        left.game.id.localeCompare(right.game.id),
+    );
   }
   async clearConfirmedItems(reviewed: Queue, report: Report): Promise<void> {
     if (!report.results.some(isConfirmedUnlock)) return;

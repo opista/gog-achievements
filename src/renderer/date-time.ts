@@ -1,5 +1,6 @@
 /** Convert local wall times by round-tripping offsets through the selected zone. */
 const formatters = new Map<string, Intl.DateTimeFormat>();
+const timestampFormatters = new Map<string, Intl.DateTimeFormat>();
 
 export interface LocalFields {
   date: string;
@@ -124,18 +125,22 @@ export function formatTimestamp(iso: string | null, zone: string, exact = true):
   if (!iso) return 'Not confirmed';
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return 'Date unavailable';
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: zone,
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    ...(exact ? { second: '2-digit' as const } : {}),
-    hourCycle: 'h23',
-  })
-    .format(date)
-    .replace(',', '');
+  const key = `${zone}:${exact}`;
+  let value = timestampFormatters.get(key);
+  if (!value) {
+    value = new Intl.DateTimeFormat('en-GB', {
+      timeZone: zone,
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      ...(exact ? { second: '2-digit' as const } : {}),
+      hourCycle: 'h23',
+    });
+    timestampFormatters.set(key, value);
+  }
+  return value.format(date).replace(',', '');
 }
 
 export function zoneLabel(zone: string, iso = new Date().toISOString()): string {
@@ -144,12 +149,25 @@ export function zoneLabel(zone: string, iso = new Date().toISOString()): string 
   return `${zone} (${offsetLabel(((local ?? actual) - actual) / 1000)})`;
 }
 
-export const TIME_ZONES = [
-  'Europe/London',
-  'UTC',
-  'Europe/Berlin',
-  'America/New_York',
-  'America/Los_Angeles',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-];
+export function detectTimeZone(): string {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!zone) return 'UTC';
+    // Validate the browser's reported zone before using it in date inputs.
+    new Intl.DateTimeFormat('en-GB', { timeZone: zone });
+    return zone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+function supportedTimeZones(): string[] {
+  try {
+    return Intl.supportedValuesOf('timeZone');
+  } catch {
+    return [];
+  }
+}
+
+// Build once; rendering the zone menu must not format hundreds of timestamps.
+export const TIME_ZONES = [...new Set(['UTC', detectTimeZone(), ...supportedTimeZones()])].sort();

@@ -165,6 +165,8 @@ test('concurrent apply and sign-out are rejected; attempt is persisted before a 
   expect((await store.operations(userId))[0]?.state).toBe('running');
   await expect(api.apply({ previewToken: preview.token })).rejects.toThrow('Another operation');
   await expect(api.logout()).rejects.toThrow('Another operation');
+  await expect(api.listQueues()).rejects.toThrow('Another operation');
+  await expect(api.history({})).rejects.toThrow('Another operation');
   finish();
   await first;
   expect(api.currentOperation.kind).toBe('idle');
@@ -392,15 +394,15 @@ async function saveOldAttempt(
   state: 'complete' | 'unknown' = 'complete',
   startedAt = '2020-01-01T00:00:00Z',
 ) {
-  const file = await store.draftPath(userId, gameId);
+  const file = await store.draftPath(queue.user_id, queue.game.id);
   await writeFile(file, JSON.stringify(queue));
   const id = randomUUID();
-  const snapshot = await store.snapshot(userId, id, file);
+  const snapshot = await store.snapshot(queue.user_id, id, file);
   const record: StoredOperation = {
     id,
-    user_id: userId,
-    game_id: gameId,
-    game_title: game.title,
+    user_id: queue.user_id,
+    game_id: queue.game.id,
+    game_title: queue.game.title,
     started_at: startedAt,
     finished_at: startedAt,
     state,
@@ -469,4 +471,82 @@ test('saved-result reconciliation requires untampered snapshot evidence', async 
   await writeFile(snapshot.path, '{}');
   expect((await api.getQueue(gameId))?.items).toEqual(makeQueue().items);
   expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(0);
+});
+
+async function saveDraft(store: QueueStore, queue: ReturnType<typeof makeQueue>): Promise<void> {
+  await writeFile(await store.draftPath(queue.user_id, queue.game.id), JSON.stringify(queue));
+}
+
+test('global queue discovery lists only current-account nonempty drafts without browsing each game', async () => {
+  const { api, cli, store } = await fixture();
+  const first = makeQueue();
+  first.game = { ...first.game, id: '200', title: 'Alpha' };
+  const second = makeQueue();
+  second.game = { ...second.game, id: '300', title: 'Zeta' };
+  const empty = { ...makeQueue(), game: { ...game, id: '400', title: 'Empty' }, items: [] };
+  const foreign = { ...makeQueue(), user_id: '998877' };
+  await saveDraft(store, second);
+  await saveDraft(store, first);
+  await saveDraft(store, empty);
+  await saveDraft(store, foreign);
+  expect((await api.listQueues()).map((queue) => queue.game.id)).toEqual(['200', '300']);
+  expect(cli.calls.map((command) => command.kind)).toEqual(['auth-status']);
+  const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
+  expect((await reopened.listQueues()).map((queue) => queue.game.id)).toEqual(['200', '300']);
+  expect((await store.drafts('998877'))[0]?.user_id).toBe('998877');
+});
+
+test('global queue discovery reconciles completed saved requests before returning groups', async () => {
+  const { api, cli, store } = await fixture();
+  await saveOldAttempt(store);
+  const other = makeQueue();
+  other.game = { ...other.game, id: '200', title: 'Another game', client_id: '555' };
+  await saveDraft(store, other);
+  expect((await api.listQueues()).map((queue) => queue.game.id)).toEqual(['200']);
+  expect(cli.calls.map((command) => command.kind)).toEqual(['auth-status']);
+  expect((await api.getQueue(gameId))?.items).toEqual([]);
+});
+
+test('global queue discovery keeps readable drafts when cleanup is busy', async () => {
+  const { api, store } = await fixture();
+  const { file } = await saveOldAttempt(store);
+  await writeFile(`${file}.lock`, '{"pid":98765}');
+  expect((await api.listQueues())[0]?.items).toEqual(makeQueue().items);
+  expect(await readFile(`${file}.lock`, 'utf8')).toBe('{"pid":98765}');
+});
+
+test('global queues and history require an authenticated account', async () => {
+  const { api, cli, store } = await fixture();
+  await seed(store);
+  const original = cli.run.bind(cli);
+  cli.run = async (command, onSpawn) =>
+    command.kind === 'auth-status'
+      ? { exitCode: 0, result: { ok: true, data: { authenticated: false } } }
+      : original(command, onSpawn);
+  await expect(api.listQueues()).rejects.toThrow('Sign in');
+  await expect(api.history({})).rejects.toThrow('Sign in');
+});
+
+test('global history contains all current-account games while game filters remain strict', async () => {
+  const { api, store } = await fixture();
+  const first = await saveOldAttempt(store);
+  const other = makeQueue();
+  other.game = { ...other.game, id: '200', title: 'Another game', client_id: '555' };
+  const second = await saveOldAttempt(store, other, 'complete', '2020-02-01T00:00:00Z');
+  await saveOldAttempt(
+    store,
+    { ...makeQueue(), user_id: '998877' },
+    'complete',
+    '2020-03-01T00:00:00Z',
+  );
+  expect((await api.history({})).map((record) => record.id)).toEqual([
+    second.record.id,
+    first.record.id,
+  ]);
+  expect((await api.history({ gameId })).map((record) => record.id)).toEqual([first.record.id]);
+  const history = await api.history({});
+  expect(history.every((record) => record.user_id === userId)).toBe(true);
+  expect(history[0]).not.toHaveProperty('digest');
+  expect(history[0]).not.toHaveProperty('process');
+  await expect(api.history({ gameId: '../arbitrary' })).rejects.toThrow();
 });

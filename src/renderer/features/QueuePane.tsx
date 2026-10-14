@@ -1,78 +1,38 @@
-import { CalendarDays, Check, Eye, FileText, Info, LoaderCircle, X } from 'lucide-react';
+import { Check, FileText, Info, LoaderCircle, X } from 'lucide-react';
 import type { Workspace } from '../use-workspace';
 import { Art } from '../components/Art';
 import { PaneResize } from '../components/PaneResize';
-import { formatTimestamp, zoneLabel, TIME_ZONES } from '../date-time';
-import { CloseGameNote } from './Review';
-import { resultsNeedAttention } from './Results';
+import { TIME_ZONES, zoneLabel } from '../date-time';
+import { QueueDatePicker } from './QueueDatePicker';
 interface Props {
   workspace: Workspace;
   zone: string;
   demo: boolean;
-  selected: Set<string>;
-  onToggle(id: string): void;
-  onDate(ids: string[]): void;
   onZone(value: string): void;
-  onConfirm(): void;
   width?: number;
   onResize(width: number): void;
 }
-export function QueuePane({
-  workspace: w,
-  zone,
-  demo,
-  selected,
-  onToggle,
-  onDate,
-  onZone,
-  onConfirm,
-  width,
-  onResize,
-}: Props) {
-  const items = w.queue?.items ?? [];
-  const pending = w.preview?.report.results.filter((item) => item.status === 'pending') ?? [];
-  const resultView = w.view === 'results' && w.result;
+export function QueuePane({ workspace: w, zone, demo, onZone, width, onResize }: Props) {
+  const groups = w.queues
+    .filter((item) => item.items.length > 0)
+    .toSorted(
+      (left, right) =>
+        left.game.title.localeCompare(right.game.title) ||
+        left.game.id.localeCompare(right.game.id),
+    );
+  const total = groups.reduce((count, group) => count + group.items.length, 0);
   const activeApply =
     w.view === 'applying' || w.operation.kind === 'apply' || w.operation.kind === 'recovery';
-  const review = w.view === 'preview';
-  const readonly = review || activeApply || Boolean(resultView) || w.view === 'history';
-  const lockedIds = new Set(w.achievements.filter((item) => !item.unlocked).map((item) => item.id));
-  const selectedLocked = [...selected].filter(
-    (id) => lockedIds.has(id) && items.some((item) => item.achievement_id === id),
-  );
   return (
     <aside className="queue-pane" aria-label="Achievement queue">
       <PaneResize pane="Queue" width={width} min={336} max={504} onResize={onResize} />
       <div className="queue-header">
         <div>
-          <h2>
-            {activeApply
-              ? 'Applying changes…'
-              : resultView
-                ? resultsNeedAttention(resultView)
-                  ? 'Needs attention'
-                  : 'Apply complete'
-                : review
-                  ? 'Reviewed queue'
-                  : 'Queue'}
-          </h2>
-          {w.achievementsLoaded ? (
-            <p className="muted">
-              {review
-                ? `${pending.length} achievements to restore`
-                : `${items.length} ${resultView ? 'remaining' : 'achievements'}`}
-            </p>
-          ) : null}
+          <h2>Queue</h2>
+          <p className="muted">
+            {total} achievements · {groups.length} games
+          </p>
         </div>
-        {!readonly ? (
-          <button
-            disabled={w.busy || selectedLocked.length === 0}
-            onClick={() => onDate(selectedLocked)}
-          >
-            <CalendarDays size={18} />
-            Set date for selected
-          </button>
-        ) : null}
       </div>
       <div className="queue-body">
         {!w.auth.authenticated ? (
@@ -80,175 +40,124 @@ export function QueuePane({
             <FileText size={34} />
             <p>Choose achievements after sign-in.</p>
           </div>
-        ) : !w.game ? (
+        ) : !w.queuesLoaded && w.busy ? (
+          <div className="queue-skeleton" role="status" aria-label="Loading queue">
+            <span className="sr-only">Loading queue…</span>
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="queue-row skeleton-row" aria-hidden="true">
+                <span className="skeleton-text" />
+              </div>
+            ))}
+          </div>
+        ) : !w.queuesLoaded ? (
           <div className="empty-state">
-            <FileText size={34} />
-            <p>Choose a game to load its queue.</p>
+            <p>Queue could not be loaded.</p>
+            <button onClick={w.refreshQueues}>Retry queue</button>
           </div>
-        ) : !w.achievementsLoaded ? (
-          <div className="empty-state" role="status">
-            <FileText size={34} />
-            <p>{w.busy ? 'Loading queue…' : 'Queue could not be loaded.'}</p>
-          </div>
-        ) : items.length === 0 ? (
+        ) : groups.length === 0 ? (
           <div className="empty-state">
             <FileText size={34} />
             <p>
-              {resultView
+              {w.result
                 ? 'Queue is clear. Results are saved in history.'
                 : 'Select achievements you have already earned.'}
             </p>
           </div>
         ) : (
-          <div className="queue-items">
-            {items.map((item) => (
-              <div
-                className={`queue-row ${readonly ? 'queue-readonly' : ''}`}
-                key={item.achievement_id}
+          groups.map((group) => {
+            const saving = w.queueAction?.gameId === group.game.id;
+            const checking = w.previewGameId === group.game.id;
+            return (
+              <section
+                className="queue-game-group"
+                aria-label={`Queue for ${group.game.title}`}
+                key={group.game.id}
               >
-                {!readonly ? (
-                  <input
-                    type="checkbox"
-                    aria-label={`Select queue row ${item.name}`}
-                    checked={selected.has(item.achievement_id)}
-                    disabled={w.busy || !lockedIds.has(item.achievement_id)}
-                    onChange={() => onToggle(item.achievement_id)}
-                  />
-                ) : null}
-                <Art
-                  name={item.name}
-                  kind="achievement"
-                  image={
-                    w.achievements.find((entry) => entry.id === item.achievement_id)?.image_locked
-                  }
-                  demo={demo}
-                />
-                <div className="queue-row-content">
-                  <strong>{item.name}</strong>
-                  {!readonly ? (
-                    <button
-                      className="queue-date"
-                      disabled={w.busy || !lockedIds.has(item.achievement_id)}
-                      aria-label={`Edit date for ${item.name}`}
-                      onClick={() => onDate([item.achievement_id])}
-                    >
-                      <CalendarDays size={17} />
-                      {formatTimestamp(item.unlocked_at, zone, false)}
-                    </button>
-                  ) : (
-                    <span className="muted queue-readonly-date">
-                      {formatTimestamp(item.unlocked_at, zone, true)}
-                    </span>
-                  )}
+                <div className="queue-game-heading">
+                  <h3 title={group.game.title}>{group.game.title}</h3>
+                  <span className="muted">{group.items.length}</span>
                 </div>
-                {!readonly ? (
-                  <button
-                    className="icon-button"
-                    aria-label={`Remove ${item.name} from queue`}
-                    disabled={w.busy}
-                    onClick={() => w.remove([item.achievement_id])}
-                  >
-                    <X size={19} />
-                  </button>
+                <div className="queue-items">
+                  {group.items.map((item) => (
+                    <div className="queue-row" key={item.achievement_id}>
+                      <Art
+                        name={item.name}
+                        kind="achievement"
+                        image={
+                          group.game.id === w.game?.id
+                            ? w.achievements.find((entry) => entry.id === item.achievement_id)
+                                ?.image_locked
+                            : null
+                        }
+                        demo={demo}
+                      />
+                      <div className="queue-row-content">
+                        <strong>{item.name}</strong>
+                        <QueueDatePicker
+                          key={`${group.game.id}:${item.achievement_id}:${zone}:${item.unlocked_at}`}
+                          item={item}
+                          zone={zone}
+                          busy={w.busy}
+                          onSave={(iso) =>
+                            w.saveDates(group.game.id, { [item.achievement_id]: iso })
+                          }
+                        />
+                      </div>
+                      <button
+                        className="icon-button"
+                        aria-label={`Remove ${item.name} from queue`}
+                        disabled={w.busy}
+                        onClick={() => w.remove(group.game.id, [item.achievement_id])}
+                      >
+                        <X size={19} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="primary queue-group-apply"
+                  aria-label={`Apply changes for ${group.game.title}`}
+                  disabled={w.busy}
+                  onClick={() => w.prepareApply(group.game.id)}
+                >
+                  {checking ? <LoaderCircle className="spinner" size={18} /> : <Check size={18} />}
+                  {checking ? 'Checking changes…' : 'Apply changes'}
+                </button>
+                {saving ? (
+                  <p className="queue-progress" role="status">
+                    <LoaderCircle className="spinner" size={16} />
+                    Saving draft…
+                  </p>
                 ) : null}
-              </div>
-            ))}
-          </div>
+              </section>
+            );
+          })
         )}
-        {review && w.game ? (
-          <>
-            <p className="muted">Existing unlocks keep their dates.</p>
-            <CloseGameNote title={w.game.title} />
-            <p className="muted">No changes have been sent.</p>
-          </>
-        ) : null}
         {activeApply ? (
-          <p className="info-note">
-            <LoaderCircle className="spinner" size={22} />
-            <span>
-              Keep the app open until the result is available. This operation cannot be cancelled.
-            </span>
+          <p className="info-note" role="status">
+            <LoaderCircle className="spinner" size={20} />
+            <span>Applying changes. Keep the app open until the result is available.</span>
           </p>
         ) : null}
       </div>
       <div className="queue-actions">
         <label className="zone-control">
           Time zone
-          <select
-            value={zone}
-            onChange={(event) => onZone(event.target.value)}
-            disabled={activeApply}
-          >
+          <select value={zone} onChange={(event) => onZone(event.target.value)} disabled={w.busy}>
             {[...new Set([zone, ...TIME_ZONES])].map((value) => (
               <option value={value} key={value}>
-                {zoneLabel(value)}
+                {value.replaceAll('_', ' ')}
               </option>
             ))}
           </select>
         </label>
-        {resultView ? (
-          <>
-            <button className="primary" disabled={w.busy} onClick={() => w.setView('browse')}>
-              {resultsNeedAttention(resultView) ? 'Review queue' : 'Back to achievements'}
-            </button>
-            <button disabled={w.busy} onClick={() => w.refreshAchievements(true)}>
-              {resultsNeedAttention(resultView) ? 'Check current state' : 'Refresh achievements'}
-            </button>
-            <p className="saved-state">
-              <FileText size={16} />
-              Report retained
-            </p>
-          </>
-        ) : review ? (
-          <>
-            <button disabled={w.busy} onClick={() => w.setView('browse')}>
-              Back to queue
-            </button>
-            <button
-              className="primary"
-              disabled={w.busy || pending.length === 0}
-              onClick={onConfirm}
-            >
-              Continue to apply
-            </button>
-            {pending.length === 0 ? <p className="muted">Nothing needs restoration.</p> : null}
-          </>
-        ) : activeApply ? (
-          <button className="primary" disabled>
-            <LoaderCircle className="spinner" size={18} />
-            Applying changes…
-          </button>
-        ) : w.view === 'history' ? (
-          <button onClick={() => w.setView('browse')} disabled={w.busy}>
-            Back to achievements
-          </button>
-        ) : (
-          <>
-            <button
-              className="primary"
-              disabled={w.busy || items.length === 0 || !w.auth.authenticated}
-              onClick={w.createPreview}
-            >
-              <Eye size={20} />
-              Preview changes
-            </button>
-            <button disabled title="Preview changes to enable Apply">
-              <Check size={18} />
-              Apply changes
-            </button>
-            <p className="action-hint">
-              {w.previewStale
-                ? 'Queue changed — preview again.'
-                : 'Preview changes to enable Apply.'}
-            </p>
-            {w.saved ? (
-              <p className="saved-state" role="status">
-                <Check size={16} />
-                Draft saved
-              </p>
-            ) : null}
-          </>
-        )}
+        <small className="muted">{zoneLabel(zone)}</small>
+        {w.saved ? (
+          <p className="saved-state" role="status">
+            <Check size={16} />
+            Draft saved
+          </p>
+        ) : null}
         {w.error && w.auth.authenticated ? (
           <p className="field-error">
             <Info size={16} />

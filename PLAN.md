@@ -16,20 +16,20 @@ Use Electron, React and strict TypeScript. Use electron-vite for development and
 
 1. **Connect GOG.** Check the bundled CLI and saved login. Sign in through the CLI's native GOG window. Show sign-in, cancellation and credential-store errors clearly. Sign out through the CLI.
 2. **Choose a game.** Show owned GOG games, with local search and an explicit Refresh action. Handle an empty library and unavailable game metadata.
-3. **Choose achievements.** Show names, descriptions, lock status and unlock dates. Filter by locked, unlocked and queued. Allow multiple selections, then add them in one CLI command. Preserve existing unlocks. Hide locked hidden-achievement details until the user chooses to reveal them.
-4. **Edit the queue.** Add or remove selections, edit one date or set a common date for selected rows. Save through CLI queue commands and show the returned values. Restore drafts after restart.
-5. **Preview changes.** Show the game, account, requested dates, achievements to restore and existing unlocks to skip. Remind the user to close the game before applying.
+3. **Choose achievements.** Show names, descriptions, lock status and unlock dates. Filter by all, locked and unlocked. Allow multiple selections, then add them in one CLI command. Preserve existing unlocks. Hide locked hidden-achievement details until the user chooses to reveal them.
+4. **Edit the queue.** Group saved drafts by game in one queue that stays visible across game switches and history. Remove individual rows and edit their dates with inline date/time controls. Save through CLI queue commands and show the returned values. Restore drafts after restart.
+5. **Check changes.** A game group's Apply button runs the dry-run check automatically. Then show the game, account and exact requested dates in one final confirmation. Remind the user to close the game before applying.
 6. **Apply and review.** Require an explicit final confirmation. Show an active operation while the CLI runs, then show each result and its confirmed date. Refresh achievements after completion. Preserve the report and any items that still need attention.
 
-Use one main window: a game list and search on the left, achievements in the centre, and the current queue beside or below them. Keep Preview and Apply visible with the queue. Support keyboard navigation and the system light or dark theme. Use placeholders for artwork until trusted image sources are defined.
+Use one main window: a game list and search on the left, achievements in the centre, and the account-wide queue beside or below them. Give each game group its own Apply action. Support keyboard navigation and the system light or dark theme. Use placeholders for artwork until trusted image sources are defined.
 
 ## Chosen design
 
 **A — Desktop workspace** is the selected design. The [design notes and concepts](docs/design/README.md) retain all three mockups for reference. Each uses sample content and generated artwork.
 
-Use A's three-pane layout: library at left, achievements in the centre, and the queue at right. Use C's detailed date-table controls within A's date editor, with explicit queue-row selection for bulk changes. Keep browsing and the queue together.
+Use A's three-pane layout: library at left, achievements in the centre, and the queue at right. Use inline per-row date/time fields in the queue. Keep browsing and the grouped queue together. The later workspace reviews supersede the original bulk date-table concept.
 
-The [screen and interaction design](docs/design/WORKFLOW.md) now covers sign-in, date editing, preview, final confirmation, active apply, complete and partial results, and A's dark appearance. It also defines loading, empty, error and recovery states. Keep existing unlocks read-only and require preview before final confirmation. The minimum-window and theme checks remain implementation acceptance checks.
+The [screen and interaction design](docs/design/WORKFLOW.md) now covers sign-in, date editing, preview, final confirmation, active apply, complete and partial results, and A's dark appearance. It also defines loading, empty, error and recovery states. Keep existing unlocks read-only and run the dry-run check automatically before final confirmation. The minimum-window and theme checks remain implementation acceptance checks.
 
 ## Process boundaries
 
@@ -63,7 +63,7 @@ Append `--json` to every command. `PATH` is an app-owned path resolved by main. 
 | Create the first draft with selections | `queue create --game ID --file PATH --achievement ID`            |
 | Add selections                         | `queue add --file PATH --achievement ID`                         |
 | Remove selections                      | `queue remove --file PATH --achievement ID`                      |
-| Change selected dates                  | `queue set-date --file PATH --achievement ID --unlocked-at DATE` |
+| Change one row date                    | `queue set-date --file PATH --achievement ID --unlocked-at DATE` |
 | Read the saved draft                   | `queue show --file PATH`                                         |
 | Preview                                | `queue apply --file PATH --dry-run`                              |
 | Apply the confirmed snapshot           | `queue apply --file PATH --yes`                                  |
@@ -82,7 +82,7 @@ Keep a local audit record for each apply: the requested dates, confirmed results
 
 Store drafts under Electron's `userData`, partitioned by account and game. Keep an immutable queue snapshot and an operation record for each apply. Protect local files with platform-appropriate permissions. On logout or account change, clear visible account data and invalidate previews; show retained drafts only for their matching signed-in account.
 
-Let users edit dates only for queued achievements that are still locked. Use the CLI's returned default date when the user supplies no original date. Show the exact value before applying. Display local time with its zone and provide the UTC value for comparison. Send RFC 3339 timestamps with an explicit offset or `Z`, at second precision. Reject invalid calendar dates, nonexistent local times and future dates. Require an explicit offset to resolve an ambiguous local time. Group bulk edits by their requested timestamp and reload the actual queue if any command fails. [CLI date and queue rules](https://github.com/metacurb/gog-achievements-cli/blob/v0.3.0/README.md#create-and-edit-a-queue).
+Let users edit dates only for queued achievements that are still locked. Use the CLI's returned default date when the user supplies no original date. Show the exact value before applying. Display local time with its zone and provide the UTC value for comparison. Send RFC 3339 timestamps with an explicit offset or `Z`, at second precision. Reject invalid calendar dates, nonexistent local times and future dates. Require an explicit offset to resolve an ambiguous local time. Detect the user's time zone and offer all zones supported by the runtime. Reload the actual queue if a save command fails. [CLI date and queue rules](https://github.com/metacurb/gog-achievements-cli/blob/v0.3.0/README.md#create-and-edit-a-queue).
 
 The range of historical dates accepted by GOG still needs live verification. Show requested and confirmed dates separately, preserve date-mismatch reports, and use only a user-authorized restoration for that check.
 
@@ -142,7 +142,7 @@ Define command construction, IPC validation and result mapping once. Keep GOG ru
 
 - Test command arguments, all error envelopes, exit 6 reports, string IDs, large output, missing binaries and version mismatches with a fake CLI.
 - Test IPC validation, account changes, stale results, duplicate clicks, queue locks and rejected stale preview tokens.
-- Test date offsets, leap days, daylight-saving changes, future dates and bulk-edit failures.
+- Test date offsets, leap days, daylight-saving changes, future dates and failed inline date saves.
 - Test every report status, an interrupted operation, a surviving child and recovery without an automatic write.
 - Test the full UI flow with a fake CLI, including proof that preview never sends `--yes` and that cancelling final confirmation starts no write.
 - Smoke-test real packaged apps with the released CLI: version, JSON help, an offline fixture queue and native availability. Cover paths with spaces, a read-only installation folder, a cold helper cache and machines without system Node or .NET.

@@ -9,6 +9,7 @@ interface Props {
   gameId?: string;
   signedIn: boolean;
   loaded: boolean;
+  loading?: boolean;
   busy: boolean;
   demo: boolean;
   onSelect(game: Game): void;
@@ -22,6 +23,7 @@ export function Library({
   gameId,
   signedIn,
   loaded,
+  loading = false,
   busy,
   demo,
   onSelect,
@@ -46,10 +48,10 @@ export function Library({
         <button
           className="icon-button"
           aria-label="Refresh library"
-          disabled={!signedIn || busy}
+          disabled={!signedIn || busy || loading}
           onClick={onRefresh}
         >
-          <RefreshCw size={18} />
+          <RefreshCw size={18} className={loading ? 'spinner' : undefined} />
         </button>
       </div>
       <div className="search-field">
@@ -78,6 +80,20 @@ export function Library({
           <div className="library-placeholder">
             <Gamepad2 size={34} />
             <p>Sign in to load your games.</p>
+          </div>
+        ) : loading ? (
+          <div className="library-skeleton">
+            <p className="sr-only" role="status">
+              Loading games…
+            </p>
+            <div aria-hidden="true">
+              {Array.from({ length: 6 }, (_, index) => (
+                <div className="library-skeleton-row" key={index}>
+                  <span className="skeleton-block library-skeleton-cover" />
+                  <span className="skeleton-block library-skeleton-title" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : !loaded ? (
           <div className="library-placeholder" role="status">

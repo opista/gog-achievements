@@ -21,6 +21,7 @@ export function installIpc(ipcMain: IpcMain, window: BrowserWindow, api: Desktop
     listGames: () => api.listGames(),
     listAchievements: (value) => api.listAchievements(ipcSchemas.listAchievements.parse(value)),
     getQueue: (value) => api.getQueue(ipcSchemas.getQueue.parse(value)),
+    listQueues: () => api.listQueues(),
     addAchievements: (value) => api.addAchievements(ipcSchemas.addAchievements.parse(value)),
     removeAchievements: (value) =>
       api.removeAchievements(ipcSchemas.removeAchievements.parse(value)),

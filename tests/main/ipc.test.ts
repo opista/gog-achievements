@@ -71,3 +71,26 @@ test('IPC keeps sanitized failures and passes only a validated opaque apply toke
   expect(JSON.stringify(failure)).not.toContain('fixture-private');
   expect(JSON.stringify(failure)).not.toContain('auth.gog.com');
 });
+
+test('IPC exposes account-local queue discovery and accepts only optional validated history game IDs', async () => {
+  const { api, invoke } = fixture();
+  await api.login();
+  const queues = vi.spyOn(api, 'listQueues');
+  const history = vi.spyOn(api, 'history');
+  expect((await invoke({ method: 'listQueues' })).ok).toBe(true);
+  expect(queues).toHaveBeenCalledOnce();
+  expect((await invoke({ method: 'history', payload: {} })).ok).toBe(true);
+  expect(history).toHaveBeenLastCalledWith({});
+  expect((await invoke({ method: 'history', payload: { gameId: '2' } })).ok).toBe(true);
+  expect(history).toHaveBeenLastCalledWith({ gameId: '2' });
+  for (const request of [
+    { method: 'listQueues', payload: { userId: '998877' } },
+    { method: 'history', payload: { userId: '998877' } },
+    { method: 'history', payload: { gameId: 2 } },
+    { method: 'history', payload: { gameId: '../arbitrary' } },
+    { method: 'history' },
+  ])
+    expect((await invoke(request)).ok).toBe(false);
+  expect(queues).toHaveBeenCalledOnce();
+  expect(history).toHaveBeenCalledTimes(2);
+});

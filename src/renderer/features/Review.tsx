@@ -1,4 +1,4 @@
-import { CalendarDays, Globe2, Info } from 'lucide-react';
+import { CalendarDays, Globe2 } from 'lucide-react';
 import type { Report, ReportItem } from '../../shared/api';
 import { formatTimestamp, zoneLabel } from '../date-time';
 import { Dialog } from '../components/Dialog';
@@ -15,29 +15,6 @@ export function ExactDate({ iso, zone }: { iso: string | null; zone: string }) {
         {formatTimestamp(iso, 'UTC')} UTC
       </span>
     </span>
-  );
-}
-export function PreviewRows({ report, zone }: { report: Report; zone: string }) {
-  return (
-    <div className="preview-list">
-      {report.results.map((item) => (
-        <article className="preview-row" key={item.achievement_id}>
-          <div className="preview-row-heading">
-            <h3>{item.name}</h3>
-            <span className={`status ${item.status === 'pending' ? 'ready' : 'neutral'}`}>
-              {item.status === 'pending' ? 'Ready to restore' : 'Already unlocked'}
-            </span>
-          </div>
-          <ExactDate
-            iso={item.status === 'pending' ? item.requested_unlocked_at : item.actual_unlocked_at}
-            zone={zone}
-          />
-          {item.status === 'skipped_already_unlocked' ? (
-            <p className="muted">Existing unlock and date will be kept.</p>
-          ) : null}
-        </article>
-      ))}
-    </div>
   );
 }
 export function ApplyConfirmation({
@@ -62,7 +39,7 @@ export function ApplyConfirmation({
       footer={
         <>
           <button data-initial-focus disabled={busy} onClick={onClose}>
-            Back to preview
+            Cancel
           </button>
           <button className="primary" disabled={busy || pending.length === 0} onClick={onApply}>
             Apply {pending.length} achievements
@@ -75,6 +52,12 @@ export function ApplyConfirmation({
         <p>GOG account {report.user_id}</p>
       </div>
       <p>Close the game before applying.</p>
+      {pending.length === 0 ? (
+        <p>All queued achievements are already unlocked. Existing dates are kept.</p>
+      ) : null}
+      {report.results.length > pending.length && pending.length > 0 ? (
+        <p className="muted">Already unlocked achievements keep their dates.</p>
+      ) : null}
       <div className="confirmation-rows">
         {pending.map((item) => (
           <div key={item.achievement_id}>
@@ -84,14 +67,6 @@ export function ApplyConfirmation({
         ))}
       </div>
     </Dialog>
-  );
-}
-export function CloseGameNote({ title }: { title: string }) {
-  return (
-    <p className="info-note">
-      <Info size={20} />
-      <span>Close {title} before applying.</span>
-    </p>
   );
 }
 export const STATUS_LABELS: Record<ReportItem['status'], string> = {

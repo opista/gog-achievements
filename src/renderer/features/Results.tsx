@@ -87,19 +87,30 @@ export function HistoryView({
   records,
   zone,
   onView,
+  loading = false,
 }: {
   records: OperationRecord[];
   zone: string;
   onView(record: OperationRecord): void;
+  loading?: boolean;
 }) {
   return (
     <section className="history-view">
       <h2>Operation history</h2>
       <p className="muted">Saved reports are read-only. They cannot undo an unlock.</p>
-      {records.length === 0 ? (
+      {loading ? (
+        <div className="history-skeleton" role="status" aria-label="Loading operation history">
+          <span className="sr-only">Loading operation history…</span>
+          {[0, 1, 2].map((row) => (
+            <div className="skeleton-row" key={row} aria-hidden="true">
+              <span className="skeleton-text" />
+            </div>
+          ))}
+        </div>
+      ) : records.length === 0 ? (
         <div className="empty-state">
           <History size={34} />
-          <p>No saved operations for this game.</p>
+          <p>No saved operations yet.</p>
         </div>
       ) : (
         <ul className="history-list">
