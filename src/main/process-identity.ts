@@ -11,12 +11,71 @@ export type ProcessCheck =
 export interface ProcessProbe {
   find(snapshotPath: string, identity?: ProcessIdentity | null): Promise<ProcessCheck>;
 }
+interface ProcessCandidate {
+  pid: number;
+  startedAt: string;
+  command: string;
+  name?: string;
+}
+type ProcessExecutor = (
+  file: string,
+  args: string[],
+  options: { timeout: number; maxBuffer: number; windowsHide?: boolean },
+) => Promise<{ stdout: string }>;
+interface NativeProcessProbeOptions {
+  platform?: NodeJS.Platform;
+  execute?: ProcessExecutor;
+}
+const WINDOWS_QUERY = [
+  "$ErrorActionPreference = 'Stop';",
+  '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false);',
+  '$processes = @(Get-CimInstance -ClassName Win32_Process',
+  "-Filter \"Name = 'gog-achievements.exe' OR Name = 'node.exe'\"",
+  '-Property ProcessId,CreationDate,CommandLine,Name -ErrorAction Stop',
+  '| Select-Object ProcessId,CreationDate,CommandLine,Name);',
+  'ConvertTo-Json -InputObject $processes -Compress',
+].join(' ');
+
+function parseWindowsProcesses(stdout: string): ProcessCandidate[] {
+  const rows: unknown = JSON.parse(stdout);
+  if (!Array.isArray(rows)) throw new Error('Expected a process array.');
+  return rows.map((row: unknown) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row))
+      throw new Error('Invalid process entry.');
+    const value = row as Record<string, unknown>;
+    if (
+      !Number.isSafeInteger(value.ProcessId) ||
+      Number(value.ProcessId) <= 0 ||
+      typeof value.Name !== 'string' ||
+      !/^(gog-achievements|node)\.exe$/i.test(value.Name) ||
+      typeof value.CreationDate !== 'string' ||
+      !value.CreationDate.trim() ||
+      (typeof value.CommandLine !== 'string' && value.CommandLine !== null)
+    )
+      throw new Error('Incomplete process identity.');
+    return {
+      pid: Number(value.ProcessId),
+      startedAt: value.CreationDate,
+      command: value.CommandLine ?? '',
+      name: value.Name,
+    };
+  });
+}
+
 /** The unique snapshot argument identifies an operation even across the Intel launcher exec. */
 export class NativeProcessProbe implements ProcessProbe {
+  private readonly platform: NodeJS.Platform;
+  private readonly execute: ProcessExecutor;
+
+  constructor(options: NativeProcessProbeOptions = {}) {
+    this.platform = options.platform ?? process.platform;
+    this.execute = options.execute ?? execute;
+  }
+
   async find(snapshotPath: string, identity?: ProcessIdentity | null): Promise<ProcessCheck> {
     try {
-      let candidates: { pid: number; startedAt: string; command: string; name?: string }[];
-      if (process.platform === 'win32') {
+      let candidates: ProcessCandidate[];
+      if (this.platform === 'win32') {
         const file = join(
           process.env.SystemRoot ?? 'C:\\Windows',
           'System32',
@@ -24,29 +83,16 @@ export class NativeProcessProbe implements ProcessProbe {
           'v1.0',
           'powershell.exe',
         );
-        const result = await execute(
+        const result = await this.execute(
           file,
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            'Get-CimInstance Win32_Process | Select-Object ProcessId,CreationDate,CommandLine,Name | ConvertTo-Json -Compress',
-          ],
-          // A cold PowerShell/CIM start can exceed three seconds on Windows.
+          ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_QUERY],
+          // Filter in CIM so unrelated processes and their properties are not retrieved.
           { timeout: 10000, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
         );
-        const raw: unknown = JSON.parse(result.stdout || '[]');
-        const values = Array.isArray(raw) ? raw : [raw];
-        candidates = values
-          .filter((value): value is Record<string, unknown> => !!value && typeof value === 'object')
-          .map((value) => ({
-            pid: Number(value.ProcessId),
-            startedAt: typeof value.CreationDate === 'string' ? value.CreationDate : '',
-            command: typeof value.CommandLine === 'string' ? value.CommandLine : '',
-            name: typeof value.Name === 'string' ? value.Name : '',
-          }));
+        candidates = parseWindowsProcesses(result.stdout);
+        if (!candidates.length) return { state: 'gone' };
       } else {
-        const result = await execute(
+        const result = await this.execute(
           '/bin/ps',
           ['-axww', '-o', 'pid=', '-o', 'lstart=', '-o', 'command='],
           { timeout: 3000, maxBuffer: 2 * 1024 * 1024 },
@@ -58,7 +104,7 @@ export class NativeProcessProbe implements ProcessProbe {
         (value) =>
           !value.command &&
           ((identity && value.pid === identity.pid) ||
-            value.name?.toLowerCase() === 'gog-achievements.exe'),
+            (this.platform === 'win32' && value.name !== undefined)),
       );
       if (obscured) return { state: 'unknown' };
       const current = candidates.find(

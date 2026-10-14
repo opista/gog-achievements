@@ -8,6 +8,8 @@ Both repositories should be public for anonymous builds and installed-app update
 
 In GitHub Actions settings, allow GitHub Actions to create pull requests. Keep the default workflow token read-only; release jobs declare their own write permissions. Release Please needs no personal token.
 
+If GitHub marks a bot-created release PR as awaiting workflow approval, a maintainer must approve that CI run after reviewing the release metadata diff. This starts checks; it does not merge the PR. The explicitly dispatched CI run is also visible in Actions.
+
 Packages are unsigned. Signing and clean-machine installation checks remain needed for supported Mac and Windows systems. The [tested GOG login fix](https://github.com/opista/gog-achievements-cli/pull/2) must be released and pinned before the first app release.
 
 ## Normal release
