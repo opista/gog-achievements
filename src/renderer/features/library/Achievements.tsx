@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react';
 import { Eye, Plus, RefreshCw } from 'lucide-react';
-import type { Achievement } from '../../shared/api';
-import { Art } from '../components/Art';
-import { formatDate, formatTimestamp } from '../date-time';
+import type { Achievement } from '../../../shared/api';
+import { Art } from '../../components/Art';
+import { formatDate, formatTimestamp } from '../../date-time';
 import { AchievementSkeleton } from './AchievementSkeleton';
 
-type Filter = 'All' | 'Unlocked' | 'Locked';
+import {
+  ACHIEVEMENT_FILTERS,
+  visibleAchievements,
+  type AchievementFilter,
+} from './achievement-model';
 interface Props {
   achievements: Achievement[];
   queued: Set<string>;
@@ -16,21 +20,6 @@ interface Props {
   onAdd(ids: string[]): void;
   onRefresh(): void;
 }
-function group(item: Achievement): number {
-  return item.unlocked ? 2 : item.hidden ? 1 : 0;
-}
-function unlockTime(item: Achievement): number {
-  const time = item.unlocked_at ? Date.parse(item.unlocked_at) : Number.NaN;
-  return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
-}
-function compareAchievements(left: Achievement, right: Achievement): number {
-  const groupDifference = group(left) - group(right);
-  if (groupDifference || !left.unlocked) return groupDifference;
-  const leftTime = unlockTime(left);
-  const rightTime = unlockTime(right);
-  return leftTime === rightTime ? 0 : leftTime > rightTime ? -1 : 1;
-}
-
 export function Achievements({
   achievements,
   queued,
@@ -42,17 +31,10 @@ export function Achievements({
   onRefresh,
 }: Props) {
   const controlsBlocked = busy || loading;
-  const [filter, setFilter] = useState<Filter>('All');
+  const [filter, setFilter] = useState<AchievementFilter>('All');
   const [revealed, setRevealed] = useState(new Set<string>());
   const focusTarget = useRef<string | null>(null);
-  const filtered = achievements
-    .toSorted(compareAchievements)
-    .filter(
-      (item) =>
-        filter === 'All' ||
-        (filter === 'Unlocked' && item.unlocked) ||
-        (filter === 'Locked' && !item.unlocked),
-    );
+  const filtered = visibleAchievements(achievements, filter);
   function reveal(id: string) {
     focusTarget.current = id;
     setRevealed((previous) => new Set(previous).add(id));
@@ -62,7 +44,7 @@ export function Achievements({
     <section className="achievement-section">
       <div className="achievement-toolbar">
         <div className="filter-group" aria-label="Achievement filters">
-          {(['All', 'Unlocked', 'Locked'] as const).map((value) => (
+          {ACHIEVEMENT_FILTERS.map((value) => (
             <button
               key={value}
               aria-pressed={filter === value}

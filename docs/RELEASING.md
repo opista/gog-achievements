@@ -31,6 +31,8 @@ Each release contains a DMG and ZIP for each Mac architecture, and an EXE instal
 
 CI uploads packages as temporary workflow artifacts. These are separate from published release downloads. Run **CI → Run workflow** with a target to check one native package.
 
+Compilation has a three-minute subprocess limit; native packaging has ten minutes within the workflow's thirty-minute job limit. Slower runners can need more than three minutes to create installers. Failed commands retain their stdout and stderr in the job log, and deadline termination reports the command and its limit.
+
 ## Retry a failed release
 
 Fix an external build problem, then run **Release → Run workflow** with the existing draft tag, for example `v0.1.0`. The workflow only accepts draft releases. It rebuilds the tagged commit, verifies all files, and replaces draft assets before publication.

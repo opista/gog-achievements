@@ -4,13 +4,13 @@ import type { DesktopApi } from '../shared/api';
 import type { DemoDesktopApi, DemoScenario } from '../shared/demo-api';
 import { Art } from './components/Art';
 import { AccountMenu } from './components/AccountMenu';
-import { Achievements } from './features/Achievements';
-import { AchievementSkeleton } from './features/AchievementSkeleton';
+import { Achievements } from './features/library/Achievements';
+import { AchievementSkeleton } from './features/library/AchievementSkeleton';
 import { ApplyConfirmation } from './features/Review';
 import { useLocalTimeZone } from './use-local-time-zone';
 import { Results } from './features/Results';
 import { HistoryView } from './features/history/HistoryView';
-import { Library } from './features/Library';
+import { Library } from './features/library/Library';
 import { QueuePane } from './features/QueuePane';
 import { useWorkspace, type Workspace } from './use-workspace';
 

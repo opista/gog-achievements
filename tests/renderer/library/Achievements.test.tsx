@@ -3,10 +3,10 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Achievements } from '../../src/renderer/features/Achievements';
-import { AchievementSkeleton } from '../../src/renderer/features/AchievementSkeleton';
+import { Achievements } from '../../../src/renderer/features/library/Achievements';
+import { AchievementSkeleton } from '../../../src/renderer/features/library/AchievementSkeleton';
 import type { ComponentProps } from 'react';
-import type { Achievement } from '../../src/shared/api';
+import type { Achievement } from '../../../src/shared/api';
 afterEach(cleanup);
 function achievement(id: string, name: string, options: Partial<Achievement> = {}): Achievement {
   return {
