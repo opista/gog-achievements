@@ -2,8 +2,8 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { Results } from '../../src/renderer/features/Results';
-import { formatTimestamp } from '../../src/renderer/date-time';
+import { Results } from '../../../src/renderer/features/apply/Results';
+import { formatTimestamp } from '../../../src/renderer/date-time';
 afterEach(cleanup);
 it('does not claim requested dates were confirmed for skipped existing unlocks', () => {
   render(

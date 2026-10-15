@@ -6,9 +6,10 @@ import { Art } from './components/Art';
 import { AccountMenu } from './features/account/AccountMenu';
 import { Achievements } from './features/library/Achievements';
 import { AchievementSkeleton } from './features/library/AchievementSkeleton';
-import { ApplyConfirmation } from './features/Review';
+import { ApplyConfirmation } from './features/apply/ApplyConfirmation';
 import { useLocalTimeZone } from './use-local-time-zone';
-import { Results } from './features/Results';
+import { ApplyProgress } from './features/apply/ApplyProgress';
+import { Results } from './features/apply/Results';
 import { HistoryView } from './features/history/HistoryView';
 import { Library } from './features/library/Library';
 import { QueuePane } from './features/queue/QueuePane';
@@ -144,11 +145,7 @@ export function App({ api }: { api: DesktopApi }) {
         />
         <section className="main-pane" aria-label="Game achievements">
           {!w.auth.authenticated && applying ? (
-            <div className="active-state" role="status">
-              <LoaderCircle size={42} className="spinner" />
-              <h2>Checking previous changes…</h2>
-              <p>Please keep the app open while this check finishes.</p>
-            </div>
+            <ApplyProgress signedIn={false} recovering />
           ) : !w.auth.authenticated ? (
             <div className="connect-state">
               <span className="connect-mark">
@@ -196,22 +193,7 @@ export function App({ api }: { api: DesktopApi }) {
                 </div>
               ) : null}
               {applying ? (
-                <div className="active-state" role="status">
-                  <LoaderCircle size={42} className="spinner" />
-                  <h2>
-                    {w.operation.kind === 'recovery'
-                      ? 'Checking previous changes…'
-                      : 'Applying changes…'}
-                  </h2>
-                  <p>
-                    {w.operation.kind === 'recovery'
-                      ? 'Please keep the app open while this check finishes.'
-                      : 'Keep the app open until the result is available.'}
-                  </p>
-                  {w.operation.kind !== 'recovery' ? (
-                    <p className="muted">This cannot be cancelled.</p>
-                  ) : null}
-                </div>
+                <ApplyProgress signedIn recovering={w.operation.kind === 'recovery'} />
               ) : w.view === 'results' && w.result ? (
                 <>
                   <Results result={w.result} zone={zone} />

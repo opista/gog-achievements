@@ -1,16 +1,8 @@
 import { TriangleAlert } from 'lucide-react';
-import type { Achievement, Report } from '../../shared/api';
-import { formatTimestamp, localTimeOccurrence } from '../date-time';
-import { Dialog } from '../components/Dialog';
-import { Art } from '../components/Art';
-export function ExactDate({ iso, zone }: { iso: string | null; zone: string }) {
-  if (!iso) return <span className="muted">Not confirmed</span>;
-  return (
-    <time className="exact-date" dateTime={iso}>
-      {formatTimestamp(iso, zone)}
-    </time>
-  );
-}
+import type { Achievement, Report } from '../../../shared/api';
+import { formatTimestamp, localTimeOccurrence } from '../../date-time';
+import { Dialog } from '../../components/Dialog';
+import { Art } from '../../components/Art';
 export function ApplyConfirmation({
   report,
   zone,
