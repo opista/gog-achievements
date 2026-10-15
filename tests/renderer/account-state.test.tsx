@@ -187,6 +187,27 @@ it('clears account-wide drafts before displaying a queue response owned by anoth
   expectAccountDataCleared(result.current);
 });
 
+it('clears account views and rechecks the session when save recovery reads a foreign queue', async () => {
+  const { api, result } = await workspace();
+  const foreign = (await api.getQueue('2'))!;
+  foreign.user_id = OTHER_USER;
+  vi.spyOn(api, 'addAchievements').mockRejectedValueOnce(new Error('Save failed.'));
+  vi.spyOn(api, 'listQueues').mockResolvedValueOnce([foreign]);
+  const recheck = vi.spyOn(api, 'initialize').mockResolvedValue({
+    version: '0.1.0',
+    cliVersion: '0.3.0',
+    auth: { authenticated: true, user_id: OTHER_USER },
+    operation: { kind: 'idle' },
+  });
+  act(() => result.current.add(['5']));
+  await waitFor(() => expect(result.current.busy).toBe(false));
+  expect(result.current.error?.code).toBe('ACCOUNT_CHANGED');
+  expect(result.current.auth.user_id).toBe(OTHER_USER);
+  expect(recheck).toHaveBeenCalledTimes(1);
+  expect(result.current.queueAction).toBeNull();
+  expectAccountDataCleared(result.current);
+});
+
 it('applies one queued game group while preserving the selected game and other drafts', async () => {
   const { api, result } = await workspace();
   const original = result.current.queue;

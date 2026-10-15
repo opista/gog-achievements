@@ -3,10 +3,10 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueuePane } from '../../src/renderer/features/QueuePane';
-import { formatTimestamp } from '../../src/renderer/date-time';
-import { useWorkspace } from '../../src/renderer/use-workspace';
-import { createDemoApi, type DemoDesktopApi } from '../../src/shared/demo-api';
+import { QueuePane } from '../../../src/renderer/features/queue/QueuePane';
+import { formatTimestamp } from '../../../src/renderer/date-time';
+import { useWorkspace } from '../../../src/renderer/use-workspace';
+import { createDemoApi, type DemoDesktopApi } from '../../../src/shared/demo-api';
 
 afterEach(cleanup);
 
@@ -21,10 +21,18 @@ function QueueHarness({
   const zone = 'America/New_York';
   return (
     <QueuePane
-      workspace={{
-        ...workspace,
-        achievementFor: missingDetails ? () => undefined : workspace.achievementFor,
-      }}
+      signedIn={workspace.auth.authenticated}
+      queues={workspace.queues}
+      loaded={workspace.queuesLoaded}
+      busy={workspace.busy}
+      action={workspace.queueAction}
+      previewGameId={workspace.previewGameId}
+      applyStatus="idle"
+      achievementFor={missingDetails ? () => undefined : workspace.achievementFor}
+      onRefresh={workspace.refreshQueues}
+      onRemove={workspace.remove}
+      onSaveDates={workspace.saveDates}
+      onPrepareApply={workspace.prepareApply}
       zone={zone}
       demo
       onResize={() => {}}

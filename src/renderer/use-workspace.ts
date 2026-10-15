@@ -10,6 +10,7 @@ import type {
 } from '../shared/api';
 import { useHistory } from './features/history/use-history';
 import { useLibrary } from './features/library/use-library';
+import { useQueues } from './features/queue/use-queues';
 import { useAccount } from './features/account/use-account';
 import { isAccountMismatch } from './features/account/account-errors';
 import { toNotice, type Notice } from './presentation/error-notice';
@@ -20,13 +21,13 @@ export type LoadingTarget =
 export function useWorkspace(api: DesktopApi) {
   const account = useAccount(api, clearAccountState);
   const { auth, versions } = account;
+  const queueState = useQueues(api, account.assertOwner);
   const library = useLibrary(api, {
     assertOwner: account.assertOwner,
-    syncQueue: syncSelectedQueue,
+    syncQueue: queueState.sync,
   });
   const { games, libraryLoaded, game, achievements, achievementsLoaded } = library;
-  const [queuesLoaded, setQueuesLoaded] = useState(false);
-  const [queues, setQueues] = useState<Queue[]>([]);
+  const { queues, loaded: queuesLoaded, action: queueAction } = queueState;
   const [queueDetailsLoading, setQueueDetailsLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
@@ -35,10 +36,6 @@ export function useWorkspace(api: DesktopApi) {
   const [view, setView] = useState<View>('browse');
   const [loading, setLoading] = useState<string | null>('Checking GOG sign-in…');
   const [loadingTarget, setLoadingTarget] = useState<LoadingTarget>('session');
-  const [queueAction, setQueueAction] = useState<{
-    kind: 'add' | 'remove' | 'date';
-    gameId: string;
-  } | null>(null);
   const [previewGameId, setPreviewGameId] = useState<string | null>(null);
   const [error, setError] = useState<Notice | null>(null);
   const [operation, setOperation] = useState<OperationState>({ kind: 'idle' });
@@ -64,8 +61,7 @@ export function useWorkspace(api: DesktopApi) {
   }
   function clearAccountState() {
     library.clear();
-    setQueues([]);
-    setQueuesLoaded(false);
+    queueState.clear();
     history.clear();
     clearGamePresentation();
   }
@@ -92,24 +88,6 @@ export function useWorkspace(api: DesktopApi) {
       working.current = false;
       setLoading(null);
     }
-  }
-  function updateQueue(gameId: string, value: Queue | null) {
-    if (value) account.assertOwner(value.user_id);
-    setQueues((previous) => [
-      ...previous.filter((item) => item.game.id !== gameId),
-      ...(value ? [value] : []),
-    ]);
-  }
-  async function syncSelectedQueue(gameId: string, isCurrent: () => boolean) {
-    const value = await api.getQueue(gameId);
-    if (isCurrent()) updateQueue(gameId, value);
-  }
-  async function loadQueues() {
-    const values = await api.listQueues();
-    for (const value of values) account.assertOwner(value.user_id);
-    setQueues(values);
-    setQueuesLoaded(true);
-    return values;
   }
   async function loadQueueDetails(values: Queue[]) {
     const missing = values.filter(
@@ -149,7 +127,7 @@ export function useWorkspace(api: DesktopApi) {
       // A failed network library read must not hide readable local drafts.
       if (!isAccountMismatch(failure) && toNotice(failure).code !== 'AUTH_REQUIRED') {
         try {
-          await loadQueues();
+          await queueState.load();
           await history.load();
         } catch (localFailure) {
           if (isAccountMismatch(localFailure)) throw localFailure;
@@ -159,7 +137,7 @@ export function useWorkspace(api: DesktopApi) {
     }
     if (!(await account.reconcileOwner(data.user_id))) return;
     const first = library.acceptGames(data, preferredId);
-    const savedQueues = await loadQueues();
+    const savedQueues = await queueState.load();
     await history.load();
     if (!first) clearGameState();
     else if (library.currentGame()?.id !== first.id || !achievementsLoaded) await loadGame(first);
@@ -234,7 +212,7 @@ export function useWorkspace(api: DesktopApi) {
   }
   function refreshQueues() {
     void run('Loading queue…', 'queue', async () => {
-      const values = await loadQueues();
+      const values = await queueState.load();
       await loadQueueDetails(values);
     });
   }
@@ -249,82 +227,32 @@ export function useWorkspace(api: DesktopApi) {
       if (currentState) setView('browse');
     });
   }
-  async function mutate(
-    gameId: string,
-    kind: 'add' | 'remove' | 'date',
-    task: () => Promise<Queue>,
-    optimistic?: Queue,
-  ): Promise<boolean> {
+  async function saveQueue(task: () => Promise<boolean>): Promise<boolean> {
     if (working.current || latestOperation.current.kind !== 'idle') return false;
     invalidate();
     let succeeded = false;
     await run('Saving queue…', 'queue', async () => {
-      setQueueAction({ kind, gameId });
-      if (optimistic) updateQueue(gameId, optimistic);
-      try {
-        const value = await task();
-        updateQueue(gameId, value);
-        succeeded = true;
-      } catch (failure) {
-        if (!isAccountMismatch(failure)) {
-          try {
-            await loadQueues();
-          } catch {
-            // Roll back provisional rows if both save and reload fail.
-            if (optimistic)
-              updateQueue(gameId, queues.find((item) => item.game.id === gameId) ?? null);
-          }
-        }
-        throw failure;
-      } finally {
-        setQueueAction(null);
-      }
+      succeeded = await task();
     });
     return succeeded;
   }
   function add(ids: string[]) {
     if (!game) return;
-    const metadata = library.metadataFor(game.id);
-    const timestamp = new Date().toISOString();
-    const userId = account.current().user_id;
-    const provisional: Queue | undefined =
-      metadata && userId
-        ? {
-            schema_version: 1,
-            user_id: userId,
-            game: metadata,
-            created_at: queue?.created_at ?? timestamp,
-            updated_at: timestamp,
-            items: [
-              ...(queue?.items ?? []),
-              ...achievements
-                .filter(
-                  (item) =>
-                    ids.includes(item.id) &&
-                    !item.unlocked &&
-                    !queue?.items.some((saved) => saved.achievement_id === item.id),
-                )
-                .map((item) => ({
-                  achievement_id: item.id,
-                  key: item.key,
-                  name: item.name,
-                  unlocked_at: timestamp,
-                })),
-            ],
-          }
-        : undefined;
-    void mutate(
-      game.id,
-      'add',
-      () => api.addAchievements({ gameId: game.id, achievementIds: ids }),
-      provisional,
+    void saveQueue(() =>
+      queueState.add({
+        gameId: game.id,
+        achievementIds: ids,
+        game: library.metadataFor(game.id),
+        userId: account.current().user_id,
+        achievements,
+      }),
     );
   }
   function remove(gameId: string, ids: string[]) {
-    void mutate(gameId, 'remove', () => api.removeAchievements({ gameId, achievementIds: ids }));
+    void saveQueue(() => queueState.remove(gameId, ids));
   }
   function saveDates(gameId: string, dates: Record<string, string>): Promise<boolean> {
-    return mutate(gameId, 'date', () => api.setDates({ gameId, dates }));
+    return saveQueue(() => queueState.saveDates(gameId, dates));
   }
   function prepareApply(gameId: string) {
     if (working.current) return;
@@ -365,7 +293,7 @@ export function useWorkspace(api: DesktopApi) {
       setView('results');
       try {
         // Refresh durable local state first; a later network failure must not restore stale rows.
-        updateQueue(report.game.id, await api.getQueue(report.game.id));
+        await queueState.sync(report.game.id);
         await history.load();
         await library.refreshAfterApply(report.game.id);
       } catch (failure) {

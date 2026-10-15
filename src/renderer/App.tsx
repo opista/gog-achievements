@@ -11,7 +11,7 @@ import { useLocalTimeZone } from './use-local-time-zone';
 import { Results } from './features/Results';
 import { HistoryView } from './features/history/HistoryView';
 import { Library } from './features/library/Library';
-import { QueuePane } from './features/QueuePane';
+import { QueuePane } from './features/queue/QueuePane';
 import { useWorkspace, type Workspace } from './use-workspace';
 
 function errorRecovery(w: Workspace): { label: string; run(): void } | null {
@@ -279,7 +279,20 @@ export function App({ api }: { api: DesktopApi }) {
           )}
         </section>
         <QueuePane
-          workspace={w}
+          signedIn={w.auth.authenticated}
+          queues={w.queues}
+          loaded={w.queuesLoaded}
+          busy={w.busy}
+          action={w.queueAction}
+          previewGameId={w.previewGameId}
+          applyStatus={
+            w.operation.kind === 'recovery' ? 'recovery' : applying ? 'applying' : 'idle'
+          }
+          achievementFor={w.achievementFor}
+          onRefresh={w.refreshQueues}
+          onRemove={w.remove}
+          onSaveDates={w.saveDates}
+          onPrepareApply={w.prepareApply}
           zone={zone}
           demo={api.isDemo}
           width={queueWidth}

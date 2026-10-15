@@ -1,48 +1,74 @@
 import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Check, FileText, LoaderCircle, X } from 'lucide-react';
-import type { QueueItem } from '../../shared/api';
-import type { Workspace } from '../use-workspace';
-import { Art } from '../components/Art';
-import { PaneResize } from '../components/PaneResize';
-import { formatTimestamp, localTimeOccurrence } from '../date-time';
+import type { Achievement, Queue } from '../../../shared/api';
+import { Art } from '../../components/Art';
+import { PaneResize } from '../../components/PaneResize';
+import { formatTimestamp, localTimeOccurrence } from '../../date-time';
 import { QueueDateModal } from './QueueDateModal';
+import { queueGroups, type QueueAction } from './queue-model';
 interface Props {
-  workspace: Workspace;
+  signedIn: boolean;
+  queues: Queue[];
+  loaded: boolean;
+  busy: boolean;
+  action: QueueAction | null;
+  previewGameId: string | null;
+  applyStatus: 'idle' | 'applying' | 'recovery';
+  achievementFor(gameId: string, achievementId: string): Achievement | undefined;
+  onRefresh(): void;
+  onRemove(gameId: string, ids: string[]): void;
+  onSaveDates(gameId: string, dates: Record<string, string>): Promise<boolean>;
+  onPrepareApply(gameId: string): void;
   zone: string;
   demo: boolean;
   width?: number;
   onResize(width: number): void;
 }
 export function QueuePane(props: Props) {
-  return props.workspace.auth.authenticated ? <SignedInQueuePane {...props} /> : null;
+  return props.signedIn ? <SignedInQueuePane {...props} /> : null;
 }
 
-function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props) {
-  const [editing, setEditing] = useState<{ gameId: string; item: QueueItem } | null>(null);
+function SignedInQueuePane({
+  queues,
+  loaded,
+  busy,
+  action,
+  previewGameId,
+  applyStatus,
+  achievementFor,
+  onRefresh,
+  onRemove,
+  onSaveDates,
+  onPrepareApply,
+  zone,
+  demo,
+  width,
+  onResize,
+}: Props) {
+  const [editing, setEditing] = useState<{
+    gameId: string;
+    userId: string;
+    achievementId: string;
+  } | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const removeButtons = useRef(new Map<string, HTMLButtonElement>());
   const removalFocus = useRef<string[] | null>(null);
-  const groups = w.queues
-    .filter((item) => item.items.length > 0)
-    .toSorted(
-      (left, right) =>
-        left.game.title.localeCompare(right.game.title) ||
-        left.game.id.localeCompare(right.game.id),
-    );
+  const groups = queueGroups(queues);
+  const editingItem = queues
+    .find((queue) => queue.game.id === editing?.gameId && queue.user_id === editing.userId)
+    ?.items.find((item) => item.achievement_id === editing?.achievementId);
   const total = groups.reduce((count, group) => count + group.items.length, 0);
   const removeOrder = groups.flatMap((group) =>
     group.items.map((item) => `${group.game.id}:${item.achievement_id}`),
   );
   useEffect(() => {
-    if (w.busy || !removalFocus.current) return;
+    if (busy || !removalFocus.current) return;
     const target = removalFocus.current
       .map((key) => removeButtons.current.get(key))
       .find((button) => button && !button.disabled);
     (target ?? headingRef.current)?.focus();
     removalFocus.current = null;
-  }, [w.busy, w.queues]);
-  const activeApply =
-    w.view === 'applying' || w.operation.kind === 'apply' || w.operation.kind === 'recovery';
+  }, [busy, queues]);
   return (
     <aside className="queue-pane" aria-label="Achievement queue">
       <PaneResize pane="Queue" width={width} min={336} max={504} onResize={onResize} />
@@ -58,7 +84,7 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
         </div>
       </div>
       <div className="queue-body">
-        {!w.queuesLoaded && w.busy ? (
+        {!loaded && busy ? (
           <div className="queue-skeleton" role="status" aria-label="Loading queue">
             <span className="sr-only">Loading queue…</span>
             {[0, 1, 2].map((row) => (
@@ -67,10 +93,10 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
               </div>
             ))}
           </div>
-        ) : !w.queuesLoaded ? (
+        ) : !loaded ? (
           <div className="empty-state">
             <p>Queue could not be loaded.</p>
-            <button onClick={w.refreshQueues}>Retry queue</button>
+            <button onClick={onRefresh}>Retry queue</button>
           </div>
         ) : groups.length === 0 ? (
           <div className="empty-state">
@@ -80,8 +106,8 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
           </div>
         ) : (
           groups.map((group) => {
-            const saving = w.queueAction?.gameId === group.game.id;
-            const checking = w.previewGameId === group.game.id;
+            const saving = action?.gameId === group.game.id;
+            const checking = previewGameId === group.game.id;
             return (
               <section
                 className="queue-game-group"
@@ -94,7 +120,7 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
                 </div>
                 <div className="queue-items">
                   {group.items.map((item) => {
-                    const achievement = w.achievementFor(group.game.id, item.achievement_id);
+                    const achievement = achievementFor(group.game.id, item.achievement_id);
                     const description = achievement?.description || 'No description available.';
                     const savedDate = [
                       formatTimestamp(item.unlocked_at, zone),
@@ -121,8 +147,14 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
                             className="icon-button"
                             aria-label={`Edit date for ${item.name}`}
                             title={savedDate}
-                            disabled={w.busy}
-                            onClick={() => setEditing({ gameId: group.game.id, item })}
+                            disabled={busy}
+                            onClick={() =>
+                              setEditing({
+                                gameId: group.game.id,
+                                userId: group.user_id,
+                                achievementId: item.achievement_id,
+                              })
+                            }
                           >
                             <CalendarDays size={18} />
                           </button>
@@ -135,7 +167,7 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
                             className="icon-button"
                             aria-label={`Remove ${item.name} from queue`}
                             title={`Remove ${item.name} from queue`}
-                            disabled={w.busy}
+                            disabled={busy}
                             onClick={(event) => {
                               if (event.detail === 0) {
                                 const key = `${group.game.id}:${item.achievement_id}`;
@@ -146,7 +178,7 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
                                   ...removeOrder.slice(0, index).reverse(),
                                 ];
                               }
-                              w.remove(group.game.id, [item.achievement_id]);
+                              onRemove(group.game.id, [item.achievement_id]);
                             }}
                           >
                             <X size={18} />
@@ -159,8 +191,8 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
                 <button
                   className="primary queue-group-apply"
                   aria-label={`Apply changes for ${group.game.title}`}
-                  disabled={w.busy}
-                  onClick={() => w.prepareApply(group.game.id)}
+                  disabled={busy}
+                  onClick={() => onPrepareApply(group.game.id)}
                 >
                   {checking ? <LoaderCircle className="spinner" size={18} /> : <Check size={18} />}
                   {checking ? 'Checking changes…' : 'Apply changes'}
@@ -175,25 +207,25 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
             );
           })
         )}
-        {activeApply ? (
+        {applyStatus !== 'idle' ? (
           <p className="info-note" role="status">
             <LoaderCircle className="spinner" size={20} />
             <span>
-              {w.operation.kind === 'recovery'
+              {applyStatus === 'recovery'
                 ? 'Checking previous changes. Please keep the app open.'
                 : 'Applying changes. Keep the app open until the result is available.'}
             </span>
           </p>
         ) : null}
       </div>
-      {editing ? (
+      {editing && editingItem ? (
         <QueueDateModal
-          item={editing.item}
-          description={w.achievementFor(editing.gameId, editing.item.achievement_id)?.description}
+          item={editingItem}
+          description={achievementFor(editing.gameId, editing.achievementId)?.description}
           zone={zone}
-          busy={w.busy}
+          busy={busy}
           onClose={() => setEditing(null)}
-          onSave={(iso) => w.saveDates(editing.gameId, { [editing.item.achievement_id]: iso })}
+          onSave={(iso) => onSaveDates(editing.gameId, { [editing.achievementId]: iso })}
         />
       ) : null}
     </aside>
