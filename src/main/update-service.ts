@@ -1,6 +1,8 @@
 export type UpdateStatus =
   'available' | 'up-to-date' | 'no-release' | 'unavailable' | 'unsupported-target';
 
+export const UPDATE_CHECK_FAILED_MESSAGE = 'Could not check for updates. Please try again later.';
+
 export interface UpdateCheck {
   status: UpdateStatus;
   currentVersion: string;
@@ -164,15 +166,11 @@ export class UpdateService {
   private async performCheck(): Promise<UpdateCheck> {
     const { platform, architecture } = this.options;
     if (!['darwin', 'win32'].includes(platform) || !['arm64', 'x64'].includes(architecture))
-      return this.result(
-        'unsupported-target',
-        'Updates are available for macOS and Windows on Intel or ARM64.',
-      );
+      return this.result('unsupported-target', 'Update checks are not available on this device.');
     const current = stableVersion(this.options.currentVersion);
-    if (!current)
-      return this.result('unavailable', 'This app version cannot be checked for stable updates.');
+    if (!current) return this.result('unavailable', UPDATE_CHECK_FAILED_MESSAGE);
     if (!Number.isFinite(this.timeoutMs) || this.timeoutMs <= 0 || this.timeoutMs > 30000)
-      return this.result('unavailable', 'The update check is not configured correctly.');
+      return this.result('unavailable', UPDATE_CHECK_FAILED_MESSAGE);
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -184,7 +182,7 @@ export class UpdateService {
       });
       return await Promise.race([this.fetchRelease(current, controller.signal), timeout]);
     } catch {
-      return this.result('unavailable', 'The update check could not finish. Try again later.');
+      return this.result('unavailable', UPDATE_CHECK_FAILED_MESSAGE);
     } finally {
       clearTimeout(timer);
       controller.abort();
@@ -227,10 +225,7 @@ export class UpdateService {
       }
       if (response.status === 404) {
         void response.body?.cancel().catch(() => {});
-        return this.result(
-          'no-release',
-          'No public release is available. The repository may still be private.',
-        );
+        return this.result('no-release', UPDATE_CHECK_FAILED_MESSAGE);
       }
       if (response.status !== 200) {
         void response.body?.cancel().catch(() => {});
@@ -262,7 +257,7 @@ export class UpdateService {
       )
         throw new Error('Invalid release page.');
       if (!newer(latest, current))
-        return this.result('up-to-date', 'You are up to date.', latest.value);
+        return this.result('up-to-date', 'Your app is up to date.', latest.value);
       const target = `${this.options.platform === 'darwin' ? 'macos' : 'windows'}-${this.options.architecture}`;
       const asset = `gog-achievements-${latest.value}-${target}.${this.options.platform === 'darwin' ? 'dmg' : 'exe'}`;
       const matches = release.assets.filter(

@@ -174,6 +174,7 @@ export const historyInputSchema = z.object({ gameId: idSchema.optional() }).stri
 export const applyInputSchema = z.object({ previewToken: tokenSchema }).strict();
 export const ipcSchemas = {
   initialize: z.undefined(),
+  checkForUpdates: z.undefined(),
   login: z.undefined(),
   logout: z.undefined(),
   listGames: z.undefined(),

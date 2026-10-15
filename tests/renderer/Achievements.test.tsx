@@ -103,6 +103,20 @@ it('focuses a revealed queued title without a duplicate add action', async () =>
     screen.queryByRole('button', { name: 'Add Secret title to queue' }),
   ).not.toBeInTheDocument();
 });
+
+it.each([
+  ['Locked B', 'locked-b', false],
+  ['Secret title', 'secret', true],
+] as const)('keeps keyboard focus on %s after it is queued', async (name, id, hidden) => {
+  const user = userEvent.setup();
+  const { onAdd, props, rerender } = show();
+  if (hidden) await user.click(screen.getByRole('button', { name: 'Reveal' }));
+  screen.getByRole('button', { name: `Add ${name} to queue` }).focus();
+  await user.keyboard('{Enter}');
+  expect(onAdd).toHaveBeenCalledExactlyOnceWith([id]);
+  rerender(<Achievements {...props} queued={new Set([id])} />);
+  expect(screen.getByRole('heading', { name })).toHaveFocus();
+});
 it('keeps filters and refresh stable while skeleton rows load', async () => {
   const user = userEvent.setup();
   const { props, rerender } = show();

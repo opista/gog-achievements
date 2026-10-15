@@ -18,9 +18,15 @@ function fixture() {
     },
   } as unknown as IpcMain;
   const api = createDemoApi({ delayMs: 0 });
-  installIpc(ipc, window, api);
+  const checkForUpdates = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  installIpc(ipc, window, api, { checkForUpdates });
   const event = { sender: webContents, senderFrame: mainFrame } as unknown as IpcMainInvokeEvent;
-  return { api, event, invoke: (request: unknown, from = event) => handle(from, request) };
+  return {
+    api,
+    checkForUpdates,
+    event,
+    invoke: (request: unknown, from = event) => handle(from, request),
+  };
 }
 test('IPC denies other windows and subframes before any API action', async () => {
   const { api, event, invoke } = fixture();
@@ -93,4 +99,27 @@ test('IPC exposes account-local queue discovery and accepts only optional valida
     expect((await invoke(request)).ok).toBe(false);
   expect(queues).toHaveBeenCalledOnce();
   expect(history).toHaveBeenCalledTimes(2);
+});
+
+test('IPC permits only trusted, no-payload update checks without GOG sign-in', async () => {
+  const { checkForUpdates, event, invoke } = fixture();
+  for (const from of [
+    { ...event, senderFrame: {} },
+    { ...event, sender: {} },
+    { ...event, senderFrame: null },
+  ]) {
+    expect(await invoke({ method: 'checkForUpdates' }, from as IpcMainInvokeEvent)).toMatchObject({
+      ok: false,
+      error: { code: 'IPC_DENIED' },
+    });
+  }
+  for (const payload of [null, 'https://example.com', { url: 'https://example.com' }]) {
+    expect(await invoke({ method: 'checkForUpdates', payload })).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    });
+  }
+  expect(checkForUpdates).not.toHaveBeenCalled();
+  expect(await invoke({ method: 'checkForUpdates' })).toEqual({ ok: true, data: undefined });
+  expect(checkForUpdates).toHaveBeenCalledExactlyOnceWith();
 });

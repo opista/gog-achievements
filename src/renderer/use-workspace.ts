@@ -340,25 +340,23 @@ export function useWorkspace(api: DesktopApi) {
   function refreshAchievements(currentState = false) {
     const selected = currentGame.current;
     if (!selected) return;
-    void run(
-      currentState ? 'Checking current state…' : 'Refreshing achievements…',
-      'achievements',
-      async () => {
-        if (!achievementsLoaded) {
-          await loadGame(selected);
-          return;
-        }
-        setPreview(null);
-        const data = currentState
-          ? await api.checkCurrentState({ gameId: selected.id })
-          : await api.listAchievements(selected.id);
-        assertOwner(data.user_id);
-        const nextQueue = await api.getQueue(selected.id);
-        updateQueue(selected.id, nextQueue);
-        setAchievements(data.achievements);
-        setAchievementCache((previous) => ({ ...previous, [selected.id]: data.achievements }));
-      },
-    );
+    void run('Refreshing achievements…', 'achievements', async () => {
+      if (!achievementsLoaded) {
+        await loadGame(selected);
+        if (currentState) setView('browse');
+        return;
+      }
+      setPreview(null);
+      const data = currentState
+        ? await api.checkCurrentState({ gameId: selected.id })
+        : await api.listAchievements(selected.id);
+      assertOwner(data.user_id);
+      const nextQueue = await api.getQueue(selected.id);
+      updateQueue(selected.id, nextQueue);
+      setAchievements(data.achievements);
+      setAchievementCache((previous) => ({ ...previous, [selected.id]: data.achievements }));
+      if (currentState) setView('browse');
+    });
   }
   async function mutate(
     gameId: string,

@@ -99,7 +99,7 @@ export function resolveLocalDate(
       return {
         iso: null,
         choices: matches,
-        error: 'This time occurs twice. Choose an explicit UTC offset.',
+        error: 'This time occurs twice when clocks change. Choose the first or second time.',
       };
     const epoch = desired - offset * 1000;
     if (epoch < 0)

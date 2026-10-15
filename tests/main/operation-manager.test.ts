@@ -48,7 +48,10 @@ test('startup checks exact version; browsing keeps string IDs and uses the CLI',
     command.kind === 'help'
       ? { exitCode: 0, result: { ok: true, data: { version: '0.2.0' } } }
       : original(command, onSpawn);
-  await expect(api.initialize()).rejects.toThrow('version');
+  await expect(api.initialize()).rejects.toMatchObject({
+    code: 'CLI_VERSION_MISMATCH',
+    message: expect.stringContaining('Reinstall the app'),
+  });
 });
 test('queue edits make no apply call and preserve the actual saved queue', async () => {
   const { api, cli } = await fixture();
@@ -117,7 +120,9 @@ test('preview creates immutable reviewed bytes and applies exactly once after ex
   expect(history[0]?.report?.results[0]?.status).toBe('restored');
   expect(history[0]).not.toHaveProperty('process');
   expect(history[0]).not.toHaveProperty('digest');
-  await expect(api.apply({ previewToken: preview.token })).rejects.toThrow('Preview');
+  await expect(api.apply({ previewToken: preview.token })).rejects.toMatchObject({
+    code: 'STALE_PREVIEW',
+  });
   expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
 });
 test('draft edits, account changes and restarts invalidate prior previews', async () => {
@@ -125,21 +130,27 @@ test('draft edits, account changes and restarts invalidate prior previews', asyn
   const file = await seed(store);
   const first = await api.preview({ gameId });
   await api.removeAchievements({ gameId, achievementIds: ['101'] });
-  await expect(api.apply({ previewToken: first.token })).rejects.toThrow('Preview');
+  await expect(api.apply({ previewToken: first.token })).rejects.toMatchObject({
+    code: 'STALE_PREVIEW',
+  });
   await seed(store);
   const second = await api.preview({ gameId });
   cli.account = '998877';
-  await expect(api.apply({ previewToken: second.token })).rejects.toThrow('account changed');
+  await expect(api.apply({ previewToken: second.token })).rejects.toMatchObject({
+    code: 'ACCOUNT_CHANGED',
+  });
   cli.account = userId;
   const third = await api.preview({ gameId });
   await expect(
     new OperationManager(cli, store, '0.1.0', '0.3.0', gone).apply({ previewToken: third.token }),
-  ).rejects.toThrow('Preview');
+  ).rejects.toMatchObject({ code: 'STALE_PREVIEW' });
   const fourth = await api.preview({ gameId });
   const queue = makeQueue();
   queue.items[0]!.unlocked_at = '2020-02-01T00:00:00Z';
   await writeFile(file, JSON.stringify(queue));
-  await expect(api.apply({ previewToken: fourth.token })).rejects.toThrow('queue changed');
+  await expect(api.apply({ previewToken: fourth.token })).rejects.toMatchObject({
+    code: 'STALE_PREVIEW',
+  });
   expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
 });
 test('snapshot tampering prevents a write and consumes the token', async () => {
@@ -149,7 +160,9 @@ test('snapshot tampering prevents a write and consumes the token', async () => {
   const snapshot = store.snapshotPath(userId, preview.token);
   await chmod(snapshot, 0o600);
   await writeFile(snapshot, '{}');
-  await expect(api.apply({ previewToken: preview.token })).rejects.toThrow('queue changed');
+  await expect(api.apply({ previewToken: preview.token })).rejects.toMatchObject({
+    code: 'STALE_PREVIEW',
+  });
   expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
 });
 test('concurrent apply and sign-out are rejected; attempt is persisted before a child write', async () => {
@@ -161,14 +174,19 @@ test('concurrent apply and sign-out are rejected; attempt is persisted before a 
     finish = resolve;
   });
   const first = api.apply({ previewToken: preview.token });
-  await waitFor(() => cli.calls.some((command) => command.kind === 'queue-apply'));
-  expect((await store.operations(userId))[0]?.state).toBe('running');
-  await expect(api.apply({ previewToken: preview.token })).rejects.toThrow('Another operation');
-  await expect(api.logout()).rejects.toThrow('Another operation');
-  await expect(api.listQueues()).rejects.toThrow('Another operation');
-  await expect(api.history({})).rejects.toThrow('Another operation');
-  finish();
-  await first;
+  try {
+    await waitFor(() => cli.calls.some((command) => command.kind === 'queue-apply'));
+    expect((await store.operations(userId))[0]?.state).toBe('running');
+    await expect(api.apply({ previewToken: preview.token })).rejects.toMatchObject({
+      code: 'BUSY',
+    });
+    await expect(api.logout()).rejects.toMatchObject({ code: 'BUSY' });
+    await expect(api.listQueues()).rejects.toMatchObject({ code: 'BUSY' });
+    await expect(api.history({})).rejects.toMatchObject({ code: 'BUSY' });
+  } finally {
+    finish();
+    await first;
+  }
   expect(api.currentOperation.kind).toBe('idle');
   expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
 });
@@ -246,8 +264,8 @@ test('a surviving child blocks all new CLI operations until identity checks show
   const startup = await api.initialize();
   expect(startup.operation.kind).toBe('recovery');
   expect(cli.calls).toHaveLength(0);
-  await expect(api.logout()).rejects.toThrow('Another operation');
-  await expect(api.listGames()).rejects.toThrow('Another operation');
+  await expect(api.logout()).rejects.toMatchObject({ code: 'BUSY' });
+  await expect(api.listGames()).rejects.toMatchObject({ code: 'BUSY' });
   alive = false;
   await api.refreshRecovery();
   await api.initialize();
@@ -262,7 +280,7 @@ test('unknown process inspection fails closed and leaves lock files untouched', 
   const lock = `${store.snapshotPath(userId, record.id)}.lock`;
   await writeFile(lock, '{"pid":12345}');
   expect((await api.initialize()).operation.kind).toBe('recovery');
-  await expect(api.login()).rejects.toThrow('Another operation');
+  await expect(api.login()).rejects.toMatchObject({ code: 'BUSY' });
   expect(await readFile(lock, 'utf8')).toContain('12345');
   expect(cli.calls).toHaveLength(0);
 });
@@ -365,7 +383,9 @@ test('a cleanup failure preserves the saved report, queue, and external lock wit
   expect(await readFile(lock, 'utf8')).toBe('{"pid":98765}');
   expect((await store.operations(userId))[0]?.report).toEqual(result.report);
   expect(saved.mock.calls.some(([record]) => record.report?.complete)).toBe(true);
-  await expect(api.apply({ previewToken: preview.token })).rejects.toThrow('Preview');
+  await expect(api.apply({ previewToken: preview.token })).rejects.toMatchObject({
+    code: 'STALE_PREVIEW',
+  });
   expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
 });
 

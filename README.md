@@ -64,7 +64,7 @@ Packages are currently unsigned. Developer ID signing, notarization and Windows 
 
 Release Please maintains a version pull request from conventional commits on `main`. Merging that pull request creates a draft release, runs the checks and native builds, verifies all packages and checksums, then publishes the release. Read the [release guide](docs/RELEASING.md) for setup and retries.
 
-Installed apps check for a newer public stable release once at startup. Choose **GOG Achievements → Check for Updates…** on macOS, or **Help → Check for Updates…** on Windows, to check again. An update notice opens the matching installer in your browser; you install it yourself. Notices wait until active CLI work finishes. Update checks need no GOG or GitHub login.
+Installed apps check for a newer public stable release once at startup. Open the top-right account menu and choose **Check for updates…** to check again. This is also available through **GOG Achievements → Check for Updates…** on macOS, or **Help → Check for Updates…** on Windows. An update notice opens the matching installer in your browser; you install it yourself. Notices wait until active CLI work finishes. Update checks need no GOG or GitHub login.
 
 | Area            | Responsibility                                                                 |
 | --------------- | ------------------------------------------------------------------------------ |

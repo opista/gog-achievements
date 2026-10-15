@@ -125,7 +125,7 @@ export interface ApplyResult {
   report: Report | null;
   error?: PublicError;
 }
-export interface DesktopApi {
+export interface WorkspaceApi {
   readonly isDemo: boolean;
   initialize(): Promise<InitializeResult>;
   login(): Promise<AuthStatus>;
@@ -142,6 +142,9 @@ export interface DesktopApi {
   history(input: { gameId?: string }): Promise<OperationRecord[]>;
   checkCurrentState(input: { gameId: string }): Promise<AchievementsData>;
   onOperation(listener: (state: OperationState) => void): () => void;
+}
+export interface DesktopApi extends WorkspaceApi {
+  checkForUpdates(): Promise<void>;
 }
 export type ApiMethod = Exclude<keyof DesktopApi, 'isDemo' | 'onOperation'>;
 export type IpcResult = { ok: true; data: unknown } | { ok: false; error: PublicError };

@@ -19,11 +19,15 @@ export function Dialog({ title, children, footer, onClose, busy = false, wide = 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const target =
-      ref.current?.querySelector<HTMLElement>('[data-initial-focus]') ??
-      ref.current?.querySelector<HTMLElement>(FOCUSABLE);
+      ref.current?.querySelector<HTMLElement>('[data-initial-focus]:not(:disabled)') ??
+      ref.current?.querySelector<HTMLElement>(FOCUSABLE) ??
+      ref.current;
     target?.focus();
     return () => previous?.focus();
   }, []);
+  useEffect(() => {
+    if (busy && !ref.current?.querySelector(FOCUSABLE)) ref.current?.focus();
+  }, [busy]);
   return (
     <div className="dialog-backdrop">
       <div
@@ -31,6 +35,7 @@ export function Dialog({ title, children, footer, onClose, busy = false, wide = 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className={`dialog ${wide ? 'dialog-wide' : ''}`}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && !busy) {
@@ -41,7 +46,13 @@ export function Dialog({ title, children, footer, onClose, busy = false, wide = 
           const controls = [...(ref.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
           const first = controls[0];
           const last = controls.at(-1);
-          if (event.shiftKey && document.activeElement === first) {
+          if (!first || !last) {
+            event.preventDefault();
+            ref.current?.focus();
+          } else if (document.activeElement === ref.current) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+          } else if (event.shiftKey && document.activeElement === first) {
             event.preventDefault();
             last?.focus();
           } else if (!event.shiftKey && document.activeElement === last) {

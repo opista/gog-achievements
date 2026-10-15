@@ -280,7 +280,7 @@ for (const scenario of ['partial', 'unknown'] as const) {
       await confirmApply(page);
       await expect(
         page.getByRole('heading', {
-          name: scenario === 'partial' ? 'Results need attention' : 'Outcome unknown',
+          name: scenario === 'partial' ? 'Results need attention' : 'Could not confirm changes',
           exact: true,
         }),
       ).toBeVisible();
@@ -292,9 +292,10 @@ for (const scenario of ['partial', 'unknown'] as const) {
         await expect(page.getByText('Not attempted', { exact: true })).toBeVisible();
       }
       await expect(
-        page.getByRole('button', { name: 'Check current state', exact: true }),
+        page.getByRole('button', { name: 'Refresh achievements', exact: true }),
       ).toBeEnabled();
-      await page.getByRole('button', { name: 'Check current state', exact: true }).click();
+      await page.getByRole('button', { name: 'Refresh achievements', exact: true }).click();
+      await expect(page.locator('.achievement-list')).toBeVisible();
       const history = page.getByRole('button', { name: 'History', exact: true });
       await expect(history).toBeEnabled();
       await history.click();
@@ -495,3 +496,67 @@ for (const display of [
     });
   });
 }
+
+test('account menu offers update checks before and after GOG sign-in', async ({ page }) => {
+  await page.getByLabel('Account menu').click();
+  const check = page.getByRole('button', { name: 'Check for updates…', exact: true });
+  await expect(check).toBeEnabled();
+  await check.click();
+  await expect(page.locator('.account-popover').getByRole('alert')).toHaveText(
+    'Update checks are available in the installed app.',
+  );
+  await expect(page.locator('.error-banner')).toHaveCount(0);
+  await page.getByLabel('Account menu').click();
+  await signIn(page);
+  await page.getByLabel('Account menu').click();
+  await expect(check).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
+});
+
+test('account menu dismisses with Escape, outside clicks and keyboard focus changes', async ({
+  page,
+}) => {
+  const menu = page.getByLabel('Account menu');
+  const popover = page.locator('.account-popover');
+  await menu.click();
+  await expect(popover).toBeVisible();
+  await menu.press('Escape');
+  await expect(popover).toBeHidden();
+  await expect(menu).toBeFocused();
+  await menu.click();
+  await page.getByRole('heading', { name: 'GOG Achievements', exact: true }).click();
+  await expect(popover).toBeHidden();
+  await menu.click();
+  await page.getByRole('button', { name: 'Check for updates…', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(popover).toBeHidden();
+});
+
+test('keyboard queue actions keep their place and the empty queue explains how to add', async ({
+  page,
+}) => {
+  await signIn(page);
+  const add = page.getByRole('button', {
+    name: 'Add Legend of The Afterlife to queue',
+    exact: true,
+  });
+  await add.focus();
+  await add.press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'Legend of The Afterlife', exact: true }),
+  ).toBeFocused();
+  const remove = page.getByRole('button', { name: /^Remove .+ from queue$/ });
+  while (await remove.count()) {
+    const count = await remove.count();
+    const button = remove.last();
+    await expect(button).toBeEnabled();
+    await button.focus();
+    await button.press('Enter');
+    await expect(remove).toHaveCount(count - 1);
+  }
+  const queue = page.getByRole('complementary', { name: 'Achievement queue' });
+  await expect(queue.getByRole('heading', { name: 'Queue', exact: true })).toBeFocused();
+  await expect(
+    queue.getByText('Use + beside an achievement to add it here.', { exact: true }),
+  ).toBeVisible();
+});

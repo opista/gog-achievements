@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { CircleAlert, History, Info } from 'lucide-react';
+import { CircleAlert, History } from 'lucide-react';
 import type { ApplyResult, OperationRecord } from '../../shared/api';
 import { formatTimestamp } from '../date-time';
 import { ExactDate, STATUS_LABELS } from './Review';
@@ -21,18 +21,22 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
   return (
     <section className="results">
       <h2>
-        {unknown ? 'Outcome unknown' : attention ? 'Results need attention' : 'Results confirmed'}
+        {unknown
+          ? 'Could not confirm changes'
+          : attention
+            ? 'Results need attention'
+            : 'Results confirmed'}
       </h2>
       <p className="muted">
         {unknown
-          ? 'The operation ended without a confirmed report. Check current state before another attempt.'
+          ? 'Refresh achievements to check which achievements are unlocked before trying again.'
           : attention
             ? 'Review each result. No further changes will be sent automatically.'
             : hasSkipped
-              ? 'Restorations confirmed. Existing unlocks kept their dates.'
+              ? 'Existing unlocks kept their dates.'
               : 'All requested unlocks and dates were confirmed.'}
       </p>
-      {result.error ? (
+      {result.error && !unknown ? (
         <p className="info-note">
           <CircleAlert size={20} />
           <span>{result.error.message}</span>
@@ -58,7 +62,6 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
                     >
                       {STATUS_LABELS[item.status]}
                     </span>
-                    {item.error_code ? <small>{item.error_code}</small> : null}
                   </th>
                   <td>
                     <ExactDate iso={item.requested_unlocked_at} zone={zone} />
@@ -71,15 +74,7 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
             </tbody>
           </table>
         </div>
-      ) : (
-        <p className="info-note">
-          <Info size={20} />
-          <span>
-            A live refresh shows current achievement state. It cannot prove which operation caused
-            an unlock.
-          </span>
-        </p>
-      )}
+      ) : null}
     </section>
   );
 }

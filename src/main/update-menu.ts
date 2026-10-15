@@ -8,7 +8,7 @@ import type {
   MessageBoxOptions,
   Shell,
 } from 'electron';
-import { UpdateService, type UpdateCheck } from './update-service';
+import { UpdateService, UPDATE_CHECK_FAILED_MESSAGE, type UpdateCheck } from './update-service';
 
 interface UpdateMenuOptions {
   app: Pick<App, 'isPackaged' | 'getVersion'>;
@@ -93,7 +93,6 @@ export function installUpdates(options: UpdateMenuOptions) {
           type: 'info',
           title: 'Check for Updates',
           message: 'Update checks are available in the installed app.',
-          detail: 'This is a development build. Install a packaged release to check for updates.',
           buttons: ['OK'],
         });
         return;
@@ -101,7 +100,7 @@ export function installUpdates(options: UpdateMenuOptions) {
       const result = notice.result;
       if (result.status !== 'available') {
         await showMessage({
-          type: result.status === 'unavailable' ? 'warning' : 'info',
+          type: ['unavailable', 'no-release'].includes(result.status) ? 'warning' : 'info',
           title: 'Check for Updates',
           message: result.message,
           buttons: ['OK'],
@@ -117,7 +116,7 @@ export function installUpdates(options: UpdateMenuOptions) {
         message: result.latestVersion
           ? `GOG Achievements ${result.latestVersion} is available.`
           : 'A new version of GOG Achievements is available.',
-        detail: `${result.message}\n\nDownload opens your browser. Install the new version when you are ready.`,
+        detail: 'Download the new version in your browser, then open it to install.',
         buttons: ['Download', 'Later'],
         defaultId: 0,
         cancelId: 1,
@@ -161,7 +160,7 @@ export function installUpdates(options: UpdateMenuOptions) {
       const result = await service.check().catch((): UpdateCheck => ({
         status: 'unavailable',
         currentVersion: app.getVersion(),
-        message: 'Updates could not be checked. Try again later.',
+        message: UPDATE_CHECK_FAILED_MESSAGE,
       }));
       if (disposed) return;
       if (result.status === 'available' || manualRequested) {

@@ -32,9 +32,10 @@ function QueueHarness({
   );
 }
 
-async function connected({ witcher = false, missingDetails = false } = {}) {
+async function connected({ witcher = false, missingDetails = false, singleCyber = false } = {}) {
   const api = createDemoApi({ delayMs: 0 });
   await api.login();
+  if (singleCyber) await api.removeAchievements({ gameId: '1', achievementIds: ['2', '3'] });
   if (witcher) await api.addAchievements({ gameId: '2', achievementIds: ['201'] });
   const list = api.listAchievements.bind(api);
   api.listAchievements = async (gameId) => {
@@ -154,7 +155,52 @@ it.each(['before', 'after'] as const)(
     else await api.removeAchievements({ gameId: '1', achievementIds: ['1', '2', '3'] });
     render(<QueueHarness api={api} />);
     expect(await screen.findByText('Queue is empty.')).toBeVisible();
+    expect(screen.getByText('Use + beside an achievement to add it here.')).toBeVisible();
     expect(screen.queryByText(/Results are saved in history/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Apply changes for/ })).not.toBeInTheDocument();
   },
 );
+
+it('keeps keyboard focus on the next remove action after removing an achievement', async () => {
+  const { user, api } = await connected();
+  const remove = vi.spyOn(api, 'removeAchievements');
+  screen.getByRole('button', { name: 'Remove The World from queue' }).focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Remove Frequent Flyer from queue' })).toHaveFocus(),
+  );
+  expect(remove).toHaveBeenCalledExactlyOnceWith({ gameId: '1', achievementIds: ['1'] });
+});
+
+it('continues to the next game after removing the final achievement in a group', async () => {
+  const { user } = await connected({ singleCyber: true, witcher: true });
+  screen.getByRole('button', { name: 'Remove The World from queue' }).focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Remove Passed the Trial from queue' }),
+    ).toHaveFocus(),
+  );
+  expect(
+    screen.queryByRole('region', { name: 'Queue for Cyberpunk 2077' }),
+  ).not.toBeInTheDocument();
+});
+
+it('focuses the queue heading after removing its final achievement', async () => {
+  const { user } = await connected({ singleCyber: true });
+  screen.getByRole('button', { name: 'Remove The World from queue' }).focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Queue' })).toHaveFocus());
+  expect(screen.getByText('Use + beside an achievement to add it here.')).toBeVisible();
+});
+
+it('restores focus to the original remove action when removal fails', async () => {
+  const { user, api } = await connected();
+  vi.spyOn(api, 'removeAchievements').mockRejectedValueOnce(new Error('Fixture failure'));
+  const remove = screen.getByRole('button', { name: 'Remove The World from queue' });
+  remove.focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(remove).toBeEnabled());
+  expect(remove).toHaveFocus();
+  expect(screen.queryByText('Your queue and results are kept.')).not.toBeInTheDocument();
+});

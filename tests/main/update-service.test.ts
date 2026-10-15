@@ -81,7 +81,9 @@ it.each([
   ['1.9007199254740992.0', '1.9007199254740993.0', 'available'],
 ])('compares numeric stable versions %s and %s', async (currentVersion, latest, status) => {
   const { service } = fixture({ currentVersion }, release(latest));
-  expect((await service.check()).status).toBe(status);
+  const result = await service.check();
+  expect(result.status).toBe(status);
+  if (status === 'up-to-date') expect(result.message).toBe('Your app is up to date.');
 });
 
 it.each(['linux', 'freebsd'])(
@@ -98,19 +100,27 @@ it('rejects unsupported architectures and invalid local configuration without a 
     { architecture: 'ia32' },
     { currentVersion: '1.0.0-beta.1' },
     { repository: '../private' },
+    { timeoutMs: 0 },
   ]) {
     const { service, fetch } = fixture(options);
-    expect(['unavailable', 'unsupported-target']).toContain((await service.check()).status);
+    const result = await service.check();
+    expect(['unavailable', 'unsupported-target']).toContain(result.status);
+    expect(result.message).toBe(
+      options.architecture
+        ? 'Update checks are not available on this device.'
+        : 'Could not check for updates. Please try again later.',
+    );
     expect(fetch).not.toHaveBeenCalled();
   }
 });
 
-it('reports private or missing public releases as no-release, never up-to-date', async () => {
+it('treats a missing published release as retryable, never up-to-date', async () => {
   const { service, fetch } = fixture();
   fetch.mockResolvedValue(new Response('private metadata', { status: 404 }));
   const result = await service.check();
   expect(result.status).toBe('no-release');
-  expect(result.message).toMatch(/No public release/);
+  expect(result.message).toBe('Could not check for updates. Please try again later.');
+  expect(result.message).not.toMatch(/repository|private|public release/i);
   expect(await service.openDownload()).toBe(false);
 });
 
@@ -119,6 +129,7 @@ it.each([403, 429, 500])('handles HTTP %s without exposing response data', async
   fetch.mockResolvedValue(new Response('fixture-secret-token', { status }));
   const result = await service.check();
   expect(result.status).toBe('unavailable');
+  expect(result.message).toBe('Could not check for updates. Please try again later.');
   expect(JSON.stringify(result)).not.toContain('fixture-secret-token');
 });
 
@@ -253,4 +264,14 @@ it('reports a failed browser launch without throwing or accepting a caller URL',
   openExternal.mockRejectedValueOnce(new Error('Browser unavailable'));
   expect(await service.openDownload()).toBe(false);
   expect(openExternal).toHaveBeenCalledTimes(1);
+});
+
+it('finds a published update on retry after a release was unavailable', async () => {
+  const { service, fetch } = fixture();
+  fetch.mockResolvedValueOnce(new Response(null, { status: 404 }));
+  expect((await service.check()).status).toBe('no-release');
+  const result = await service.check();
+  expect(result.status).toBe('available');
+  expect(result.latestVersion).toBe('1.10.0');
+  expect(fetch).toHaveBeenCalledTimes(2);
 });

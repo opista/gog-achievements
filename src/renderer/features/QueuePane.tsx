@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CalendarDays, Check, FileText, Info, LoaderCircle, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { CalendarDays, Check, FileText, LoaderCircle, X } from 'lucide-react';
 import type { QueueItem } from '../../shared/api';
 import type { Workspace } from '../use-workspace';
 import { Art } from '../components/Art';
@@ -19,6 +19,9 @@ export function QueuePane(props: Props) {
 
 function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props) {
   const [editing, setEditing] = useState<{ gameId: string; item: QueueItem } | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const removeButtons = useRef(new Map<string, HTMLButtonElement>());
+  const removalFocus = useRef<string[] | null>(null);
   const groups = w.queues
     .filter((item) => item.items.length > 0)
     .toSorted(
@@ -27,6 +30,17 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
         left.game.id.localeCompare(right.game.id),
     );
   const total = groups.reduce((count, group) => count + group.items.length, 0);
+  const removeOrder = groups.flatMap((group) =>
+    group.items.map((item) => `${group.game.id}:${item.achievement_id}`),
+  );
+  useEffect(() => {
+    if (w.busy || !removalFocus.current) return;
+    const target = removalFocus.current
+      .map((key) => removeButtons.current.get(key))
+      .find((button) => button && !button.disabled);
+    (target ?? headingRef.current)?.focus();
+    removalFocus.current = null;
+  }, [w.busy, w.queues]);
   const activeApply =
     w.view === 'applying' || w.operation.kind === 'apply' || w.operation.kind === 'recovery';
   return (
@@ -34,7 +48,9 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
       <PaneResize pane="Queue" width={width} min={336} max={504} onResize={onResize} />
       <div className="queue-header">
         <div>
-          <h2>Queue</h2>
+          <h2 ref={headingRef} tabIndex={-1}>
+            Queue
+          </h2>
           <p className="muted">
             {total} achievement{total === 1 ? '' : 's'} · {groups.length} game
             {groups.length === 1 ? '' : 's'}
@@ -60,6 +76,7 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
           <div className="empty-state">
             <FileText size={34} />
             <p>Queue is empty.</p>
+            <p>Use + beside an achievement to add it here.</p>
           </div>
         ) : (
           groups.map((group) => {
@@ -110,10 +127,27 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
                             <CalendarDays size={18} />
                           </button>
                           <button
+                            ref={(element) => {
+                              const key = `${group.game.id}:${item.achievement_id}`;
+                              if (element) removeButtons.current.set(key, element);
+                              else removeButtons.current.delete(key);
+                            }}
                             className="icon-button"
                             aria-label={`Remove ${item.name} from queue`}
+                            title={`Remove ${item.name} from queue`}
                             disabled={w.busy}
-                            onClick={() => w.remove(group.game.id, [item.achievement_id])}
+                            onClick={(event) => {
+                              if (event.detail === 0) {
+                                const key = `${group.game.id}:${item.achievement_id}`;
+                                const index = removeOrder.indexOf(key);
+                                removalFocus.current = [
+                                  key,
+                                  ...removeOrder.slice(index + 1),
+                                  ...removeOrder.slice(0, index).reverse(),
+                                ];
+                              }
+                              w.remove(group.game.id, [item.achievement_id]);
+                            }}
                           >
                             <X size={18} />
                           </button>
@@ -144,18 +178,14 @@ function SignedInQueuePane({ workspace: w, zone, demo, width, onResize }: Props)
         {activeApply ? (
           <p className="info-note" role="status">
             <LoaderCircle className="spinner" size={20} />
-            <span>Applying changes. Keep the app open until the result is available.</span>
+            <span>
+              {w.operation.kind === 'recovery'
+                ? 'Checking previous changes. Please keep the app open.'
+                : 'Applying changes. Keep the app open until the result is available.'}
+            </span>
           </p>
         ) : null}
       </div>
-      {w.error ? (
-        <div className="queue-actions">
-          <p className="field-error">
-            <Info size={16} />
-            The last request did not complete. Your queue and results are kept.
-          </p>
-        </div>
-      ) : null}
       {editing ? (
         <QueueDateModal
           item={editing.item}

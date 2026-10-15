@@ -7,7 +7,7 @@ import { QueueStore } from './queue-store';
 import { OperationManager } from './operation-manager';
 import { installIpc } from './ipc';
 import { createDemoApi } from '../shared/demo-api';
-import { IPC_OPERATION, type DesktopApi, type OperationState } from '../shared/api';
+import { IPC_OPERATION, type WorkspaceApi, type OperationState } from '../shared/api';
 import { DesktopError } from './errors';
 import { installUpdates } from './update-menu';
 import packageMetadata from '../../package.json';
@@ -31,7 +31,7 @@ else {
   void app
     .whenReady()
     .then(async () => {
-      let api: DesktopApi;
+      let api: WorkspaceApi;
       if (demo) api = createDemoApi();
       else {
         // Resolving the bundled CLI never falls back to PATH or a source checkout.
@@ -93,7 +93,7 @@ else {
         isBusy: () => operation.kind !== 'idle',
         repository: new URL(packageMetadata.repository.url).pathname.replace(/^\/|\.git$/g, ''),
       });
-      installIpc(ipcMain, currentWindow, api);
+      installIpc(ipcMain, currentWindow, api, updates);
       const unsubscribe = api.onOperation((state) => {
         operation = state;
         if (state.kind === 'idle') updates?.onIdle();

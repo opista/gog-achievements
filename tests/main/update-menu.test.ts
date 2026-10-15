@@ -211,6 +211,7 @@ test('a packaged startup checks once and Download uses only the retained service
     title: 'Update available',
     message: 'GOG Achievements 0.2.0 is available.',
     buttons: ['Download', 'Later'],
+    detail: 'Download the new version in your browser, then open it to install.',
     cancelId: 1,
   });
   expect(f.openDownload).toHaveBeenCalledExactlyOnceWith();
@@ -243,6 +244,9 @@ for (const status of ['up-to-date', 'no-release', 'unavailable', 'unsupported-ta
     await f.updates.checkForUpdates();
     expect(f.notices()).toHaveLength(1);
     expect(f.notices()[0]?.message).toBe(result.message);
+    expect(f.notices()[0]?.type).toBe(
+      ['unavailable', 'no-release'].includes(status) ? 'warning' : 'info',
+    );
     expect(f.openDownload).not.toHaveBeenCalled();
     f.updates.cleanup();
   });
@@ -391,7 +395,7 @@ test('unexpected check failures stay silent at startup and show safe manual feed
   await settle();
   expect(f.showMessageBox).not.toHaveBeenCalled();
   await f.updates.checkForUpdates();
-  expect(f.notices()[0]?.message).toBe('Updates could not be checked. Try again later.');
+  expect(f.notices()[0]?.message).toBe('Could not check for updates. Please try again later.');
   expect(JSON.stringify(f.notices())).not.toContain('private request details');
   f.updates.cleanup();
 });
