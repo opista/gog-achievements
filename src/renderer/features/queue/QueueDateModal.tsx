@@ -1,8 +1,8 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import type { QueueItem } from '../../shared/api';
-import { Dialog } from '../components/Dialog';
-import { localFields, localTimeOccurrence, offsetLabel, resolveLocalDate } from '../date-time';
+import type { QueueItem } from '../../../shared/api';
+import { Dialog } from '../../components/Dialog';
+import { localFields, localTimeOccurrence, offsetLabel, resolveLocalDate } from '../../date-time';
 import './QueueDateModal.css';
 
 interface Props {
