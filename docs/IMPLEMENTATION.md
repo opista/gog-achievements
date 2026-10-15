@@ -1,6 +1,22 @@
 # Implementation notes
 
-The main process uses a standalone Nest application context. `DesktopModule` provides the CLI runner, queue store and existing operation manager; `WorkspaceController` exposes typed methods through Electron IPC Bridge. Constructor dependencies use explicit `@Inject` tokens so Vite builds do not depend on a decorator-metadata compiler transform. Nest provides dependency injection and lifecycle hooks; no HTTP server is started.
+The main process uses a standalone Nest application context. `DesktopModule` connects the window and app actions to the IPC boundary. In production it imports `WorkspaceModule`, which creates the CLI runner, queue store, process probe and feature services. `WorkspaceController` exposes the module's `WorkspaceApi` through Electron IPC Bridge. Constructor dependencies use explicit `@Inject` tokens so Vite builds do not depend on a decorator-metadata compiler transform. Nest provides dependency injection and lifecycle hooks; no HTTP server is started.
+
+`WorkspaceModule` exports one `WorkspaceService` facade. Every route passes through its recovery gate and the same `OperationCoordinator` before a feature service runs. Internal feature services are not exported for IPC access. Each Nest application context has one operation lock, event stream and preview store; separate contexts do not share them.
+
+| Owner                                 | Responsibility                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------------- |
+| `WorkspaceService`                    | Stable workspace API, recovery gate and routing through the shared lock       |
+| `application/OperationCoordinator`    | Operation serialization and events for every feature                          |
+| `features/account/SessionService`     | CLI/platform checks, sign-in/out, account identity and ownership checks       |
+| `features/library/LibraryService`     | Validated game and achievement reads                                          |
+| `features/queue/QueueService`         | Saved drafts, edits, grouped date saves and reconciliation with saved results |
+| `features/apply/ApplyService`         | Preview snapshots, confirmed writes, durable reports and cleanup              |
+| `features/history/HistoryService`     | Account-filtered public operation records                                     |
+| `features/recovery/RecoveryService`   | Discovery and inspection of surviving writers                                 |
+| `features/recovery/RecoveryLifecycle` | Recovery polling and timer cleanup on shutdown                                |
+
+The application layer also owns the shared `PreviewStore` and pure report validation. Session changes, queue edits and current-state checks invalidate the same tokens that apply consumes. Every grouped date-save response must match the account, game and client before the next group is sent. Cleanup rereads surface account or game mismatches; temporary read failures can still return the last valid draft. Reports remain durable before confirmed rows are removed; partial and unknown results never cause an automatic retry. The CLI runner, process probe and versions are injectable without loading Electron, so tests can exercise the production Nest graph with a fake CLI.
 
 Each IPC method uses `IpcBoundary` to check the sender's window and main frame, validate its payload with the existing Zod schema, and return a sanitized result envelope with a stable error code. Standalone Nest does not automatically apply HTTP guards or pipes. The preload bundles the bridge helper for the sandbox and exposes a readiness promise before the renderer starts. A renderer transport adapter unwraps envelopes into the existing `DesktopApi`, so feature components and demo behavior keep their current contract. Main-to-renderer operation events retain one narrow subscription with an unsubscribe function.
 

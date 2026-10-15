@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile, chmod, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { OperationManager } from '../../src/main/operation-manager';
+import { createWorkspace } from './create-workspace';
 import { QueueStore, digestBytes, type StoredOperation } from '../../src/main/queue-store';
 import type { Report } from '../../src/shared/api';
 import type { ProcessProbe } from '../../src/main/process-identity';
@@ -18,7 +18,7 @@ async function fixture(probe: ProcessProbe = gone) {
   folders.push(folder);
   const store = new QueueStore(folder);
   const cli = new FakeCli();
-  const api = new OperationManager(cli, store, '0.1.0', '0.3.0', probe);
+  const api = createWorkspace(cli, store, '0.1.0', '0.3.0', probe);
   return { folder, store, cli, api };
 }
 async function seed(store: QueueStore) {
@@ -99,6 +99,31 @@ test('a grouped save failure retains actual prior changes and never applies', as
   expect(queue?.items[1]?.unlocked_at).toBe('2020-01-01T00:00:00Z');
   expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
 });
+test.each(['account', 'game', 'client'] as const)(
+  'a date response for another %s stops the remaining save groups',
+  async (changed) => {
+    const { api, cli } = await fixture();
+    await api.addAchievements({ gameId, achievementIds: ['101', '102'] });
+    const run = cli.run.bind(cli);
+    cli.run = async (command, onSpawn) => {
+      const outcome = await run(command, onSpawn);
+      if (command.kind !== 'queue-date' || !outcome.result.ok) return outcome;
+      const queue = structuredClone(outcome.result.data) as ReturnType<typeof makeQueue>;
+      if (changed === 'account') queue.user_id = '998877';
+      else if (changed === 'game') queue.game.id = '998877';
+      else queue.game.client_id = '998877';
+      return { ...outcome, result: { ok: true, data: queue } };
+    };
+    await expect(
+      api.setDates({
+        gameId,
+        dates: { '101': '2020-02-01T00:00:00Z', '102': '2020-03-01T00:00:00Z' },
+      }),
+    ).rejects.toMatchObject({ code: changed === 'account' ? 'ACCOUNT_CHANGED' : 'GAME_CHANGED' });
+    expect(cli.calls.filter((command) => command.kind === 'queue-date')).toHaveLength(1);
+    expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
+  },
+);
 test('preview creates immutable reviewed bytes and applies exactly once after explicit token use', async () => {
   const { api, cli, store } = await fixture();
   await seed(store);
@@ -142,7 +167,7 @@ test('draft edits, account changes and restarts invalidate prior previews', asyn
   cli.account = userId;
   const third = await api.preview({ gameId });
   await expect(
-    new OperationManager(cli, store, '0.1.0', '0.3.0', gone).apply({ previewToken: third.token }),
+    createWorkspace(cli, store, '0.1.0', '0.3.0', gone).apply({ previewToken: third.token }),
   ).rejects.toMatchObject({ code: 'STALE_PREVIEW' });
   const fourth = await api.preview({ gameId });
   const queue = makeQueue();
@@ -216,7 +241,7 @@ test.each(['transport', 'wrong-account', 'invalid-report'] as const)(
     expect(result.report).toBeNull();
     expect((await api.getQueue(gameId))?.items).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain('fixture-secret');
-    const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
+    const reopened = createWorkspace(cli, store, '0.1.0', '0.3.0', gone);
     await reopened.initialize();
     expect((await reopened.history({ gameId }))[0]?.state).toBe('unknown');
     expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
@@ -267,7 +292,6 @@ test('a surviving child blocks all new CLI operations until identity checks show
   await expect(api.logout()).rejects.toMatchObject({ code: 'BUSY' });
   await expect(api.listGames()).rejects.toMatchObject({ code: 'BUSY' });
   alive = false;
-  await api.refreshRecovery();
   await api.initialize();
   expect(api.currentOperation.kind).toBe('idle');
   expect((await store.operations(userId))[0]?.state).toBe('unknown');
@@ -336,7 +360,7 @@ test('partial apply clears confirmed rows and retains every unresolved status', 
     '105',
     '106',
   ]);
-  const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
+  const reopened = createWorkspace(cli, store, '0.1.0', '0.3.0', gone);
   expect((await reopened.getQueue(gameId))?.items).toHaveLength(3);
   expect((await reopened.history({ gameId }))[0]?.report).toEqual(result.report);
   expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
@@ -434,12 +458,46 @@ async function saveOldAttempt(
   return { file, snapshot, record };
 }
 
+test.each(['account', 'game'] as const)(
+  'a cleanup reread for another %s does not fall back to an earlier draft',
+  async (changed) => {
+    const { api, cli, store } = await fixture();
+    await saveOldAttempt(store);
+    const run = cli.run.bind(cli);
+    let reads = 0;
+    cli.run = async (command, onSpawn) => {
+      const outcome = await run(command, onSpawn);
+      if (command.kind !== 'queue-show' || ++reads !== 2 || !outcome.result.ok) return outcome;
+      const queue = structuredClone(outcome.result.data) as ReturnType<typeof makeQueue>;
+      if (changed === 'account') queue.user_id = '998877';
+      else queue.game.id = '998877';
+      return { ...outcome, result: { ok: true, data: queue } };
+    };
+    await expect(api.getQueue(gameId)).rejects.toMatchObject({
+      code: changed === 'account' ? 'ACCOUNT_CHANGED' : 'GAME_CHANGED',
+    });
+    expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
+  },
+);
+
+test('a temporary cleanup reread failure keeps the last valid draft without replay', async () => {
+  const { api, cli, store } = await fixture();
+  await saveOldAttempt(store);
+  let reads = 0;
+  cli.failure = ({ kind }) => {
+    if (kind === 'queue-show' && ++reads === 2) throw new Error('Temporary local read failure.');
+  };
+  expect((await api.getQueue(gameId))?.items).toHaveLength(1);
+  expect((await api.getQueue(gameId))?.items).toEqual([]);
+  expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
+});
+
 test('reopening a draft from the old apply behavior clears saved confirmed requests without a new apply', async () => {
   const { api, cli, store } = await fixture();
   const { snapshot, record } = await saveOldAttempt(store);
   const before = await store.bytes(snapshot.path);
   expect((await api.getQueue(gameId))?.items).toEqual([]);
-  const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
+  const reopened = createWorkspace(cli, store, '0.1.0', '0.3.0', gone);
   expect((await reopened.getQueue(gameId))?.items).toEqual([]);
   expect((await reopened.history({ gameId }))[0]?.report).toEqual(record.report);
   expect(await store.bytes(snapshot.path)).toEqual(before);
@@ -511,7 +569,7 @@ test('global queue discovery lists only current-account nonempty drafts without 
   await saveDraft(store, foreign);
   expect((await api.listQueues()).map((queue) => queue.game.id)).toEqual(['200', '300']);
   expect(cli.calls.map((command) => command.kind)).toEqual(['auth-status']);
-  const reopened = new OperationManager(cli, store, '0.1.0', '0.3.0', gone);
+  const reopened = createWorkspace(cli, store, '0.1.0', '0.3.0', gone);
   expect((await reopened.listQueues()).map((queue) => queue.game.id)).toEqual(['200', '300']);
   expect((await store.drafts('998877'))[0]?.user_id).toBe('998877');
 });

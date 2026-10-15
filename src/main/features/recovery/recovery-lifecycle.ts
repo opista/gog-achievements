@@ -1,22 +1,15 @@
-import {
-  Inject,
-  Injectable,
-  Optional,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
-import { OperationManager } from './operation-manager';
+import { Inject, Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { RecoveryService } from './recovery.service';
 
 @Injectable()
 export class RecoveryLifecycle implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | undefined;
 
-  constructor(@Optional() @Inject(OperationManager) private readonly manager?: OperationManager) {}
+  constructor(@Inject(RecoveryService) private readonly recovery: RecoveryService) {}
 
   onModuleInit(): void {
-    if (!this.manager) return;
     this.timer = setInterval(() => {
-      void this.manager?.refreshRecovery().catch(() => {});
+      void this.recovery.refresh().catch(() => {});
     }, 3000);
     this.timer.unref();
   }
