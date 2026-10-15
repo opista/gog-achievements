@@ -56,10 +56,10 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
       page.locator('.game-heading').getByRole('heading', { name: 'Cyberpunk 2077', exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Apply changes for Cyberpunk 2077', exact: true }),
+      page.getByRole('button', { name: 'Review changes for Cyberpunk 2077', exact: true }),
     ).toBeEnabled();
     for (const name of ['Full Body Conversion', 'Daemon In The Shell']) {
-      const lock = page.getByRole('button', { name: `Queue lock for ${name}`, exact: true });
+      const lock = page.getByRole('button', { name: `Queue re-lock for ${name}`, exact: true });
       await expect(lock).toBeEnabled();
       await lock.click();
       await expect(
@@ -67,12 +67,15 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
       ).toBeEnabled();
     }
     await page
-      .getByRole('button', { name: 'Apply changes for Cyberpunk 2077', exact: true })
+      .getByRole('button', { name: 'Review changes for Cyberpunk 2077', exact: true })
       .click();
     const confirmation = page.getByRole('dialog', { name: 'Apply 5 achievements?', exact: true });
     await expect(confirmation).toBeVisible();
     await confirmation
-      .getByRole('button', { name: 'Unlock 3 achievements and lock 2 achievements', exact: true })
+      .getByRole('button', {
+        name: 'Unlock 3 achievements and re-lock 2 achievements',
+        exact: true,
+      })
       .click();
     await expect(
       page.getByText('All requested changes were confirmed.', { exact: true }),

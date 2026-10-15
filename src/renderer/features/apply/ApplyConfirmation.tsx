@@ -28,7 +28,7 @@ export function ApplyConfirmation({
   const describe = (count: number) => `${count} achievement${count === 1 ? '' : 's'}`;
   const actionLabel = [
     unlocks ? `Unlock ${describe(unlocks)}` : '',
-    locks ? `lock ${describe(locks)}` : '',
+    locks ? `re-lock ${describe(locks)}` : '',
   ]
     .filter(Boolean)
     .join(' and ');
@@ -37,7 +37,7 @@ export function ApplyConfirmation({
     locks === 0
       ? 'Achievements to unlock'
       : unlocks === 0
-        ? 'Achievements to lock'
+        ? 'Achievements to re-lock'
         : 'Achievements to change';
   return (
     <Dialog

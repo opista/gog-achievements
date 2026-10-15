@@ -31,7 +31,7 @@ it('does not call a pending or failed initial library read an empty library', as
   expect(screen.queryByText('No GOG games found')).not.toBeInTheDocument();
   const queue = screen.getByRole('complementary', { name: 'Achievement queue' });
   expect(within(queue).getByText('The World')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' })).toBeEnabled();
   expect(screen.queryByText('Loading queue…')).not.toBeInTheDocument();
   expect(screen.queryByText('Queue could not be loaded.')).not.toBeInTheDocument();
 });
@@ -48,7 +48,7 @@ it('separates pending and failed game reads from an empty achievement list and r
   expect(screen.queryByText('No achievements available for this game.')).not.toBeInTheDocument();
   expect(screen.queryByText('Loading queue…')).not.toBeInTheDocument();
   expect(screen.getByText('3 achievements · 1 game')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' })).toBeDisabled();
   await act(async () => request.reject(new Error('Achievement request failed.')));
   await screen.findByText('Game data could not be loaded.');
   expect(screen.queryByText('No achievements available for this game.')).not.toBeInTheDocument();
@@ -56,7 +56,7 @@ it('separates pending and failed game reads from an empty achievement list and r
   expect(screen.getByText('3 achievements · 1 game')).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Retry game data' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' })).toBeEnabled(),
   );
   expect(screen.queryByText('Game data could not be loaded.')).not.toBeInTheDocument();
 });
@@ -74,7 +74,7 @@ it('uses the achievement empty message only after a successful empty read', asyn
   await screen.findByText('No achievements available for this game.');
   expect(screen.queryByText('Game data could not be loaded.')).not.toBeInTheDocument();
   expect(
-    screen.queryByRole('button', { name: 'Apply changes for Cyberpunk 2077' }),
+    screen.queryByRole('button', { name: 'Review changes for Cyberpunk 2077' }),
   ).not.toBeInTheDocument();
   expect(screen.getByText('0 achievements · 0 games')).toBeVisible();
 });
@@ -203,7 +203,7 @@ it('ends queue loading with a local retry when both the initial library and save
   expect(screen.getByRole('button', { name: 'Retry queue' })).toBeEnabled();
   await user.click(screen.getByRole('button', { name: 'Retry queue' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' })).toBeEnabled(),
   );
   expect(queues).toHaveBeenCalledTimes(2);
   expect(screen.queryByText('Queue could not be loaded.')).not.toBeInTheDocument();
@@ -265,11 +265,11 @@ it('leaves a failed confirmation check for review instead of retrying an unrelat
   vi.spyOn(api, 'preview').mockRejectedValueOnce(
     new Error('Select Apply changes to review again.'),
   );
-  await user.click(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' }));
+  await user.click(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' }));
   const alert = await screen.findByRole('alert');
   expect(within(alert).getAllByRole('button')).toHaveLength(1);
   expect(within(alert).getByRole('button', { name: 'Dismiss error' })).toBeEnabled();
-  expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' })).toBeEnabled();
   expect(library).not.toHaveBeenCalled();
   expect(apply).not.toHaveBeenCalled();
 });

@@ -29,19 +29,19 @@ Requires macOS 13.5 or later, or Windows 10/11. Current builds are unsigned, so 
 
 1. Open the app and choose **Sign in with GOG**.
 2. Choose a game from **Your Library**. You can search for it by name.
-3. Select **Unlock** beside a locked achievement to add it to the **Queue**. Unlock uses a green open padlock. Lock uses an amber closed padlock. These markers stay the same in the achievement list, queue, confirmation and results.
+3. Select **Unlock** beside a locked achievement to add it to the **Queue**. The list keeps its description and current state visible. **Queued** replaces the action; select it to remove the request. The queue groups requests under **Unlock** and **Re-lock**, with an open or closed padlock.
 4. To set its unlock date, select the calendar button beside the queued achievement, choose the date and time, then select **Save date**. Dates use your computer’s local time.
-5. Close the game, then select **Apply changes** in its queue. Check the achievements and dates in the confirmation window, then select **Unlock N achievements** to confirm.
+5. Close the game, then select **Review changes** in its queue. Check the achievements and dates in the confirmation window, then select **Unlock N achievements** to confirm.
 
 You can queue achievements from several games and apply one game at a time. Your queue is saved between visits. Use **×** to remove an item before applying.
 
 Only unlock achievements you have already earned. Existing unlock dates cannot be edited. Queue changes stay on your computer until you confirm the reviewed actions.
 
-### Lock achievements again
+### Re-lock achievements
 
-When the CLI supports locking, unlocked achievements have a lock button. Select it to queue a **Lock** action. Its previous unlock date stays visible in the queue and history. Lock actions have no date editor.
+When the CLI supports locking, unlocked achievements have a **Re-lock** button. Select it to queue a re-lock request. Its previous unlock date stays available in the confirmation and history. Re-lock requests have no date editor.
 
-Unlock and lock actions can share one game queue. **Apply changes** checks the whole queue before showing one confirmation. Its button states the actions, for example **Unlock 2 achievements and lock 2 achievements**. Cancel sends no changes. After applying, check each result; uncertain and unattempted actions stay queued. Removing a queue item only cancels that request.
+Unlock and re-lock requests can share one game queue. **Review changes** checks the whole queue before showing one confirmation. Its button states the actions, for example **Unlock 2 achievements and re-lock 2 achievements**. Cancel sends no changes. After applying, check each result; uncertain and unattempted actions stay queued. Removing a queue item only cancels that request.
 
 ## History and updates
 

@@ -248,6 +248,9 @@ export function App({ api }: { api: DesktopApi }) {
                   zone={zone}
                   supportsLocking={w.supportsLocking}
                   onAdd={w.add}
+                  onRemove={(ids) => {
+                    if (w.game) void w.remove(w.game.id, ids);
+                  }}
                   onRefresh={() => w.refreshAchievements()}
                 />
               ) : (

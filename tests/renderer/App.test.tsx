@@ -31,7 +31,7 @@ async function confirm(
   game = 'Cyberpunk 2077',
 ) {
   const apply = vi.spyOn(api, 'apply');
-  await user.click(screen.getByRole('button', { name: `Apply changes for ${game}` }));
+  await user.click(screen.getByRole('button', { name: `Review changes for ${game}` }));
   await screen.findByRole('dialog');
   expect(apply).not.toHaveBeenCalled();
   return apply;
@@ -69,7 +69,7 @@ describe('desktop restoration flow', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' }));
+    await user.click(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' }));
     await screen.findByRole('dialog');
     await user.click(screen.getByRole('button', { name: 'Unlock 3 achievements' }));
     await screen.findByRole('heading', { name: 'Results confirmed' });
@@ -77,7 +77,7 @@ describe('desktop restoration flow', () => {
     expect(apply).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Queue is empty.')).toBeVisible();
     expect(
-      screen.queryByRole('button', { name: 'Apply changes for Cyberpunk 2077' }),
+      screen.queryByRole('button', { name: 'Review changes for Cyberpunk 2077' }),
     ).not.toBeInTheDocument();
   });
   it('edits one date in a compact dialog without applying', async () => {
@@ -187,7 +187,7 @@ describe('desktop restoration flow', () => {
     await connected('empty');
     expect(screen.getByRole('heading', { name: 'No GOG games found' })).toBeVisible();
     expect(screen.queryByText('Cyberpunk 2077')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Apply changes for/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Review changes for/ })).not.toBeInTheDocument();
   });
   it('initializes once under StrictMode', async () => {
     const api = createDemoApi({ delayMs: 0 });

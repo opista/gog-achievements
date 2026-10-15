@@ -221,7 +221,7 @@ it('shows confirmed locks with their previous dates, retaining uncertain null-da
   expect(screen.getByText(/Previous unlock:/)).toBeVisible();
   expect(
     within(screen.getByRole('region', { name: 'Needs attention' })).getByText(
-      'Lock: Outcome uncertain',
+      'Re-lock: Outcome uncertain',
     ),
   ).toBeVisible();
   expect(screen.queryByText('Already locked')).not.toBeInTheDocument();

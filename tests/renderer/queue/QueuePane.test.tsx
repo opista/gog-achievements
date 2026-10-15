@@ -146,7 +146,9 @@ it('keeps Apply scoped to one game and waits for the separate final confirmation
   const { user, api } = await connected({ witcher: true });
   const preview = vi.spyOn(api, 'preview');
   const apply = vi.spyOn(api, 'apply');
-  const button = screen.getByRole('button', { name: 'Apply changes for The Witcher 3: Wild Hunt' });
+  const button = screen.getByRole('button', {
+    name: 'Review changes for The Witcher 3: Wild Hunt',
+  });
   await user.click(button);
   await waitFor(() => expect(button).toBeEnabled());
   expect(preview).toHaveBeenCalledExactlyOnceWith({ gameId: '2' });
@@ -165,7 +167,7 @@ it.each(['before', 'after'] as const)(
     expect(await screen.findByText('Queue is empty.')).toBeVisible();
     expect(screen.getByText('Use the buttons beside achievements to add them here.')).toBeVisible();
     expect(screen.queryByText(/Results are saved in history/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Apply changes for/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Review changes for/ })).not.toBeInTheDocument();
   },
 );
 

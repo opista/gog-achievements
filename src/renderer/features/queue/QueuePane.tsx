@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { CalendarDays, Check, FileText, LoaderCircle, X } from 'lucide-react';
+import { ArrowRight, CalendarDays, FileText, LoaderCircle, X } from 'lucide-react';
 import type { Achievement, Queue } from '../../../shared/api';
-import { Art } from '../../components/Art';
-import { AchievementActionLabel } from '../../components/AchievementAction';
+import { achievementActionName, AchievementActionLabel } from '../../components/AchievementAction';
 import { PaneResize } from '../../components/PaneResize';
 import { formatTimestamp, localTimeOccurrence } from '../../date-time';
 import { QueueDateModal } from './QueueDateModal';
@@ -42,7 +41,6 @@ function SignedInQueuePane({
   onSaveDates,
   onPrepareApply,
   zone,
-  demo,
   width,
   onResize,
 }: Props) {
@@ -54,13 +52,23 @@ function SignedInQueuePane({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const removeButtons = useRef(new Map<string, HTMLButtonElement>());
   const removalFocus = useRef<string[] | null>(null);
-  const groups = queueGroups(queues);
+  const groups = queueGroups(queues).map((queue) => ({
+    ...queue,
+    actions: (['unlock', 'lock'] as const)
+      .map((action) => ({
+        action,
+        items: queue.items.filter((item) => (item.action ?? 'unlock') === action),
+      }))
+      .filter((group) => group.items.length > 0),
+  }));
   const editingItem = queues
     .find((queue) => queue.game.id === editing?.gameId && queue.user_id === editing.userId)
     ?.items.find((item) => item.achievement_id === editing?.achievementId);
   const total = groups.reduce((count, group) => count + group.items.length, 0);
   const removeOrder = groups.flatMap((group) =>
-    group.items.map((item) => `${group.game.id}:${item.achievement_id}`),
+    group.actions.flatMap((actionGroup) =>
+      actionGroup.items.map((item) => `${group.game.id}:${item.achievement_id}`),
+    ),
   );
   useEffect(() => {
     if (busy || !removalFocus.current) return;
@@ -120,90 +128,94 @@ function SignedInQueuePane({
                   <span className="muted">{group.items.length}</span>
                 </div>
                 <div className="queue-items">
-                  {group.items.map((item) => {
-                    const achievement = achievementFor(group.game.id, item.achievement_id);
-                    const description = achievement?.description || 'No description available.';
-                    const locking = item.action === 'lock';
-                    const date = locking ? item.previous_unlocked_at : item.unlocked_at;
-                    const savedDate = [formatTimestamp(date, zone), localTimeOccurrence(date, zone)]
-                      .filter(Boolean)
-                      .join(' · ');
-                    return (
-                      <div className="queue-row" key={item.achievement_id}>
-                        <Art
-                          name={item.name}
-                          kind="achievement"
-                          image={locking ? achievement?.image_unlocked : achievement?.image_locked}
-                          demo={demo}
-                        />
-                        <div className="queue-row-content">
-                          <strong title={item.name}>{item.name}</strong>
-                          <AchievementActionLabel action={locking ? 'lock' : 'unlock'} />
-                          <p className="queue-description" title={description}>
-                            {description}
-                          </p>
-                          {locking ? (
-                            <small className="queue-previous-date" title={date}>
-                              Previous unlock: {savedDate}
-                            </small>
-                          ) : null}
-                        </div>
-                        <div className="queue-row-controls">
-                          {!locking ? (
-                            <button
-                              className="icon-button"
-                              aria-label={`Edit date for ${item.name}`}
-                              title={savedDate}
-                              disabled={busy}
-                              onClick={() =>
-                                setEditing({
-                                  gameId: group.game.id,
-                                  userId: group.user_id,
-                                  achievementId: item.achievement_id,
-                                })
-                              }
-                            >
-                              <CalendarDays size={18} />
-                            </button>
-                          ) : null}
-                          <button
-                            ref={(element) => {
-                              const key = `${group.game.id}:${item.achievement_id}`;
-                              if (element) removeButtons.current.set(key, element);
-                              else removeButtons.current.delete(key);
-                            }}
-                            className="icon-button"
-                            aria-label={`Remove ${item.name} from queue`}
-                            title={`Remove ${item.name} from queue`}
-                            disabled={busy}
-                            onClick={(event) => {
-                              if (event.detail === 0) {
-                                const key = `${group.game.id}:${item.achievement_id}`;
-                                const index = removeOrder.indexOf(key);
-                                removalFocus.current = [
-                                  key,
-                                  ...removeOrder.slice(index + 1),
-                                  ...removeOrder.slice(0, index).reverse(),
-                                ];
-                              }
-                              onRemove(group.game.id, [item.achievement_id]);
-                            }}
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {group.actions.map((actionGroup) => (
+                    <section
+                      className="queue-action-group"
+                      aria-label={`${achievementActionName(actionGroup.action)} requests for ${group.game.title}`}
+                      key={actionGroup.action}
+                    >
+                      <h4 className="queue-action-heading">
+                        <AchievementActionLabel action={actionGroup.action} />
+                        <span className="muted">{actionGroup.items.length}</span>
+                      </h4>
+                      {actionGroup.items.map((item) => {
+                        const achievement = achievementFor(group.game.id, item.achievement_id);
+                        const description = achievement?.description || 'No description available.';
+                        const locking = item.action === 'lock';
+                        const date = locking ? item.previous_unlocked_at : item.unlocked_at;
+                        const savedDate = [
+                          formatTimestamp(date, zone),
+                          localTimeOccurrence(date, zone),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ');
+                        return (
+                          <div className="queue-row" key={item.achievement_id}>
+                            <div className="queue-row-content">
+                              <strong title={item.name}>{item.name}</strong>
+                              <p className="queue-description" title={description}>
+                                {description}
+                              </p>
+                            </div>
+                            <div className="queue-row-controls">
+                              {!locking ? (
+                                <button
+                                  className="icon-button"
+                                  aria-label={`Edit date for ${item.name}`}
+                                  title={savedDate}
+                                  disabled={busy}
+                                  onClick={() =>
+                                    setEditing({
+                                      gameId: group.game.id,
+                                      userId: group.user_id,
+                                      achievementId: item.achievement_id,
+                                    })
+                                  }
+                                >
+                                  <CalendarDays size={18} />
+                                </button>
+                              ) : null}
+                              <button
+                                ref={(element) => {
+                                  const key = `${group.game.id}:${item.achievement_id}`;
+                                  if (element) removeButtons.current.set(key, element);
+                                  else removeButtons.current.delete(key);
+                                }}
+                                className="icon-button"
+                                aria-label={`Remove ${item.name} from queue`}
+                                title={`Remove ${item.name} from queue`}
+                                disabled={busy}
+                                onClick={(event) => {
+                                  if (event.detail === 0) {
+                                    const key = `${group.game.id}:${item.achievement_id}`;
+                                    const index = removeOrder.indexOf(key);
+                                    removalFocus.current = [
+                                      key,
+                                      ...removeOrder.slice(index + 1),
+                                      ...removeOrder.slice(0, index).reverse(),
+                                    ];
+                                  }
+                                  onRemove(group.game.id, [item.achievement_id]);
+                                }}
+                              >
+                                <X size={18} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </section>
+                  ))}
                 </div>
                 <button
                   className="primary queue-group-apply"
-                  aria-label={`Apply changes for ${group.game.title}`}
+                  aria-label={`Review changes for ${group.game.title}`}
                   disabled={busy}
                   onClick={() => onPrepareApply(group.game.id)}
                 >
-                  {checking ? <LoaderCircle className="spinner" size={18} /> : <Check size={18} />}
-                  {checking ? 'Checking changes…' : 'Apply changes'}
+                  {checking ? <LoaderCircle className="spinner" size={18} /> : null}
+                  {checking ? 'Checking changes…' : 'Review changes'}
+                  {!checking ? <ArrowRight size={18} aria-hidden="true" /> : null}
                 </button>
                 {saving ? (
                   <p className="queue-progress" role="status">

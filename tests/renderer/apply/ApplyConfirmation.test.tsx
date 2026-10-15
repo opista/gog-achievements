@@ -180,13 +180,15 @@ it.each([false, true])(
     };
     const { onApply } = confirmation(mixed ? [row(), lock] : [lock]);
     expect(
-      screen.getByRole('list', { name: mixed ? 'Achievements to change' : 'Achievements to lock' }),
+      screen.getByRole('list', {
+        name: mixed ? 'Achievements to change' : 'Achievements to re-lock',
+      }),
     ).toBeVisible();
-    expect(screen.getByText('Lock', { exact: true })).toBeVisible();
+    expect(screen.getByText('Re-lock', { exact: true })).toBeVisible();
     expect(screen.getByText('Previous unlock', { exact: true })).toBeVisible();
     expect(
       screen.getByRole('button', {
-        name: mixed ? 'Unlock 1 achievement and lock 1 achievement' : 'Lock 1 achievement',
+        name: mixed ? 'Unlock 1 achievement and re-lock 1 achievement' : 'Re-lock 1 achievement',
       }),
     ).toBeEnabled();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();

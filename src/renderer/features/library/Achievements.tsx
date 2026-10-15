@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { Eye, RefreshCw } from 'lucide-react';
+import { Check, Eye, RefreshCw } from 'lucide-react';
 import type { Achievement, AchievementAction } from '../../../shared/api';
 import { Art } from '../../components/Art';
-import { AchievementActionIcon, AchievementActionLabel } from '../../components/AchievementAction';
+import { achievementActionName, AchievementActionIcon } from '../../components/AchievementAction';
 import { formatDate, formatTimestamp } from '../../date-time';
 import { AchievementSkeleton } from './AchievementSkeleton';
 
@@ -20,6 +20,7 @@ interface Props {
   zone: string;
   supportsLocking?: boolean;
   onAdd(ids: string[], action?: AchievementAction): void;
+  onRemove(ids: string[]): void;
   onRefresh(): void;
 }
 export function Achievements({
@@ -31,6 +32,7 @@ export function Achievements({
   zone,
   supportsLocking = false,
   onAdd,
+  onRemove,
   onRefresh,
 }: Props) {
   const controlsBlocked = busy || loading;
@@ -69,7 +71,7 @@ export function Achievements({
       </div>
       <div className="achievement-column-labels">
         <span>Achievement</span>
-        <span>Status</span>
+        <span>Action</span>
       </div>
       <div className="achievement-list">
         {loading ? (
@@ -81,6 +83,10 @@ export function Achievements({
             const queuedAction = queued.get(item.id);
             const isQueued = queuedAction !== undefined;
             const action = item.unlocked ? 'lock' : 'unlock';
+            const actionName = achievementActionName(queuedAction ?? action);
+            const buttonLabel = isQueued
+              ? `Undo queued ${actionName.toLowerCase()} for ${name}`
+              : `Queue ${actionName.toLowerCase()} for ${name}`;
             return (
               <article className="achievement-row" key={item.id} aria-label={name}>
                 <div className="achievement-main">
@@ -97,7 +103,14 @@ export function Achievements({
                       className="achievement-name"
                       tabIndex={-1}
                       ref={(element) => {
-                        if (element && focusTarget.current === item.id && isQueued) {
+                        if (
+                          element &&
+                          focusTarget.current === item.id &&
+                          !concealed &&
+                          !isQueued &&
+                          item.unlocked &&
+                          !supportsLocking
+                        ) {
                           element.focus();
                           focusTarget.current = null;
                         }
@@ -110,17 +123,32 @@ export function Achievements({
                         {item.description || 'No description available.'}
                       </p>
                     ) : null}
+                    {!concealed ? (
+                      <p
+                        className="achievement-current-state"
+                        title={
+                          item.unlocked
+                            ? `Existing unlock: ${formatTimestamp(item.unlocked_at, zone)}. This date is read-only.`
+                            : undefined
+                        }
+                      >
+                        {item.unlocked
+                          ? `Unlocked${item.unlocked_at ? ` · ${formatDate(item.unlocked_at, zone)}` : ''}`
+                          : 'Locked'}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="achievement-status">
-                    {!concealed && !isQueued && (!item.unlocked || supportsLocking) ? (
+                    {!concealed && (isQueued || !item.unlocked || supportsLocking) ? (
                       <button
-                        className={`achievement-action-button achievement-action-${action}`}
-                        aria-label={`Queue ${action} for ${name}`}
-                        title={`Queue ${action} for ${name}`}
+                        className={`achievement-action-button${isQueued ? ' achievement-queued-button' : ''}`}
+                        aria-label={buttonLabel}
+                        title={buttonLabel}
                         disabled={controlsBlocked}
                         onClick={(event) => {
                           if (event.detail === 0) focusTarget.current = item.id;
-                          if (item.unlocked) onAdd([item.id], 'lock');
+                          if (isQueued) onRemove([item.id]);
+                          else if (item.unlocked) onAdd([item.id], 'lock');
                           else onAdd([item.id]);
                         }}
                         ref={(element) => {
@@ -130,8 +158,12 @@ export function Achievements({
                           }
                         }}
                       >
-                        <AchievementActionIcon action={action} />
-                        <span>{item.unlocked ? 'Lock' : 'Unlock'}</span>
+                        {isQueued ? (
+                          <Check size={16} aria-hidden="true" />
+                        ) : (
+                          <AchievementActionIcon action={action} />
+                        )}
+                        <span>{isQueued ? 'Queued' : actionName}</span>
                       </button>
                     ) : null}
                     {concealed ? (
@@ -139,22 +171,7 @@ export function Achievements({
                         <Eye size={16} />
                         Reveal
                       </button>
-                    ) : queuedAction ? (
-                      <AchievementActionLabel
-                        action={queuedAction}
-                        className="status"
-                        label={`${queuedAction === 'lock' ? 'Lock' : 'Unlock'} queued`}
-                      />
-                    ) : item.unlocked ? (
-                      <AchievementActionLabel
-                        action="unlock"
-                        className="status"
-                        label={`Unlocked ${item.unlocked_at ? formatDate(item.unlocked_at, zone) : ''}`.trim()}
-                        title={`Existing unlock: ${formatTimestamp(item.unlocked_at, zone)}. This date is read-only.`}
-                      />
-                    ) : (
-                      <AchievementActionLabel action="lock" className="status" label="Locked" />
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </article>

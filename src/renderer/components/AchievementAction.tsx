@@ -1,6 +1,10 @@
 import { LockKeyhole, LockKeyholeOpen } from 'lucide-react';
 import type { AchievementAction } from '../../shared/api';
 
+export function achievementActionName(action: AchievementAction) {
+  return action === 'lock' ? 'Re-lock' : 'Unlock';
+}
+
 export function AchievementActionIcon({
   action,
   size = 16,
@@ -29,7 +33,7 @@ export function AchievementActionLabel({
       title={title}
     >
       <AchievementActionIcon action={action} size={14} />
-      <span>{label ?? (action === 'lock' ? 'Lock' : 'Unlock')}</span>
+      <span>{label ?? achievementActionName(action)}</span>
     </span>
   );
 }

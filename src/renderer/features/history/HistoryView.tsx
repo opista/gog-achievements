@@ -52,7 +52,7 @@ export function HistoryView({
                       </small>
                     </div>
                     <span className="history-unlock-date">
-                      Lock confirmed{' '}
+                      Re-lock confirmed{' '}
                       <time dateTime={entry.lockedAt}>{formatTimestamp(entry.lockedAt, zone)}</time>
                     </span>
                   </li>

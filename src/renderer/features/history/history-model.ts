@@ -81,7 +81,7 @@ export function buildHistoryRows(records: OperationRecord[]): {
           game: report.game.title,
           status: restored
             ? 'Unlock date unavailable'
-            : `${item.action === 'lock' ? 'Lock: ' : ''}${STATUS_LABELS[item.status]}`,
+            : `${item.action === 'lock' ? 'Re-lock: ' : ''}${STATUS_LABELS[item.status]}`,
           timestamp:
             item.action === 'lock' ? item.previous_unlocked_at : item.requested_unlocked_at,
           dateLabel: item.action === 'lock' ? 'Previous unlock' : 'Requested',

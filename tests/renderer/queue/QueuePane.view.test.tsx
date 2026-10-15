@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import type { ComponentProps } from 'react';
+import type { Queue } from '../../../src/shared/api';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueuePane } from '../../../src/renderer/features/queue/QueuePane';
-import { achievement, OTHER_USER, queue } from './fixtures';
+import { achievement, DATE, OTHER_USER, queue } from './fixtures';
 
 afterEach(cleanup);
 
@@ -56,10 +57,68 @@ it('sends remove and preview actions for the chosen game without a workspace or 
   );
   expect(input.onRemove).toHaveBeenCalledExactlyOnceWith('2', ['1']);
   await userEvent.click(
-    within(second).getByRole('button', { name: 'Apply changes for Sample game 2' }),
+    within(second).getByRole('button', { name: 'Review changes for Sample game 2' }),
   );
   expect(input.onPrepareApply).toHaveBeenCalledExactlyOnceWith('2');
   expect(screen.getByText('2 achievements · 2 games')).toBeVisible();
+});
+
+it('groups saved actions and keeps keyboard removal in the visible group order', async () => {
+  const input = props();
+  const mixed: Queue = {
+    ...queue(),
+    items: [
+      {
+        achievement_id: '1',
+        key: 'key-1',
+        name: 'Re-lock one',
+        action: 'lock',
+        previous_unlocked_at: DATE,
+      },
+      {
+        achievement_id: '2',
+        key: 'key-2',
+        name: 'Unlock two',
+        action: 'unlock',
+        unlocked_at: DATE,
+      },
+      {
+        achievement_id: '3',
+        key: 'key-3',
+        name: 'Re-lock three',
+        action: 'lock',
+        previous_unlocked_at: DATE,
+      },
+      { achievement_id: '4', key: 'key-4', name: 'Legacy unlock four', unlocked_at: DATE },
+    ],
+  };
+  const { rerender } = render(<QueuePane {...input} queues={[mixed]} />);
+  const unlocks = screen.getByRole('region', { name: 'Unlock requests for Sample game 1' });
+  const relocks = screen.getByRole('region', { name: 'Re-lock requests for Sample game 1' });
+  expect(within(unlocks).getAllByRole('button', { name: /^Edit date/ })).toHaveLength(2);
+  expect(within(relocks).queryByRole('button', { name: /^Edit date/ })).not.toBeInTheDocument();
+  expect(
+    screen
+      .getAllByRole('button', { name: /^Remove/ })
+      .map((button) => button.getAttribute('aria-label')),
+  ).toEqual([
+    'Remove Unlock two from queue',
+    'Remove Legacy unlock four from queue',
+    'Remove Re-lock one from queue',
+    'Remove Re-lock three from queue',
+  ]);
+  screen.getByRole('button', { name: 'Remove Unlock two from queue' }).focus();
+  await userEvent.keyboard('{Enter}');
+  expect(input.onRemove).toHaveBeenCalledExactlyOnceWith('1', ['2']);
+  rerender(
+    <QueuePane
+      {...input}
+      queues={[{ ...mixed, items: mixed.items.filter((item) => item.achievement_id !== '2') }]}
+    />,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Remove Legacy unlock four from queue' }),
+  ).toHaveFocus();
 });
 
 it('saves the modal date for its queue without requesting an apply', async () => {
