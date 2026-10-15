@@ -10,7 +10,7 @@ In GitHub Actions settings, allow GitHub Actions to create pull requests. Keep t
 
 If GitHub marks a bot-created release PR as awaiting workflow approval, a maintainer must approve that CI run after reviewing the release metadata diff. This starts checks; it does not merge the PR. The explicitly dispatched CI run is also visible in Actions.
 
-Packages are unsigned. Signing and clean-machine installation checks remain needed for supported Mac and Windows systems. The [tested GOG login fix](https://github.com/opista/gog-achievements-cli/pull/2) must be released and pinned before the first app release.
+Packages are unsigned. Signing and clean-machine installation checks remain needed for supported Mac and Windows systems. The pinned [CLI v0.4.0](https://github.com/opista/gog-achievements-cli/releases/tag/v0.4.0) includes the [tested GOG login fix](https://github.com/opista/gog-achievements-cli/pull/2).
 
 ## Normal release
 
