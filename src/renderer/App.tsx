@@ -3,7 +3,7 @@ import { CircleAlert, Gamepad2, History, LoaderCircle, RefreshCw, X } from 'luci
 import type { DesktopApi } from '../shared/api';
 import type { DemoDesktopApi, DemoScenario } from '../shared/demo-api';
 import { Art } from './components/Art';
-import { AccountMenu } from './components/AccountMenu';
+import { AccountMenu } from './features/account/AccountMenu';
 import { Achievements } from './features/library/Achievements';
 import { AchievementSkeleton } from './features/library/AchievementSkeleton';
 import { ApplyConfirmation } from './features/Review';
