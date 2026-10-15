@@ -3,9 +3,9 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Achievement, Report, ReportItem } from '../../src/shared/api';
-import { ApplyConfirmation } from '../../src/renderer/features/Review';
-import { formatTimestamp } from '../../src/renderer/date-time';
+import type { Achievement, Report, ReportItem } from '../../../src/shared/api';
+import { ApplyConfirmation } from '../../../src/renderer/features/apply/ApplyConfirmation';
+import { formatTimestamp } from '../../../src/renderer/date-time';
 
 afterEach(cleanup);
 

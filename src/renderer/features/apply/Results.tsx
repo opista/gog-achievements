@@ -1,16 +1,8 @@
 import { CircleAlert } from 'lucide-react';
-import type { ApplyResult } from '../../shared/api';
-import { ExactDate } from './Review';
-import { STATUS_LABELS } from '../presentation/report-status';
-export function resultsNeedAttention(result: ApplyResult): boolean {
-  return (
-    !result.report ||
-    result.state === 'unknown' ||
-    result.report.results.some(
-      (row) => !['restored', 'skipped_already_unlocked'].includes(row.status),
-    )
-  );
-}
+import type { ApplyResult } from '../../../shared/api';
+import { ExactDate } from './ExactDate';
+import { resultsNeedAttention } from './apply-model';
+import { STATUS_LABELS } from '../../presentation/report-status';
 export function Results({ result, zone }: { result: ApplyResult; zone: string }) {
   const unknown = result.state === 'unknown' || !result.report;
   const attention = resultsNeedAttention(result);

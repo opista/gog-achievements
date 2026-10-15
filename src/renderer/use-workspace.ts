@@ -1,13 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type {
-  ApplyResult,
-  DesktopApi,
-  Game,
-  OperationState,
-  PreviewResult,
-  Queue,
-  QueueGame,
-} from '../shared/api';
+import type { DesktopApi, Game, Queue } from '../shared/api';
+import { useApply } from './features/apply/use-apply';
+import { useOperation } from './application/use-operation';
 import { useHistory } from './features/history/use-history';
 import { useLibrary } from './features/library/use-library';
 import { useQueues } from './features/queue/use-queues';
@@ -19,6 +13,8 @@ export type View = 'browse' | 'applying' | 'results' | 'history';
 export type LoadingTarget =
   'session' | 'library' | 'achievements' | 'queue' | 'history' | 'preview' | 'apply';
 export function useWorkspace(api: DesktopApi) {
+  const working = useRef(false);
+  const lifecycle = useRef(0);
   const account = useAccount(api, clearAccountState);
   const { auth, versions } = account;
   const queueState = useQueues(api, account.assertOwner);
@@ -29,31 +25,30 @@ export function useWorkspace(api: DesktopApi) {
   const { games, libraryLoaded, game, achievements, achievementsLoaded } = library;
   const { queues, loaded: queuesLoaded, action: queueAction } = queueState;
   const [queueDetailsLoading, setQueueDetailsLoading] = useState(false);
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
-  const [result, setResult] = useState<ApplyResult | null>(null);
-  const [resultGame, setResultGame] = useState<QueueGame | null>(null);
   const history = useHistory(api, account.assertOwner);
   const [view, setView] = useState<View>('browse');
   const [loading, setLoading] = useState<string | null>('Checking GOG sign-in…');
   const [loadingTarget, setLoadingTarget] = useState<LoadingTarget>('session');
-  const [previewGameId, setPreviewGameId] = useState<string | null>(null);
   const [error, setError] = useState<Notice | null>(null);
-  const [operation, setOperation] = useState<OperationState>({ kind: 'idle' });
-  const working = useRef(false);
-  const latestOperation = useRef(operation);
-  latestOperation.current = operation;
+  const applyState = useApply(api, {
+    assertOwner: account.assertOwner,
+    run,
+    onView: setView,
+    refreshAfterApply,
+  });
+  const { preview, result, resultGame, previewGameId } = applyState;
+  const operations = useOperation(api, {
+    canRecover: () => !working.current,
+    onRecovered: recoverOperation,
+  });
+  const { operation } = operations;
   const active =
     operation.kind === 'apply' || operation.kind === 'recovery' || operation.kind === 'login';
   const busy = loading !== null || operation.kind !== 'idle';
   const queue = queues.find((item) => item.game.id === game?.id) ?? null;
-  function invalidate() {
-    setPreview(null);
-  }
   function clearGamePresentation() {
-    setResult(null);
-    setResultGame(null);
+    applyState.clear();
     setView('browse');
-    invalidate();
   }
   function clearGameState() {
     library.clearSelection();
@@ -65,17 +60,19 @@ export function useWorkspace(api: DesktopApi) {
     history.clear();
     clearGamePresentation();
   }
-  async function handleFailure(failure: unknown) {
+  async function handleFailure(failure: unknown, isCurrent = () => true) {
+    if (!isCurrent()) return;
     await account.recover(failure);
-    setError(toNotice(failure));
+    if (isCurrent()) setError(toNotice(failure));
   }
   async function run(label: string, target: LoadingTarget, task: () => Promise<void>) {
     if (
       working.current ||
-      latestOperation.current.kind === 'apply' ||
-      latestOperation.current.kind === 'recovery'
+      operations.current().kind === 'apply' ||
+      operations.current().kind === 'recovery'
     )
       return;
+    const stamp = lifecycle.current;
     working.current = true;
     setLoading(label);
     setLoadingTarget(target);
@@ -83,10 +80,13 @@ export function useWorkspace(api: DesktopApi) {
     try {
       await task();
     } catch (failure) {
-      await handleFailure(failure);
+      await handleFailure(failure, () => stamp === lifecycle.current);
     } finally {
-      working.current = false;
-      setLoading(null);
+      if (stamp === lifecycle.current) {
+        working.current = false;
+        setLoading(null);
+        operations.flushRecovery();
+      }
     }
   }
   async function loadQueueDetails(values: Queue[]) {
@@ -115,7 +115,7 @@ export function useWorkspace(api: DesktopApi) {
   async function loadGame(next: Game) {
     setLoadingTarget('achievements');
     if (library.currentGame()?.id !== next.id) clearGamePresentation();
-    else invalidate();
+    else applyState.invalidate();
     await library.loadGame(next);
   }
   async function loadLibrary(preferredId?: string) {
@@ -143,48 +143,42 @@ export function useWorkspace(api: DesktopApi) {
     else if (library.currentGame()?.id !== first.id || !achievementsLoaded) await loadGame(first);
     await loadQueueDetails(savedQueues);
   }
-  const handleOperation = useEffectEvent((state: OperationState) => {
-    const previous = latestOperation.current;
-    latestOperation.current = state;
-    setOperation(state);
-    if (previous.kind === 'recovery' && state.kind === 'idle')
-      void run('Checking GOG sign-in…', 'session', async () => {
-        const initial = await account.refresh();
-        if (!initial) return;
-        if (initial.auth.authenticated) await loadLibrary(previous.gameId);
-        else setView('browse');
-      });
-  });
+  function recoverOperation(gameId?: string) {
+    void run('Checking GOG sign-in…', 'session', async () => {
+      setView('browse');
+      const initial = await account.refresh();
+      if (!initial) return;
+      if (initial.auth.authenticated) await loadLibrary(gameId);
+    });
+  }
   const start = useEffectEvent(async (isMounted: () => boolean) => {
     working.current = true;
     setLoading('Checking GOG sign-in…');
     setLoadingTarget('session');
+    const checkpoint = operations.checkpoint();
     try {
       const initial = await account.bootstrap();
       if (!isMounted() || !initial) return;
-      setOperation(initial.operation);
-      latestOperation.current = initial.operation;
-      if (initial.operation.kind === 'apply' || initial.operation.kind === 'recovery')
+      const restored = operations.restore(initial.operation, checkpoint);
+      if (restored.kind === 'apply' || restored.kind === 'recovery' || operations.needsRecovery())
         setView('applying');
       else if (initial.auth.authenticated) await loadLibrary();
     } catch (failure) {
-      if (isMounted()) await handleFailure(failure);
+      if (isMounted()) await handleFailure(failure, isMounted);
     } finally {
       if (isMounted()) {
         working.current = false;
         setLoading(null);
+        operations.flushRecovery();
       }
     }
   });
   useEffect(() => {
     let mounted = true;
-    const unsubscribe = api.onOperation((state) => {
-      if (mounted) handleOperation(state);
-    });
     void start(() => mounted);
     return () => {
       mounted = false;
-      unsubscribe();
+      lifecycle.current += 1;
     };
   }, [api]);
   function login() {
@@ -205,8 +199,7 @@ export function useWorkspace(api: DesktopApi) {
   function selectGame(next: Game) {
     void run('Loading achievements…', 'achievements', async () => {
       setView('browse');
-      setResult(null);
-      setResultGame(null);
+      applyState.clear();
       await loadGame(next);
     });
   }
@@ -222,14 +215,14 @@ export function useWorkspace(api: DesktopApi) {
   function refreshAchievements(currentState = false) {
     if (!library.currentGame()) return;
     void run('Refreshing achievements…', 'achievements', async () => {
-      invalidate();
+      applyState.invalidate();
       await library.refreshSelected(currentState);
       if (currentState) setView('browse');
     });
   }
   async function saveQueue(task: () => Promise<boolean>): Promise<boolean> {
-    if (working.current || latestOperation.current.kind !== 'idle') return false;
-    invalidate();
+    if (working.current || operations.current().kind !== 'idle') return false;
+    applyState.invalidate();
     let succeeded = false;
     await run('Saving queue…', 'queue', async () => {
       succeeded = await task();
@@ -254,52 +247,13 @@ export function useWorkspace(api: DesktopApi) {
   function saveDates(gameId: string, dates: Record<string, string>): Promise<boolean> {
     return saveQueue(() => queueState.saveDates(gameId, dates));
   }
-  function prepareApply(gameId: string) {
-    if (working.current) return;
-    setPreviewGameId(gameId);
-    void run('Checking changes…', 'preview', async () => {
-      try {
-        const value = await api.preview({ gameId });
-        account.assertOwner(value.report.user_id);
-        setPreview(value);
-      } finally {
-        setPreviewGameId(null);
-      }
-    });
-  }
-  function apply() {
-    if (!preview || working.current) return;
-    const { token, report } = preview;
-    setView('applying');
-    setPreview(null);
-    setResultGame(report.game);
-    void run('Applying changes…', 'apply', async () => {
-      try {
-        const value = await api.apply({ previewToken: token });
-        if (value.report) account.assertOwner(value.report.user_id);
-        setResult(value);
-      } catch (failure) {
-        if (isAccountMismatch(failure)) throw failure;
-        setResult({
-          operationId: '',
-          state: 'unknown',
-          report: null,
-          error: {
-            code: toNotice(failure).code ?? 'UNKNOWN_OUTCOME',
-            message: toNotice(failure).message,
-          },
-        });
-      }
-      setView('results');
-      try {
-        // Refresh durable local state first; a later network failure must not restore stale rows.
-        await queueState.sync(report.game.id);
-        await history.load();
-        await library.refreshAfterApply(report.game.id);
-      } catch (failure) {
-        await handleFailure(failure);
-      }
-    });
+  async function refreshAfterApply(gameId: string, isCurrent: () => boolean) {
+    // Refresh durable local state first; a network failure must not restore stale rows.
+    await queueState.sync(gameId);
+    if (!isCurrent()) return;
+    await history.load();
+    if (!isCurrent()) return;
+    await library.refreshAfterApply(gameId);
   }
   function showHistory() {
     void run('Loading history…', 'history', async () => {
@@ -342,11 +296,15 @@ export function useWorkspace(api: DesktopApi) {
     add,
     remove,
     saveDates,
-    prepareApply,
-    apply,
+    prepareApply: (gameId: string) => {
+      void applyState.prepare(gameId);
+    },
+    apply: () => {
+      void applyState.apply();
+    },
     showHistory,
     setView,
-    cancelPreview: () => setPreview(null),
+    cancelPreview: applyState.invalidate,
     clearError: () => setError(null),
   };
 }
