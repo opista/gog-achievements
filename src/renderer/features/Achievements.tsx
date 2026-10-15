@@ -44,7 +44,7 @@ export function Achievements({
   const controlsBlocked = busy || loading;
   const [filter, setFilter] = useState<Filter>('All');
   const [revealed, setRevealed] = useState(new Set<string>());
-  const revealTarget = useRef<string | null>(null);
+  const focusTarget = useRef<string | null>(null);
   const filtered = achievements
     .toSorted(compareAchievements)
     .filter(
@@ -54,7 +54,7 @@ export function Achievements({
         (filter === 'Locked' && !item.unlocked),
     );
   function reveal(id: string) {
-    revealTarget.current = id;
+    focusTarget.current = id;
     setRevealed((previous) => new Set(previous).add(id));
   }
 
@@ -114,9 +114,9 @@ export function Achievements({
                       className="achievement-name"
                       tabIndex={-1}
                       ref={(element) => {
-                        if (element && revealTarget.current === item.id && isQueued) {
+                        if (element && focusTarget.current === item.id && isQueued) {
                           element.focus();
-                          revealTarget.current = null;
+                          focusTarget.current = null;
                         }
                       }}
                     >
@@ -135,11 +135,14 @@ export function Achievements({
                         aria-label={`Add ${name} to queue`}
                         title={`Add ${name} to queue`}
                         disabled={controlsBlocked}
-                        onClick={() => onAdd([item.id])}
+                        onClick={(event) => {
+                          if (event.detail === 0) focusTarget.current = item.id;
+                          onAdd([item.id]);
+                        }}
                         ref={(element) => {
-                          if (element && revealTarget.current === item.id && !element.disabled) {
+                          if (element && focusTarget.current === item.id && !element.disabled) {
                             element.focus();
-                            revealTarget.current = null;
+                            focusTarget.current = null;
                           }
                         }}
                       >

@@ -11,7 +11,26 @@ import { useLocalTimeZone } from './use-local-time-zone';
 import { HistoryView, Results } from './features/Results';
 import { Library } from './features/Library';
 import { QueuePane } from './features/QueuePane';
-import { useWorkspace } from './use-workspace';
+import { useWorkspace, type Workspace } from './use-workspace';
+
+function errorRecovery(w: Workspace): { label: string; run(): void } | null {
+  if (!w.auth.authenticated || /AUTH|LOGIN|TOKEN|CREDENTIAL/.test(w.error?.code ?? ''))
+    return { label: 'Sign in to GOG', run: w.login };
+  switch (w.loadingTarget) {
+    case 'library':
+      return { label: 'Refresh library', run: w.refreshLibrary };
+    case 'achievements':
+      return w.game
+        ? { label: 'Refresh achievements', run: () => w.refreshAchievements(w.view === 'results') }
+        : null;
+    case 'queue':
+      return { label: 'Reload queue', run: w.refreshQueues };
+    case 'history':
+      return { label: 'Reload history', run: w.showHistory };
+    default:
+      return null;
+  }
+}
 
 export function App({ api }: { api: DesktopApi }) {
   const w = useWorkspace(api);
@@ -21,7 +40,7 @@ export function App({ api }: { api: DesktopApi }) {
   const [scenario, setScenario] = useState<DemoScenario>(() =>
     'getScenario' in api ? (api as DemoDesktopApi).getScenario() : 'complete',
   );
-  const needsLogin = !w.auth.authenticated || /AUTH|LOGIN|TOKEN/.test(w.error?.code ?? '');
+  const recovery = w.error ? errorRecovery(w) : null;
   const applying =
     w.view === 'applying' || w.operation.kind === 'apply' || w.operation.kind === 'recovery';
   const reportView = w.view === 'results' || applying;
@@ -89,13 +108,12 @@ export function App({ api }: { api: DesktopApi }) {
       {w.error ? (
         <div className="error-banner" role="alert">
           <CircleAlert size={19} />
-          <span>
-            {w.error.message}
-            {w.auth.authenticated ? ' Data may not be refreshed.' : ''}
-          </span>
-          <button disabled={w.busy} onClick={needsLogin ? w.login : w.refreshLibrary}>
-            {needsLogin ? 'Sign in to GOG' : 'Retry'}
-          </button>
+          <span>{w.error.message}</span>
+          {recovery ? (
+            <button disabled={w.busy} onClick={recovery.run}>
+              {recovery.label}
+            </button>
+          ) : null}
           <button className="icon-button" aria-label="Dismiss error" onClick={w.clearError}>
             <X size={18} />
           </button>
@@ -127,9 +145,8 @@ export function App({ api }: { api: DesktopApi }) {
           {!w.auth.authenticated && applying ? (
             <div className="active-state" role="status">
               <LoaderCircle size={42} className="spinner" />
-              <h2>Checking an interrupted operation…</h2>
-              <p>A previous writer is still active. Keep the app open until it exits.</p>
-              <p className="muted">No new operation will be started.</p>
+              <h2>Checking previous changes…</h2>
+              <p>Please keep the app open while this check finishes.</p>
             </div>
           ) : !w.auth.authenticated ? (
             <div className="connect-state">
@@ -180,9 +197,19 @@ export function App({ api }: { api: DesktopApi }) {
               {applying ? (
                 <div className="active-state" role="status">
                   <LoaderCircle size={42} className="spinner" />
-                  <h2>Applying changes…</h2>
-                  <p>Keep the app open until the result is available.</p>
-                  <p className="muted">The operation cannot be cancelled.</p>
+                  <h2>
+                    {w.operation.kind === 'recovery'
+                      ? 'Checking previous changes…'
+                      : 'Applying changes…'}
+                  </h2>
+                  <p>
+                    {w.operation.kind === 'recovery'
+                      ? 'Please keep the app open while this check finishes.'
+                      : 'Keep the app open until the result is available.'}
+                  </p>
+                  {w.operation.kind !== 'recovery' ? (
+                    <p className="muted">This cannot be cancelled.</p>
+                  ) : null}
                 </div>
               ) : w.view === 'results' && w.result ? (
                 <>
@@ -199,7 +226,7 @@ export function App({ api }: { api: DesktopApi }) {
                         else w.refreshAchievements(true);
                       }}
                     >
-                      Check current state
+                      Refresh achievements
                     </button>
                   </div>
                 </>

@@ -118,7 +118,9 @@ it.each([
     const { input, onSave } = modal('Europe/London');
     fireEvent.change(input, { target: { value: '2026-10-25T01:30:15' } });
     expect(screen.getByRole('status')).toHaveTextContent(/occurs twice/);
-    const select = screen.getByRole('combobox', { name: 'UTC offset for The World' });
+    const select = screen.getByRole('combobox', { name: 'Repeated time for The World' });
+    expect(screen.getByRole('option', { name: 'First time (UTC+01:00)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Second time (UTC+00:00)' })).toBeInTheDocument();
     expect(select).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Save date' })).toBeDisabled();
     await user.selectOptions(select, offset);

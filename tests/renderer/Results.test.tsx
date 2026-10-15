@@ -39,9 +39,7 @@ it('does not claim requested dates were confirmed for skipped existing unlocks',
       }}
     />,
   );
-  expect(
-    screen.getByText('Restorations confirmed. Existing unlocks kept their dates.'),
-  ).toBeVisible();
+  expect(screen.getByText('Existing unlocks kept their dates.')).toBeVisible();
   expect(
     screen.queryByText('All requested unlocks and dates were confirmed.'),
   ).not.toBeInTheDocument();
@@ -61,7 +59,50 @@ it('keeps immediate unknown apply feedback separate from the history feed', () =
       }}
     />,
   );
-  expect(screen.getByRole('heading', { name: 'Outcome unknown' })).toBeVisible();
-  expect(screen.getByText('The write ended without a confirmed report.')).toBeVisible();
-  expect(screen.getByText(/cannot prove which operation caused an unlock/)).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Could not confirm changes' })).toBeVisible();
+  expect(
+    screen.getByText(
+      'Refresh achievements to check which achievements are unlocked before trying again.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(/report|operation|current state|cannot prove/i),
+  ).not.toBeInTheDocument();
+});
+
+it('shows useful result statuses without exposing server error codes', () => {
+  render(
+    <Results
+      zone="UTC"
+      result={{
+        operationId: 'partial',
+        state: 'complete',
+        error: { code: 'APPLY_INCOMPLETE', message: 'Some achievements could not be confirmed.' },
+        report: {
+          dry_run: false,
+          complete: false,
+          user_id: '123456789',
+          game: { id: '1', title: 'Cyberpunk 2077', client_id: '100001' },
+          results: [
+            {
+              achievement_id: '1',
+              name: 'The World',
+              requested_unlocked_at: '2026-10-10T17:30:00Z',
+              previous_unlocked_at: null,
+              actual_unlocked_at: null,
+              status: 'failed',
+              error_code: 'API_INTERNAL_WRITE_REJECTED',
+            },
+          ],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByRole('heading', { name: 'Results need attention' })).toBeVisible();
+  expect(screen.getByText('The World')).toBeVisible();
+  expect(screen.getByText('Request failed')).toBeVisible();
+  expect(screen.getByText('Not confirmed')).toBeVisible();
+  expect(screen.getByText('Some achievements could not be confirmed.')).toBeVisible();
+  expect(screen.queryByText('API_INTERNAL_WRITE_REJECTED')).not.toBeInTheDocument();
 });

@@ -126,9 +126,9 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
           {savedOccurrence ? <small>{savedOccurrence}</small> : null}
           {resolution.choices.length > 1 ? (
             <label>
-              UTC offset
+              Repeated time
               <select
-                aria-label={`UTC offset for ${item.name}`}
+                aria-label={`Repeated time for ${item.name}`}
                 value={offset ?? ''}
                 disabled={locked}
                 onChange={(event) => {
@@ -136,10 +136,10 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
                   setStatus('idle');
                 }}
               >
-                <option value="">Choose offset</option>
-                {resolution.choices.map((choice) => (
+                <option value="">Choose first or second</option>
+                {resolution.choices.map((choice, index) => (
                   <option key={choice} value={choice}>
-                    {offsetLabel(choice)}
+                    {index === 0 ? 'First time' : 'Second time'} ({offsetLabel(choice)})
                   </option>
                 ))}
               </select>

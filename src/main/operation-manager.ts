@@ -84,7 +84,10 @@ export class OperationManager implements WorkspaceApi {
     await this.ensureRecovery();
     if (this.operation.kind === 'recovery') await this.recover();
     if (this.operation.kind !== 'idle')
-      throw new DesktopError('BUSY', 'Another operation is active. Wait for its result.');
+      throw new DesktopError(
+        'BUSY',
+        'Another action is in progress. Please wait for it to finish.',
+      );
     this.setOperation({ kind, ...(gameId ? { gameId } : {}), startedAt: new Date().toISOString() });
     try {
       return await action();
@@ -107,7 +110,7 @@ export class OperationManager implements WorkspaceApi {
   private assertAccount(userId: string, expected: string): void {
     if (userId !== expected) {
       this.previews.clear();
-      throw new DesktopError('ACCOUNT_CHANGED', 'The GOG account changed. Load the library again.');
+      throw new DesktopError('ACCOUNT_CHANGED', 'Your GOG account changed. Refresh your library.');
     }
   }
   private invalidate(): void {
@@ -147,7 +150,7 @@ export class OperationManager implements WorkspaceApi {
       record.error = {
         code: 'INTERRUPTED',
         message:
-          'The operation ended without a saved result. Check current state before another apply.',
+          'Your previous changes could not be confirmed. Refresh achievements before trying again.',
       };
       await this.store.saveOperation(record);
     }
@@ -158,7 +161,7 @@ export class OperationManager implements WorkspaceApi {
         operationId: active.id,
         gameId: active.game_id,
         startedAt: active.started_at,
-        message: 'A previous operation may still be active. Waiting for it to finish.',
+        message: 'Checking previous changes. Please keep the app open.',
       });
     else this.setOperation({ kind: 'idle' });
   }
@@ -180,7 +183,7 @@ export class OperationManager implements WorkspaceApi {
       if (help.version !== this.cliVersion)
         throw new DesktopError(
           'CLI_VERSION_MISMATCH',
-          'The bundled CLI version does not match this app.',
+          'Some app files do not match. Reinstall the app.',
         );
       const doctor = (await this.read({ kind: 'doctor' })) as {
         supported?: unknown;
@@ -189,7 +192,7 @@ export class OperationManager implements WorkspaceApi {
       if (doctor.supported !== true)
         throw new DesktopError(
           'UNSUPPORTED_PLATFORM',
-          'The bundled CLI does not support this platform.',
+          'This app does not support your computer. Download the version for your system.',
         );
       this.auth = authSchema.parse(await this.read({ kind: 'auth-status' })) as AuthStatus;
       return {
@@ -232,7 +235,10 @@ export class OperationManager implements WorkspaceApi {
     ) as AchievementsData;
     this.assertAccount(data.user_id, account);
     if (data.game.id !== gameId)
-      throw new DesktopError('GAME_CHANGED', 'The returned game did not match the request.');
+      throw new DesktopError(
+        'GAME_CHANGED',
+        'Could not load the selected game. Refresh your library and try again.',
+      );
     return data;
   }
   private async queue(gameId: string, account: string): Promise<Queue | null> {
@@ -241,7 +247,10 @@ export class OperationManager implements WorkspaceApi {
     const queue = queueSchema.parse(await this.read({ kind: 'queue-show', file: path })) as Queue;
     this.assertAccount(queue.user_id, account);
     if (queue.game.id !== gameId)
-      throw new DesktopError('GAME_CHANGED', 'The saved queue does not match this game.');
+      throw new DesktopError(
+        'GAME_CHANGED',
+        "This game's queue could not be loaded. Refresh your library and try again.",
+      );
     return queue;
   }
   async getQueue(gameId: string): Promise<Queue | null> {
@@ -340,7 +349,10 @@ export class OperationManager implements WorkspaceApi {
         const queue = queueSchema.parse(await this.read(command)) as Queue;
         this.assertAccount(queue.user_id, account);
         if (queue.game.id !== parsed.gameId)
-          throw new DesktopError('GAME_CHANGED', 'The returned queue does not match this game.');
+          throw new DesktopError(
+            'GAME_CHANGED',
+            "This game's queue could not be loaded. Refresh your library and try again.",
+          );
         return queue;
       },
       parsed.gameId,
@@ -369,7 +381,7 @@ export class OperationManager implements WorkspaceApi {
         if (live.game.id !== parsed.gameId || live.game.client_id !== queue.game.client_id)
           throw new DesktopError(
             'GAME_CHANGED',
-            'The game metadata changed. Review the queue again.',
+            "This game's achievement list changed. Remove its queued achievements and add them again.",
           );
         const known = new Set(queue.items.map((item) => item.achievement_id));
         if (Object.keys(parsed.dates).some((id) => !known.has(id)))
@@ -447,7 +459,7 @@ export class OperationManager implements WorkspaceApi {
     )
       throw new DesktopError(
         'INVALID_REPORT',
-        'The CLI report did not match the reviewed queue. Check current state before another apply.',
+        'Could not confirm these changes. Refresh achievements before trying again.',
       );
   }
   async apply({ previewToken }: { previewToken: string }): Promise<ApplyResult> {
@@ -455,7 +467,7 @@ export class OperationManager implements WorkspaceApi {
     return this.run('apply', async () => {
       const preview = this.previews.get(previewToken);
       if (!preview)
-        throw new DesktopError('STALE_PREVIEW', 'Preview the queue again before applying.');
+        throw new DesktopError('STALE_PREVIEW', 'Select Apply changes to review your queue again.');
       this.previews.delete(previewToken);
       const account = await this.account();
       this.assertAccount(account, preview.queue.user_id);
@@ -465,7 +477,7 @@ export class OperationManager implements WorkspaceApi {
       )
         throw new DesktopError(
           'STALE_PREVIEW',
-          'The queue changed. Preview it again before applying.',
+          'Your queue changed. Select Apply changes to review it again.',
         );
       if (!preview.report.results.some((item) => item.status === 'pending'))
         throw new DesktopError(
@@ -512,7 +524,7 @@ export class OperationManager implements WorkspaceApi {
           if ((outcome.exitCode === 0) !== report.complete)
             throw new DesktopError(
               'INVALID_APPLY_REPORT',
-              'The result status did not match the CLI exit code.',
+              'Could not confirm these changes. Refresh achievements before trying again.',
             );
           record.report = report;
           record.state = 'complete';
@@ -520,7 +532,11 @@ export class OperationManager implements WorkspaceApi {
         } else {
           record.state = 'unknown';
           record.error = outcome.result.ok
-            ? { code: 'INVALID_APPLY_REPORT', message: 'No valid apply report was returned.' }
+            ? {
+                code: 'INVALID_APPLY_REPORT',
+                message:
+                  'Could not confirm these changes. Refresh achievements before trying again.',
+              }
             : publicError(cliError(outcome.result.error.code));
         }
       } catch (error) {
@@ -533,7 +549,7 @@ export class OperationManager implements WorkspaceApi {
       } catch {
         throw new DesktopError(
           'REPORT_SAVE_FAILED',
-          'The result could not be saved. Check current state before another apply.',
+          'The result could not be saved. Refresh achievements before trying again.',
         );
       }
       if (record.report) {
@@ -543,7 +559,7 @@ export class OperationManager implements WorkspaceApi {
           record.error = {
             code: 'QUEUE_CLEANUP_FAILED',
             message:
-              'The result was saved, but queue cleanup could not finish. Review the queue before another apply.',
+              'Your results were saved, but the queue could not be updated. Review it before trying again.',
           };
           // The confirmed report is already durable even if saving this warning fails.
           await this.store.saveOperation(record).catch(() => {});

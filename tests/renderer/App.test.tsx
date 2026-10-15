@@ -102,7 +102,7 @@ describe('desktop restoration flow', () => {
       const apply = await confirm(api, user);
       await user.click(screen.getByRole('button', { name: 'Apply 3 achievements' }));
       await screen.findByRole('heading', {
-        name: scenario === 'partial' ? 'Results need attention' : 'Outcome unknown',
+        name: scenario === 'partial' ? 'Results need attention' : 'Could not confirm changes',
       });
       await ready();
       if (scenario === 'partial') {
@@ -113,8 +113,15 @@ describe('desktop restoration flow', () => {
         ).not.toBeInTheDocument();
       }
       expect(screen.getByRole('button', { name: 'Edit date for Frequent Flyer' })).toBeEnabled();
-      await user.click(screen.getByRole('button', { name: 'Check current state' }));
+      await user.click(screen.getByRole('button', { name: 'Refresh achievements' }));
       await ready();
+      expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
+      expect(
+        screen.queryByRole('heading', { name: 'Could not confirm changes' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'Results need attention' }),
+      ).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'History' }));
       await ready();
       expect(screen.queryByRole('button', { name: 'View report' })).not.toBeInTheDocument();
@@ -240,7 +247,7 @@ describe('desktop restoration flow', () => {
       },
     };
     render(<App api={api} />);
-    await screen.findByRole('heading', { name: 'Checking an interrupted operation…' });
+    await screen.findByRole('heading', { name: 'Checking previous changes…' });
     expect(listGames).not.toHaveBeenCalled();
     await act(async () => listener?.({ kind: 'idle' }));
     await ready();

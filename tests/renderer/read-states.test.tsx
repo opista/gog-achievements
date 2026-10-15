@@ -219,3 +219,53 @@ it('does not call a populated library empty while its saved queues load', async 
   await act(async () => request.resolve(queues));
   await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
 });
+
+it('retries an achievement read without refreshing the library or sending changes', async () => {
+  const { api, user } = await connected();
+  const library = vi.spyOn(api, 'listGames');
+  const apply = vi.spyOn(api, 'apply');
+  const read = vi
+    .spyOn(api, 'listAchievements')
+    .mockRejectedValueOnce(new Error('Achievements could not be loaded.'));
+  await user.click(screen.getAllByRole('button', { name: 'Refresh achievements' })[0]!);
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Achievements could not be loaded.');
+  expect(alert).not.toHaveTextContent('Data may not be refreshed');
+  await user.click(within(alert).getByRole('button', { name: 'Refresh achievements' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(library).not.toHaveBeenCalled();
+  expect(apply).not.toHaveBeenCalled();
+});
+
+it('offers sign-in for invalid saved credentials instead of retrying library reads', async () => {
+  const { api, user } = await connected();
+  const login = vi.spyOn(api, 'login');
+  const library = vi
+    .spyOn(api, 'listGames')
+    .mockRejectedValueOnce(
+      Object.assign(new Error('Sign in again.'), { code: 'INVALID_CREDENTIALS' }),
+    );
+  await user.click(screen.getByRole('button', { name: 'Refresh library' }));
+  const alert = await screen.findByRole('alert');
+  await user.click(within(alert).getByRole('button', { name: 'Sign in to GOG' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(login).toHaveBeenCalledOnce();
+  expect(library).toHaveBeenCalledTimes(2);
+});
+
+it('leaves a failed confirmation check for review instead of retrying an unrelated read', async () => {
+  const { api, user } = await connected();
+  const library = vi.spyOn(api, 'listGames');
+  const apply = vi.spyOn(api, 'apply');
+  vi.spyOn(api, 'preview').mockRejectedValueOnce(
+    new Error('Select Apply changes to review again.'),
+  );
+  await user.click(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' }));
+  const alert = await screen.findByRole('alert');
+  expect(within(alert).getAllByRole('button')).toHaveLength(1);
+  expect(within(alert).getByRole('button', { name: 'Dismiss error' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Apply changes for Cyberpunk 2077' })).toBeEnabled();
+  expect(library).not.toHaveBeenCalled();
+  expect(apply).not.toHaveBeenCalled();
+});

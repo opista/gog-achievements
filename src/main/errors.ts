@@ -11,52 +11,61 @@ export class DesktopError extends Error {
 }
 const messages: Record<string, string> = {
   AUTH_REQUIRED: 'Sign in to GOG to continue.',
-  AUTH_REJECTED: 'GOG rejected the saved login. Sign in again.',
+  AUTH_REJECTED: 'Please sign in to GOG again.',
   AUTH_CANCELLED: 'Sign-in was cancelled.',
   AUTH_TIMEOUT: 'Sign-in timed out. Try again.',
-  WEBVIEW2_MISSING: 'GOG sign-in needs the Microsoft Edge WebView2 Runtime.',
-  KEYCHAIN_UNAVAILABLE:
-    'Unlock the Mac Keychain, then sign in and allow the GOG helper access when asked.',
+  WEBVIEW2_MISSING: 'Install Microsoft Edge WebView2 to open GOG sign-in, then try again.',
+  KEYCHAIN_UNAVAILABLE: 'Unlock your Mac Keychain, then sign in again. Allow access when asked.',
   KEYCHAIN_STORE_FAILED: 'The login could not be saved. Sign in again and allow Keychain access.',
   CREDENTIAL_STORE_UNAVAILABLE:
-    'The Windows protected login store is unavailable. Use your Windows user account.',
-  CREDENTIAL_STORE_FAILED:
-    'The login could not be saved in the Windows protected store. Sign in again.',
+    'Windows could not access your saved sign-in. Restart the app and sign in again.',
+  CREDENTIAL_STORE_FAILED: 'Windows could not save your sign-in. Please sign in again.',
   INVALID_CREDENTIALS: 'The saved login is invalid. Sign in again.',
-  NATIVE_HELPER_MISSING: 'The bundled sign-in helper is missing. Reinstall the app.',
-  NATIVE_HELPER_FAILED:
-    'The GOG sign-in window could not start. Reinstall the app or retry sign-in.',
+  NATIVE_HELPER_MISSING: 'The sign-in window is missing. Reinstall the app.',
+  NATIVE_HELPER_FAILED: 'The GOG sign-in window could not open. Try again or reinstall the app.',
   LOGIN_PAGE_FAILED: 'The GOG sign-in page could not load. Check your connection and try again.',
-  NETWORK_ERROR: 'The request failed or timed out.',
-  API_REJECTED: 'GOG rejected the request.',
+  NETWORK_ERROR: 'Could not connect to GOG. Check your internet connection and try again.',
+  API_REJECTED: 'GOG could not complete the request. Please try again.',
   ACCOUNT_MISMATCH: 'This queue belongs to another GOG account.',
   GAME_NOT_OWNED: 'This account does not own the game.',
-  GAME_CLIENT_CHANGED: 'The game metadata changed. Create a new queue.',
-  ACHIEVEMENT_CHANGED: 'An achievement changed. Review the queue again.',
+  GAME_CLIENT_CHANGED:
+    "This game's achievement list changed. Remove its queued achievements and add them again.",
+  ACHIEVEMENT_CHANGED: 'An achievement changed. Refresh achievements and review your queue.',
   ALREADY_UNLOCKED: 'This achievement is already unlocked. Its date will be kept.',
   DUPLICATE_ACHIEVEMENT: 'This achievement is already queued.',
   ACHIEVEMENT_NOT_FOUND: 'This game does not have the selected achievement.',
   ACHIEVEMENT_NOT_QUEUED: 'A selected achievement is not in the queue.',
   EMPTY_QUEUE: 'Add an achievement to the queue first.',
   FUTURE_DATE: 'The unlock time cannot be in the future.',
-  INVALID_DATE: 'Enter a valid date and time with an explicit offset.',
-  QUEUE_BUSY: 'This queue is in use by another command.',
-  NO_GALAXY_BUILD: 'No published Galaxy achievement metadata is available for this game.',
+  INVALID_DATE: 'Choose a valid date and time.',
+  QUEUE_BUSY: 'This queue is being updated. Please wait and try again.',
+  NO_GALAXY_BUILD: 'Achievements are not available for this game.',
   APPLY_INCOMPLETE: 'Results need attention. Check each achievement before another attempt.',
-  INVALID_RESPONSE: 'GOG returned an invalid response.',
-  INCOMPLETE_RESPONSE: 'GOG returned an incomplete list. Refresh it.',
+  INVALID_RESPONSE: 'Could not read the response from GOG. Please try again.',
+  INCOMPLETE_RESPONSE: 'Could not load the full list. Refresh it and try again.',
+  CLI_PACKAGE_INVALID: 'Some app files are missing or damaged. Reinstall the app.',
+  CLI_VERSION_MISMATCH: 'Some app files do not match. Reinstall the app.',
+  CLI_START_FAILED: 'The app could not start this action. Restart the app and try again.',
+  INVALID_CLI_OUTPUT: 'The app could not complete this action. Please try again.',
+  INVALID_CLI_EXIT: 'The app could not complete this action. Please try again.',
+  CLI_OUTPUT_LIMIT: 'The app could not complete this action. Please try again.',
 };
 export function cliError(code: string): DesktopError {
+  const publicCode = /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'COMMAND_FAILED';
   return new DesktopError(
-    /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'COMMAND_FAILED',
-    messages[code] ?? 'The CLI command could not complete. Check sign-in and try again.',
+    publicCode,
+    messages[publicCode] ?? 'The request could not be completed. Please try again.',
   );
 }
 export function publicError(error: unknown): PublicError {
   return error instanceof DesktopError
-    ? { code: error.code, message: error.message }
+    ? {
+        code: error.code,
+        message:
+          (Object.hasOwn(messages, error.code) ? messages[error.code] : undefined) ?? error.message,
+      }
     : {
         code: 'LOCAL_ERROR',
-        message: 'The local operation could not complete. No result was confirmed.',
+        message: 'Something went wrong. Please try again.',
       };
 }

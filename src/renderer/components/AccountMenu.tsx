@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, LoaderCircle, LogOut, UserRound } from 'lucide-react';
 import type { AuthStatus, DesktopApi } from '../../shared/api';
 
@@ -13,6 +13,27 @@ interface AccountMenuProps {
 export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenuProps) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string>();
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const summaryRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    function dismissOutside(event: PointerEvent | FocusEvent) {
+      const menu = menuRef.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target))
+        menu.open = false;
+    }
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('focusin', dismissOutside);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('focusin', dismissOutside);
+    };
+  }, []);
+
+  function closeMenu() {
+    if (menuRef.current) menuRef.current.open = false;
+    summaryRef.current?.focus();
+  }
 
   async function checkForUpdates() {
     if (checking) return;
@@ -30,8 +51,18 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
   }
 
   return (
-    <details className="account-menu">
-      <summary aria-label="Account menu" title="Account">
+    <details
+      ref={menuRef}
+      className="account-menu"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && menuRef.current?.open) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeMenu();
+        }
+      }}
+    >
+      <summary ref={summaryRef} aria-label="Account menu" title="Account">
         <UserRound size={18} aria-hidden="true" />
         <span className="caret" />
       </summary>
@@ -51,18 +82,18 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
           </p>
         ) : null}
         {auth.authenticated ? (
-          <button disabled={busy} onClick={onLogout}>
+          <button
+            disabled={busy}
+            onClick={() => {
+              closeMenu();
+              onLogout();
+            }}
+          >
             <LogOut size={17} aria-hidden="true" />
             Sign out
           </button>
         ) : null}
-        {versions.app ? (
-          <small>
-            App {versions.app}
-            <br />
-            CLI {versions.cli}
-          </small>
-        ) : null}
+        {versions.app ? <small>Version {versions.app}</small> : null}
       </div>
     </details>
   );
