@@ -100,6 +100,8 @@ jobs:
       - run: npm run check
       - name: Build the package with its pinned CLI
         env:
+          # Mac signing is ad hoc and uses no certificate or signing secrets.
+          CSC_FOR_PULL_REQUEST: ${{ startsWith(matrix.target, 'macos-') && 'true' || 'false' }}
           # Public CLI releases need no token. Private releases require this secret.
           GH_TOKEN: ${{ secrets.CLI_RELEASE_TOKEN }}
         run: npm run package -- --target=${{ matrix.target }}

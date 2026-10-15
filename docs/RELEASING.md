@@ -14,6 +14,8 @@ Mac packages use an ad hoc signature to seal the app, helpers and bundled execut
 
 The Mac entitlements retain hardened runtime while allowing Electron and the bundled runtime to use JIT and load their libraries with an ad hoc signature. CI runs strict, recursive `codesign` verification before CLI smoke checks and uploads. A package with an incomplete signature or changed sealed resources fails this gate. This is separate from Gatekeeper approval: downloaded builds can still require a per-app approval through macOS Privacy & Security. See [Apple’s guidance](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac).
 
+The Mac package step sets `CSC_FOR_PULL_REQUEST=true` because electron-builder otherwise skips signing during pull request builds. This only enables the configured ad hoc identity (`-`); it needs no certificate or signing secrets. Keep automatic certificate discovery disabled and the existing restriction to pull requests from this repository.
+
 The `v0.2.0` Mac assets have an incomplete bundle signature. Their download checksums can be correct while macOS reports the app as damaged. A source fix must ship in a new release; do not replace published assets or move the existing tag.
 
 ## Normal release
