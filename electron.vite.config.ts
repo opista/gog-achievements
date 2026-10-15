@@ -2,16 +2,18 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 import { uiSecurity } from './build/ui-security';
+import { electronIpcBridge } from '@electron-ipc-bridge/vite-plugin';
+import { ipcBridgeOptions } from './build/ipc';
 
 export default defineConfig(({ command }) => {
   const security = uiSecurity(command);
   return {
     main: {
-      plugins: [externalizeDepsPlugin()],
+      plugins: [externalizeDepsPlugin(), electronIpcBridge(ipcBridgeOptions)],
       build: { rollupOptions: { input: resolve('src/main/index.ts') } },
     },
     preload: {
-      plugins: [externalizeDepsPlugin()],
+      plugins: [externalizeDepsPlugin({ exclude: ['@electron-ipc-bridge/core'] })],
       build: {
         rollupOptions: {
           input: resolve('src/preload/index.ts'),

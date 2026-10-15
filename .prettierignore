@@ -7,3 +7,4 @@ resources/cli
 package-lock.json
 CHANGELOG.md
 .release-please-manifest.json
+src/**/ipc.generated.*

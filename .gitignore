@@ -7,3 +7,5 @@ resources/cli/
 playwright-report/
 test-results/
 .DS_Store
+src/shared/ipc.generated.ts
+src/preload/ipc.generated.d.ts

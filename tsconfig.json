@@ -12,7 +12,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "types": ["node", "vite/client"],
-    "isolatedModules": true
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src", "tests/**/*.ts", "tests/**/*.tsx", "*.config.ts", "build/**/*.ts"]
 }

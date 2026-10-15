@@ -1,14 +1,10 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
+import 'reflect-metadata';
+import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
-import { CliClient, resolveCli } from './cli-client';
-import { QueueStore } from './queue-store';
-import { OperationManager } from './operation-manager';
-import { installIpc } from './ipc';
-import { createDemoApi } from '../shared/demo-api';
-import { IPC_OPERATION, type WorkspaceApi, type OperationState } from '../shared/api';
-import { DesktopError } from './errors';
+import { createDesktopApplication, type DesktopApplication } from './application';
+import { IPC_OPERATION, type OperationState } from '../shared/api';
 import { installUpdates } from './update-menu';
 import packageMetadata from '../../package.json';
 const mainDirectory = dirname(fileURLToPath(import.meta.url));
@@ -16,8 +12,8 @@ const demo = process.env.GOG_ACHIEVEMENTS_DEMO === '1';
 let window: BrowserWindow | null = null;
 let operation: OperationState = { kind: 'idle' };
 let guardDialog = false;
-let manager: OperationManager | undefined;
-let recoveryTimer: ReturnType<typeof setInterval> | undefined;
+let desktop: DesktopApplication | undefined;
+let closing = false;
 let updates: ReturnType<typeof installUpdates> | undefined;
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -31,41 +27,6 @@ else {
   void app
     .whenReady()
     .then(async () => {
-      let api: WorkspaceApi;
-      if (demo) api = createDemoApi();
-      else {
-        // Resolving the bundled CLI never falls back to PATH or a source checkout.
-        let executable: string;
-        try {
-          executable = await resolveCli({
-            packaged: app.isPackaged,
-            resourcesPath: process.resourcesPath,
-            projectPath: app.getAppPath(),
-          });
-        } catch {
-          executable = '';
-        }
-        const client = executable
-          ? new CliClient(executable)
-          : {
-              run: async () => {
-                throw new DesktopError(
-                  'CLI_PACKAGE_INVALID',
-                  'The bundled CLI is missing or does not match this app. Reinstall the app.',
-                );
-              },
-            };
-        manager = new OperationManager(
-          client,
-          new QueueStore(join(app.getPath('userData'), 'queues')),
-          app.getVersion(),
-        );
-        api = manager;
-        recoveryTimer = setInterval(() => {
-          void manager?.refreshRecovery().catch(() => {});
-        }, 3000);
-        recoveryTimer.unref();
-      }
       const preload = join(mainDirectory, '../preload/index.cjs');
       if (!existsSync(preload)) throw new Error('The preload bundle is missing.');
       window = new BrowserWindow({
@@ -93,7 +54,22 @@ else {
         isBusy: () => operation.kind !== 'idle',
         repository: new URL(packageMetadata.repository.url).pathname.replace(/^\/|\.git$/g, ''),
       });
-      installIpc(ipcMain, currentWindow, api, updates);
+      desktop = await createDesktopApplication({
+        window: currentWindow,
+        appActions: updates,
+        demo,
+        version: app.getVersion(),
+        userDataPath: app.getPath('userData'),
+        cli: {
+          packaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
+          projectPath: app.getAppPath(),
+          developmentDirectory: app.isPackaged
+            ? undefined
+            : process.env.GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY,
+        },
+      });
+      const { api } = desktop;
       const unsubscribe = api.onOperation((state) => {
         operation = state;
         if (state.kind === 'idle') updates?.onIdle();
@@ -145,11 +121,17 @@ else {
     if (operation.kind !== 'idle') {
       event.preventDefault();
       window?.close();
+    } else if (desktop && !closing) {
+      event.preventDefault();
+      closing = true;
+      void desktop.close().then(
+        () => app.quit(),
+        () => app.exit(1),
+      );
     }
   });
   app.on('will-quit', () => {
     updates?.cleanup();
-    if (recoveryTimer) clearInterval(recoveryTimer);
   });
   app.on('window-all-closed', () => {
     app.quit();
