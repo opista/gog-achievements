@@ -13,6 +13,7 @@ import {
   type CliCommand,
 } from '../../src/main/cli-client';
 import { publicError } from '../../src/main/errors';
+import { CLI_VERSION } from '../../src/shared/cli-release';
 
 describe('CLI command contract', () => {
   test('only explicit apply adds --yes and all commands request JSON', () => {
@@ -130,7 +131,7 @@ test('resolve bundled CLI by OS, architecture and version without PATH fallback'
     await writeFile(
       join(folder, 'cli', 'build.json'),
       JSON.stringify({
-        version: '0.3.0',
+        version: CLI_VERSION,
         platform: 'darwin',
         architecture: 'arm64',
         executable: 'gog-achievements',
@@ -168,7 +169,7 @@ test('an explicit local CLI directory is validated and works only in development
     await writeFile(
       join(folder, 'build.json'),
       JSON.stringify({
-        version: '0.3.0',
+        version: CLI_VERSION,
         platform: 'darwin',
         architecture: 'arm64',
         layout: 'single_executable',
@@ -182,7 +183,7 @@ test('an explicit local CLI directory is validated and works only in development
     await expect(
       resolveCli({ ...options, developmentDirectory: 'relative/build' }),
     ).rejects.toThrow('absolute directory');
-    await expect(resolveCli({ ...options, version: '0.4.0' })).rejects.toThrow('does not match');
+    await expect(resolveCli({ ...options, version: '0.0.0' })).rejects.toThrow('does not match');
     await expect(resolveCli({ ...options, architecture: 'x64' })).rejects.toThrow('does not match');
   } finally {
     await rm(folder, { recursive: true, force: true });
