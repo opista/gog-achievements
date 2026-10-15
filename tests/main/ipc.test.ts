@@ -1,10 +1,21 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { NestFactory } from '@nestjs/core';
+import { createIpcApp, type Constructor } from '@electron-ipc-bridge/core';
 import { setupPreload } from '@electron-ipc-bridge/core/preload';
 import { createDesktopApplication, type DesktopApplication } from '../../src/main/application';
 import { CliClient } from '../../src/main/cli-client';
-import { OperationManager } from '../../src/main/operation-manager';
+import { WorkspaceService } from '../../src/main/workspace.service';
+import { RecoveryService } from '../../src/main/features/recovery/recovery.service';
+import { WorkspaceModule } from '../../src/main/workspace.module';
+import { DesktopModule } from '../../src/main/desktop.module';
+import { WorkspaceController } from '../../src/main/workspace.controller';
+import { APP_ACTIONS, DESKTOP_WINDOW, WORKSPACE_API } from '../../src/main/ipc.tokens';
+import { FakeCli, gameId, userId } from './fixtures';
 import { ipcSchemas } from '../../src/shared/schemas';
 import type { IpcResult } from '../../src/shared/api';
 import type { IpcApi } from '../../src/shared/ipc.generated';
@@ -208,14 +219,78 @@ test('closing the Nest application removes all bridge handlers and permits a cle
   expect(await next.client.initialize()).toMatchObject({ auth: { authenticated: false } });
 });
 
-test('Nest supplies the production operation manager and stops recovery polling on close', async () => {
+test('Nest supplies the production workspace services and stops recovery polling on close', async () => {
   vi.useFakeTimers();
-  const refresh = vi.spyOn(OperationManager.prototype, 'refreshRecovery').mockResolvedValue();
+  const refresh = vi.spyOn(RecoveryService.prototype, 'refresh').mockResolvedValue();
   const { application, api } = await fixture(false);
-  expect(api).toBeInstanceOf(OperationManager);
+  expect(api).toBeInstanceOf(WorkspaceService);
   await vi.advanceTimersByTimeAsync(3000);
   expect(refresh).toHaveBeenCalledOnce();
   await application.close();
   await vi.advanceTimersByTimeAsync(6000);
   expect(refresh).toHaveBeenCalledOnce();
+});
+
+test('the production feature services complete the workspace flow through the real IPC bridge', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'gog-production-ipc-'));
+  const cli = new FakeCli();
+  const mainFrame = {};
+  const webContents = { mainFrame };
+  electron.event = { sender: webContents, senderFrame: mainFrame };
+  const context = await NestFactory.createApplicationContext(
+    {
+      module: DesktopModule,
+      imports: [
+        WorkspaceModule.register({
+          createCli: () => cli,
+          userDataPath: folder,
+          version: '0.1.0',
+          cliVersion: '0.3.0',
+          probe: { find: async () => ({ state: 'gone' }) },
+        }),
+      ],
+      providers: [
+        { provide: DESKTOP_WINDOW, useValue: { webContents } },
+        { provide: APP_ACTIONS, useValue: { checkForUpdates: async () => {} } },
+      ],
+    },
+    { logger: false, abortOnError: false },
+  );
+  const ipc = createIpcApp({
+    controllers: [WorkspaceController] as Constructor<WorkspaceController>[],
+    resolver: { resolve: (token) => context.get(token) },
+  });
+  try {
+    const api = context.get<WorkspaceService>(WORKSPACE_API);
+    const bridge = (await setupPreload()) as unknown as IpcApi;
+    const client = createDesktopApi(bridge, {
+      isDemo: false,
+      ready: async () => {},
+      onOperation: (listener) => api.onOperation(listener),
+    });
+    const events: string[] = [];
+    const unsubscribe = client.onOperation(({ kind }) => events.push(kind));
+    expect((await client.initialize()).auth.user_id).toBe(userId);
+    expect((await client.login()).authenticated).toBe(true);
+    expect((await client.listGames()).games[0]?.id).toBe(gameId);
+    expect((await client.listAchievements(gameId)).achievements.length).toBeGreaterThan(0);
+    await client.addAchievements({ gameId, achievementIds: ['101'] });
+    await client.setDates({ gameId, dates: { '101': '2020-02-01T00:00:00Z' } });
+    const preview = await client.preview({ gameId });
+    expect(cli.calls.some(({ kind }) => kind === 'queue-apply')).toBe(false);
+    expect((await client.apply({ previewToken: preview.token })).report?.complete).toBe(true);
+    expect((await client.listQueues()).length).toBe(0);
+    expect((await client.history({}))[0]?.report?.results[0]?.requested_unlocked_at).toBe(
+      '2020-02-01T00:00:00Z',
+    );
+    expect(events).toContain('login');
+    expect(events).toContain('apply');
+    expect(events.at(-1)).toBe('idle');
+    expect(cli.calls.filter(({ kind }) => kind === 'queue-apply')).toHaveLength(1);
+    unsubscribe();
+  } finally {
+    ipc.dispose();
+    await context.close();
+    await rm(folder, { recursive: true, force: true });
+  }
 });
