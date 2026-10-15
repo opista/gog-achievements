@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/opista/gog-achievements/compare/v0.2.0...v0.2.1) (2026-10-15)
+
+
+### Fixed
+
+* seal Mac app bundles before distribution ([#13](https://github.com/opista/gog-achievements/issues/13)) ([5c29d16](https://github.com/opista/gog-achievements/commit/5c29d16a34c3001100414b33749eb8a02f99a912))
+
 ## [0.2.0](https://github.com/opista/gog-achievements/compare/v0.1.0...v0.2.0) (2026-10-15)
 
 
