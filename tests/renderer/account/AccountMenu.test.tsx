@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AccountMenu } from '../../src/renderer/components/AccountMenu';
+import { AccountMenu } from '../../../src/renderer/features/account/AccountMenu';
 
 afterEach(cleanup);
 

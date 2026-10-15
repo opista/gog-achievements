@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download, LoaderCircle, LogOut, UserRound } from 'lucide-react';
-import type { AuthStatus, DesktopApi } from '../../shared/api';
+import type { AuthStatus, DesktopApi } from '../../../shared/api';
 
 interface AccountMenuProps {
   api: Pick<DesktopApi, 'checkForUpdates'>;
