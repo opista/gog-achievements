@@ -98,7 +98,9 @@ Tests use fake CLI responses and sample accounts. Browser tests run the demo flo
 
 The desktop test launches the compiled app in demo mode and checks the real renderer → sandboxed preload → IPC bridge → Nest service flow. After packaging, set `GOG_DESKTOP_PACKAGE_DIRECTORY` to the unpacked app directory to run the same check against that package. The test uses sample data and makes no GOG writes.
 
-Packages are currently unsigned. Developer ID signing, notarization and Windows signing remain distribution tasks. Native login and installation still need checks on each supported platform.
+Mac packages use ad hoc signing to seal the app and its nested code. They are not Developer ID signed or notarized, so Gatekeeper may still block downloaded apps. Windows packages remain unsigned. Native login and installation still need checks on each supported platform.
+
+Mac package verification checks the complete bundle signature before running the CLI smoke checks. This detects missing or changed sealed resources, but does not establish publisher identity or Apple notarization.
 
 Development runs use the stock Electron executable, so the Mac Dock can show **Electron** and its icon. The packaged `.app` uses the GOG Achievements name and icon. Update checks require a packaged app (`app.isPackaged`); compiling with `npm run build` alone does not enable them. You can run the generated `.app` directly from `dist`.
 
