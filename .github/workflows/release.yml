@@ -28,8 +28,11 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: write
     outputs:
       commit: ${{ steps.pin.outputs.commit }}
+      release-id: ${{ steps.pin.outputs.release-id }}
     steps:
       - name: Pin the existing draft release tag
         id: pin
@@ -42,10 +45,17 @@ jobs:
             if (!/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(tag)) {
               throw new Error('Use an existing version tag, such as v0.1.0.');
             }
-            const { data: release } = await github.rest.repos.getReleaseByTag({ ...context.repo, tag });
-            if (!release.draft) throw new Error('Only draft releases can be built for publication.');
+            // The tag endpoint only finds published releases; drafts need an authenticated listing.
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
+            const matches = releases.filter((release) => release.tag_name === tag);
+            if (matches.length !== 1) throw new Error('Use an existing draft release tag.');
+            const release = matches[0];
+            if (!Number.isSafeInteger(release.id) || release.id <= 0 || release.draft !== true) {
+              throw new Error('Only valid draft releases can be built for publication.');
+            }
             const { data: commit } = await github.rest.repos.getCommit({ ...context.repo, ref: 'refs/tags/' + tag });
             core.setOutput('commit', commit.sha);
+            core.setOutput('release-id', release.id);
 
   build:
     needs: prepare
@@ -88,11 +98,16 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag }}
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release-id }}
         with:
           script: |
             const tag = process.env.RELEASE_TAG;
-            const { data: release } = await github.rest.repos.getReleaseByTag({ ...context.repo, tag });
-            if (!release.draft) throw new Error('Only draft releases can be published.');
+            const releaseId = Number(process.env.RELEASE_ID);
+            if (!Number.isSafeInteger(releaseId) || releaseId <= 0) throw new Error('Invalid pinned release ID.');
+            const { data: release } = await github.rest.repos.getRelease({ ...context.repo, release_id: releaseId });
+            if (release.id !== releaseId || release.tag_name !== tag || release.draft !== true) {
+              throw new Error('The draft release changed during this build.');
+            }
             const { data: commit } = await github.rest.repos.getCommit({ ...context.repo, ref: 'refs/tags/' + tag });
             if (commit.sha !== process.env.RELEASE_COMMIT) throw new Error('The release tag moved during this build.');
       - name: Attach all verified packages and publish
