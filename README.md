@@ -6,13 +6,11 @@ Restore missing GOG achievements you have already earned, on Mac and Windows. Ch
 
 ![GOG Achievements running on a Mac, with The Wandering Fool from Cyberpunk 2077 queued for review.](docs/images/app-queue.jpg)
 
-_The Mac app with one achievement queued. Adding it to the queue does not unlock it._
+_The Mac app with one achievement queued._
 
 ## Download and install
 
 Get installers from [GitHub Releases](https://github.com/opista/gog-achievements/releases).
-
-> If no installer is listed, the first desktop release is still being prepared.
 
 Choose the file whose name ends with the matching text below:
 
@@ -25,7 +23,7 @@ Choose the file whose name ends with the matching text below:
 
 On a Mac, open the `.dmg` file and drag **GOG Achievements** into **Applications**. On Windows, open the `.exe` file and follow the installer.
 
-Requires macOS 13.5 or later, or Windows 10/11. Current builds are unsigned, so your computer may show an unverified publisher warning.
+Requires macOS 13.5 or later, or Windows 10/11. Current builds are unsigned, so macOS or Windows may block the app or show a security warning. Only continue if you trust the download. See [Apple’s instructions for opening an app from an unidentified developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac) or [Microsoft’s SmartScreen guidance](https://support.microsoft.com/en-us/windows/security/windows-security/app-browser-control-in-the-windows-security-app).
 
 ## Restore an achievement
 
