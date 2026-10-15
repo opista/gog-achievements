@@ -29,7 +29,7 @@ Requires macOS 13.5 or later, or Windows 10/11. Current builds are unsigned, so 
 
 1. Open the app and choose **Sign in with GOG**.
 2. Choose a game from **Your Library**. You can search for it by name.
-3. Select **+** beside a locked achievement to add it to the **Queue**.
+3. Select **Unlock** beside a locked achievement to add it to the **Queue**. Unlock uses a green open padlock. Lock uses an amber closed padlock. These markers stay the same in the achievement list, queue, confirmation and results.
 4. To set its unlock date, select the calendar button beside the queued achievement, choose the date and time, then select **Save date**. Dates use your computer’s local time.
 5. Close the game, then select **Apply changes** in its queue. Check the achievements and dates in the confirmation window, then select **Unlock N achievements** to confirm.
 

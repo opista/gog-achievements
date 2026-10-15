@@ -4,7 +4,7 @@ Design pass, 14 October 2026, following the chosen **A — Desktop workspace**. 
 
 ## Mixed actions update, 15 October 2026
 
-This update takes precedence over the restoration-only concepts below. Keep the current three panes and one confirmation per game. Locked achievements use **+** to queue an unlock. Unlocked achievements use a lock button to queue a lock when the CLI supports it. Each queue row states **Unlock** or **Lock**. Lock rows retain the previous unlock date and have no date editor. **×** only removes the queued request.
+This update takes precedence over the restoration-only concepts below. Keep the current three panes and one confirmation per game. Locked achievements use **Unlock** to queue an unlock. Unlocked achievements use **Lock** to queue a lock when the CLI supports it. Use the same green open-padlock and amber closed-padlock markers in the list, queue, confirmation, results and history. Queued list rows state **Unlock queued** or **Lock queued**, using the saved request even if the live achievement state changes. Lock rows retain the previous unlock date and have no date editor. **×** only removes the queued request.
 
 **Apply changes** checks all requests, then shows their actions and exact dates in one dialog. The final button states the pending counts: **Unlock 2 achievements**, **Lock 2 achievements**, or **Unlock 2 achievements and lock 2 achievements**. Cancel sends no writes. Keep Cancel as the initial focus.
 

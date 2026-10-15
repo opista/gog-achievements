@@ -97,7 +97,7 @@ test('compact library keeps game art, plain achievement details and existing unl
     unlocked.getByRole('button', { name: 'Queue lock for Full Body Conversion' }),
   ).toBeEnabled();
   await expect(
-    page.getByRole('button', { name: 'Add Legend of The Afterlife to queue', exact: true }),
+    page.getByRole('button', { name: 'Queue unlock for Legend of The Afterlife', exact: true }),
   ).toBeEnabled();
   await expect(page.getByRole('button', { name: /^Details for / })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Queued', exact: true })).toHaveCount(0);
@@ -229,7 +229,7 @@ for (const mode of ['unlock', 'lock', 'mixed'] as const) {
       const daemon = page.getByRole('article', { name: 'Daemon In The Shell', exact: true });
       await expect(daemon.getByText('Locked', { exact: true })).toBeVisible();
       await expect(
-        daemon.getByRole('button', { name: 'Add Daemon In The Shell to queue', exact: true }),
+        daemon.getByRole('button', { name: 'Queue unlock for Daemon In The Shell', exact: true }),
       ).toBeEnabled();
     }
   });
@@ -240,7 +240,7 @@ test('single-item date edits stay local until Save date and persist exact second
 }) => {
   await signIn(page);
   await page
-    .getByRole('button', { name: 'Add Legend of The Afterlife to queue', exact: true })
+    .getByRole('button', { name: 'Queue unlock for Legend of The Afterlife', exact: true })
     .click();
   const remove = page.getByRole('button', { name: 'Remove Legend of The Afterlife from queue' });
   await expect(remove).toBeEnabled();
@@ -435,7 +435,10 @@ test('per-game apply retains the other global queue across selection, history an
 }) => {
   await signIn(page);
   await page.getByRole('button', { name: WITCHER, exact: true }).click();
-  const passed = page.getByRole('button', { name: 'Add Passed the Trial to queue', exact: true });
+  const passed = page.getByRole('button', {
+    name: 'Queue unlock for Passed the Trial',
+    exact: true,
+  });
   await expect(passed).toBeEnabled();
   await passed.click();
   await expect(applyButton(page, WITCHER)).toBeEnabled();
@@ -632,7 +635,7 @@ test('keyboard queue actions keep their place and the empty queue explains how t
 }) => {
   await signIn(page);
   const add = page.getByRole('button', {
-    name: 'Add Legend of The Afterlife to queue',
+    name: 'Queue unlock for Legend of The Afterlife',
     exact: true,
   });
   await add.focus();

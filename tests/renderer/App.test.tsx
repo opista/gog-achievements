@@ -58,7 +58,7 @@ describe('desktop restoration flow', () => {
     expect(screen.queryByText('A sample hidden achievement')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reveal' }));
     expect(
-      screen.getByRole('button', { name: 'Add A sample hidden achievement to queue' }),
+      screen.getByRole('button', { name: 'Queue unlock for A sample hidden achievement' }),
     ).toBeEnabled();
   });
   it('checks automatically and never writes before final confirmation', async () => {
@@ -134,7 +134,7 @@ describe('desktop restoration flow', () => {
     const { api, user } = await connected();
     await user.click(screen.getByRole('button', { name: 'The Witcher 3: Wild Hunt' }));
     await ready();
-    await user.click(screen.getByRole('button', { name: 'Add Passed the Trial to queue' }));
+    await user.click(screen.getByRole('button', { name: 'Queue unlock for Passed the Trial' }));
     await ready();
     expect(screen.getByLabelText('Queue for Cyberpunk 2077')).toBeVisible();
     expect(screen.getByLabelText('Queue for The Witcher 3: Wild Hunt')).toBeVisible();
@@ -205,7 +205,9 @@ describe('desktop restoration flow', () => {
   it('adds and removes entries without applying', async () => {
     const { api, user } = await connected();
     const apply = vi.spyOn(api, 'apply');
-    await user.click(screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Queue unlock for Legend of The Afterlife' }),
+    );
     await ready();
     await user.click(
       screen.getByRole('button', { name: 'Remove Legend of The Afterlife from queue' }),

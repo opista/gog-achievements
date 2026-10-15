@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { Eye, LockKeyhole, Plus, RefreshCw } from 'lucide-react';
+import { Eye, RefreshCw } from 'lucide-react';
 import type { Achievement, AchievementAction } from '../../../shared/api';
 import { Art } from '../../components/Art';
+import { AchievementActionIcon, AchievementActionLabel } from '../../components/AchievementAction';
 import { formatDate, formatTimestamp } from '../../date-time';
 import { AchievementSkeleton } from './AchievementSkeleton';
 
@@ -12,7 +13,7 @@ import {
 } from './achievement-model';
 interface Props {
   achievements: Achievement[];
-  queued: Set<string>;
+  queued: ReadonlyMap<string, AchievementAction>;
   busy: boolean;
   loading?: boolean;
   demo: boolean;
@@ -77,7 +78,9 @@ export function Achievements({
           filtered.map((item) => {
             const concealed = item.hidden && !item.unlocked && !revealed.has(item.id);
             const name = concealed ? 'Hidden achievement' : item.name;
-            const isQueued = queued.has(item.id);
+            const queuedAction = queued.get(item.id);
+            const isQueued = queuedAction !== undefined;
+            const action = item.unlocked ? 'lock' : 'unlock';
             return (
               <article className="achievement-row" key={item.id} aria-label={name}>
                 <div className="achievement-main">
@@ -111,13 +114,9 @@ export function Achievements({
                   <div className="achievement-status">
                     {!concealed && !isQueued && (!item.unlocked || supportsLocking) ? (
                       <button
-                        className="icon-button achievement-add"
-                        aria-label={
-                          item.unlocked ? `Queue lock for ${name}` : `Add ${name} to queue`
-                        }
-                        title={
-                          item.unlocked ? `Queue lock for ${name}` : `Queue unlock for ${name}`
-                        }
+                        className={`achievement-action-button achievement-action-${action}`}
+                        aria-label={`Queue ${action} for ${name}`}
+                        title={`Queue ${action} for ${name}`}
                         disabled={controlsBlocked}
                         onClick={(event) => {
                           if (event.detail === 0) focusTarget.current = item.id;
@@ -131,7 +130,8 @@ export function Achievements({
                           }
                         }}
                       >
-                        {item.unlocked ? <LockKeyhole size={19} /> : <Plus size={19} />}
+                        <AchievementActionIcon action={action} />
+                        <span>{item.unlocked ? 'Lock' : 'Unlock'}</span>
                       </button>
                     ) : null}
                     {concealed ? (
@@ -139,19 +139,21 @@ export function Achievements({
                         <Eye size={16} />
                         Reveal
                       </button>
-                    ) : isQueued ? (
-                      <span className="status queued">Queued</span>
+                    ) : queuedAction ? (
+                      <AchievementActionLabel
+                        action={queuedAction}
+                        className="status"
+                        label={`${queuedAction === 'lock' ? 'Lock' : 'Unlock'} queued`}
+                      />
                     ) : item.unlocked ? (
-                      <span
-                        className="status ready"
+                      <AchievementActionLabel
+                        action="unlock"
+                        className="status"
+                        label={`Unlocked ${item.unlocked_at ? formatDate(item.unlocked_at, zone) : ''}`.trim()}
                         title={`Existing unlock: ${formatTimestamp(item.unlocked_at, zone)}. This date is read-only.`}
-                      >
-                        Unlocked {item.unlocked_at ? formatDate(item.unlocked_at, zone) : ''}
-                      </span>
+                      />
                     ) : (
-                      <span className={`status ${isQueued ? 'queued' : 'neutral'}`}>
-                        {isQueued ? 'Queued' : 'Locked'}
-                      </span>
+                      <AchievementActionLabel action="lock" className="status" label="Locked" />
                     )}
                   </div>
                 </div>

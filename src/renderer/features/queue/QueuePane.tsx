@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Check, FileText, LoaderCircle, X } from 'lucide-react';
 import type { Achievement, Queue } from '../../../shared/api';
 import { Art } from '../../components/Art';
+import { AchievementActionLabel } from '../../components/AchievementAction';
 import { PaneResize } from '../../components/PaneResize';
 import { formatTimestamp, localTimeOccurrence } from '../../date-time';
 import { QueueDateModal } from './QueueDateModal';
@@ -137,9 +138,7 @@ function SignedInQueuePane({
                         />
                         <div className="queue-row-content">
                           <strong title={item.name}>{item.name}</strong>
-                          <span className={`queue-action-label ${locking ? 'lock' : ''}`}>
-                            {locking ? 'Lock' : 'Unlock'}
-                          </span>
+                          <AchievementActionLabel action={locking ? 'lock' : 'unlock'} />
                           <p className="queue-description" title={description}>
                             {description}
                           </p>

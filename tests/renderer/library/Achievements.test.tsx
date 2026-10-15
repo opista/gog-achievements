@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { Achievements } from '../../../src/renderer/features/library/Achievements';
 import { AchievementSkeleton } from '../../../src/renderer/features/library/AchievementSkeleton';
 import type { ComponentProps } from 'react';
-import type { Achievement } from '../../../src/shared/api';
+import type { Achievement, AchievementAction } from '../../../src/shared/api';
 afterEach(cleanup);
 function achievement(id: string, name: string, options: Partial<Achievement> = {}): Achievement {
   return {
@@ -31,7 +31,7 @@ const input = [
   achievement('locked-a', 'Locked A'),
 ];
 function show(
-  queued = new Set<string>(),
+  queued = new Map<string, AchievementAction>(),
   overrides: Partial<ComponentProps<typeof Achievements>> = {},
 ) {
   const onAdd = vi.fn();
@@ -68,40 +68,63 @@ it('adds one achievement directly without checkboxes or a bulk action', async ()
   const { onAdd } = show();
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Add selected' })).not.toBeInTheDocument();
-  const add = screen.getByRole('button', { name: 'Add Locked A to queue' });
+  const add = screen.getByRole('button', { name: 'Queue unlock for Locked A' });
   expect(add).toHaveAttribute('title', 'Queue unlock for Locked A');
   await user.click(add);
   expect(onAdd).toHaveBeenCalledExactlyOnceWith(['locked-a']);
 });
 it('omits actions for queued and unlocked rows and blocks saves during other work', () => {
-  const { props, rerender } = show(new Set(['locked-b']));
-  expect(screen.queryByRole('button', { name: 'Add Locked B to queue' })).not.toBeInTheDocument();
+  const { props, rerender } = show(new Map([['locked-b', 'unlock']]));
   expect(
-    within(screen.getByRole('article', { name: 'Locked B' })).getByText('Queued'),
+    screen.queryByRole('button', { name: 'Queue unlock for Locked B' }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole('article', { name: 'Locked B' })).getByText('Unlock queued'),
   ).toBeVisible();
   expect(
-    screen.queryByRole('button', { name: 'Add Newest unlock to queue' }),
+    screen.queryByRole('button', { name: 'Queue unlock for Newest unlock' }),
   ).not.toBeInTheDocument();
   rerender(<Achievements {...props} busy />);
-  expect(screen.getByRole('button', { name: 'Add Locked A to queue' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Queue unlock for Locked A' })).toBeDisabled();
 });
 it('queues an explicit lock only when supported and preserves keyboard focus', async () => {
   const user = userEvent.setup();
-  const { onAdd, props, rerender } = show(new Set(), { supportsLocking: true });
+  const { onAdd, props, rerender } = show(new Map(), { supportsLocking: true });
   const lock = screen.getByRole('button', { name: 'Queue lock for Newest unlock' });
   lock.focus();
   await user.keyboard('{Enter}');
   expect(onAdd).toHaveBeenCalledExactlyOnceWith(['new'], 'lock');
-  rerender(<Achievements {...props} queued={new Set(['new'])} />);
+  rerender(<Achievements {...props} queued={new Map([['new', 'lock']])} />);
   expect(
     screen.queryByRole('button', { name: 'Queue lock for Newest unlock' }),
   ).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Newest unlock' })).toHaveFocus();
-  expect(screen.getByText('Queued')).toBeVisible();
+  expect(screen.getByText('Lock queued')).toBeVisible();
   rerender(<Achievements {...props} busy />);
   expect(screen.getByRole('button', { name: 'Queue lock for Newest unlock' })).toBeDisabled();
   rerender(<Achievements {...props} supportsLocking={false} />);
   expect(screen.queryByRole('button', { name: /Queue lock/ })).not.toBeInTheDocument();
+});
+it('labels queued actions from the saved request after the live state changes', () => {
+  show(
+    new Map([
+      ['locked-b', 'lock'],
+      ['new', 'unlock'],
+    ]),
+    { supportsLocking: true },
+  );
+  expect(
+    within(screen.getByRole('article', { name: 'Locked B' })).getByText('Lock queued'),
+  ).toBeVisible();
+  expect(
+    within(screen.getByRole('article', { name: 'Newest unlock' })).getByText('Unlock queued'),
+  ).toBeVisible();
+  expect(
+    within(screen.getByRole('article', { name: 'Locked B' })).queryByRole('button'),
+  ).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole('article', { name: 'Newest unlock' })).queryByRole('button'),
+  ).not.toBeInTheDocument();
 });
 it('conceals hidden information and focuses the direct add action after reveal', async () => {
   const user = userEvent.setup();
@@ -110,15 +133,15 @@ it('conceals hidden information and focuses the direct add action after reveal',
   expect(screen.queryByText('Secret description')).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Reveal' }));
   expect(screen.getByText('Secret description')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Add Secret title to queue' })).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Queue unlock for Secret title' })).toHaveFocus();
 });
 it('focuses a revealed queued title without a duplicate add action', async () => {
   const user = userEvent.setup();
-  show(new Set(['secret']));
+  show(new Map([['secret', 'unlock']]));
   await user.click(screen.getByRole('button', { name: 'Reveal' }));
   expect(screen.getByRole('heading', { name: 'Secret title' })).toHaveFocus();
   expect(
-    screen.queryByRole('button', { name: 'Add Secret title to queue' }),
+    screen.queryByRole('button', { name: 'Queue unlock for Secret title' }),
   ).not.toBeInTheDocument();
 });
 
@@ -129,10 +152,10 @@ it.each([
   const user = userEvent.setup();
   const { onAdd, props, rerender } = show();
   if (hidden) await user.click(screen.getByRole('button', { name: 'Reveal' }));
-  screen.getByRole('button', { name: `Add ${name} to queue` }).focus();
+  screen.getByRole('button', { name: `Queue unlock for ${name}` }).focus();
   await user.keyboard('{Enter}');
   expect(onAdd).toHaveBeenCalledExactlyOnceWith([id]);
-  rerender(<Achievements {...props} queued={new Set([id])} />);
+  rerender(<Achievements {...props} queued={new Map([[id, 'unlock']])} />);
   expect(screen.getByRole('heading', { name })).toHaveFocus();
 });
 it('keeps filters and refresh stable while skeleton rows load', async () => {
@@ -155,7 +178,7 @@ it('keeps unlocked filtering read-only and newest first', async () => {
   show();
   await user.click(screen.getByRole('button', { name: 'Unlocked' }));
   expect(rowNames()).toEqual(['Newest unlock', 'Older unlock']);
-  expect(screen.queryByRole('button', { name: /Add .* to queue/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Queue unlock for .*/ })).not.toBeInTheDocument();
 });
 it('announces skeleton status without placeholder controls', () => {
   const { container } = render(<AchievementSkeleton />);

@@ -234,7 +234,14 @@ export function App({ api }: { api: DesktopApi }) {
                 <Achievements
                   key={w.game.id}
                   achievements={w.achievements}
-                  queued={new Set(w.queue?.items.map((item) => item.achievement_id) ?? [])}
+                  queued={
+                    new Map(
+                      w.queue?.items.map((item) => [
+                        item.achievement_id,
+                        item.action ?? 'unlock',
+                      ]) ?? [],
+                    )
+                  }
                   busy={w.busy}
                   loading={w.loading !== null && w.loadingTarget === 'achievements'}
                   demo={api.isDemo}

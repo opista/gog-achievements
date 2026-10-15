@@ -89,7 +89,7 @@ async function connected(otherGame = false) {
   const rendered = render(<App api={api} />);
   await waitFor(() =>
     expect(
-      screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }),
+      screen.getByRole('button', { name: 'Queue unlock for Legend of The Afterlife' }),
     ).toBeEnabled(),
   );
   return { api, user, games, achievements, ...rendered };
@@ -148,7 +148,9 @@ it('shows selected achievements in the queue before persistence resolves', async
     return original(input);
   });
   const apply = vi.spyOn(api, 'apply');
-  await user.click(screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }));
+  await user.click(
+    screen.getByRole('button', { name: 'Queue unlock for Legend of The Afterlife' }),
+  );
   const queue = screen.getByRole('complementary', { name: 'Achievement queue' });
   expect(within(queue).getByText('Legend of The Afterlife')).toBeVisible();
   expect(within(queue).getByRole('status')).toHaveTextContent('Saving queue…');
@@ -171,7 +173,9 @@ it('rolls back provisional additions when both persistence and draft reload fail
   const request = deferred<never>();
   vi.spyOn(api, 'addAchievements').mockImplementationOnce(() => request.promise);
   vi.spyOn(api, 'listQueues').mockRejectedValueOnce(new Error('Draft reload failed.'));
-  await user.click(screen.getByRole('button', { name: 'Add Legend of The Afterlife to queue' }));
+  await user.click(
+    screen.getByRole('button', { name: 'Queue unlock for Legend of The Afterlife' }),
+  );
   const queue = screen.getByRole('complementary', { name: 'Achievement queue' });
   expect(within(queue).getByText('Legend of The Afterlife')).toBeVisible();
   await act(async () => request.reject(new Error('Draft save failed.')));

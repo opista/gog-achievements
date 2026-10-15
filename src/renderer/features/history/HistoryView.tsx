@@ -3,6 +3,7 @@ import { History } from 'lucide-react';
 import type { OperationRecord } from '../../../shared/api';
 import { formatTimestamp } from '../../date-time';
 import { buildHistoryRows } from './history-model';
+import { AchievementActionLabel } from '../../components/AchievementAction';
 
 export function HistoryView({
   records,
@@ -41,6 +42,7 @@ export function HistoryView({
                   <li className="history-unlock-row" key={entry.key}>
                     <div className="history-entry-copy">
                       <strong>{entry.name}</strong>
+                      <AchievementActionLabel action="lock" />
                       <span>{entry.game}</span>
                       <small>
                         Previous unlock:{' '}
@@ -64,6 +66,7 @@ export function HistoryView({
                 <li className="history-unlock-row" key={entry.key}>
                   <div className="history-entry-copy">
                     <strong>{entry.name}</strong>
+                    <AchievementActionLabel action="unlock" />
                     <span>{entry.game}</span>
                     {entry.differentDate ? <small>Unlocked with a different date</small> : null}
                   </div>

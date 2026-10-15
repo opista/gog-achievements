@@ -1785,9 +1785,24 @@ small {
   align-items: center;
   gap: 10px;
 }
-.achievement-add {
+.achievement-action-button {
   order: 1;
   flex: none;
+  min-width: 90px;
+  min-height: 36px;
+  padding: 7px 10px;
+  gap: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--action-colour);
+  background: var(--action-background);
+  border-color: var(--action-colour);
+}
+button.achievement-action-button:hover:not(:disabled) {
+  color: var(--action-colour);
+  background: var(--action-background);
+  border-color: var(--action-colour);
+  box-shadow: inset 0 0 0 1px var(--action-colour);
 }
 .achievement-column-labels {
   padding-left: 70px;
@@ -1875,15 +1890,45 @@ small {
 .queue-row-content {
   gap: 0;
 }
-.queue-action-label {
-  display: block;
-  color: var(--muted);
+.achievement-action-unlock {
+  --action-colour: var(--green);
+  --action-background: var(--green-bg);
+}
+.achievement-action-lock {
+  --action-colour: var(--warn);
+  --action-background: var(--warn-bg);
+}
+.achievement-action-label {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: var(--action-colour);
+  background: var(--action-background);
   font-size: 12px;
   font-weight: 600;
   margin: 4px 0;
+  line-height: 1.3;
 }
-.queue-action-label.lock {
-  color: var(--text);
+.achievement-action-label svg,
+.achievement-action-button svg {
+  flex: none;
+}
+.achievement-status > .achievement-action-label {
+  margin: 0;
+  align-self: center;
+}
+.result-table td > .achievement-action-label {
+  margin: 0 0 6px;
+}
+.history-entry-copy .achievement-action-label,
+.history-entry-copy .achievement-action-label span {
+  color: var(--action-colour);
+  font-size: 12px;
 }
 .queue-previous-date,
 .result-previous-date {

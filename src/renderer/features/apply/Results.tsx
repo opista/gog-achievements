@@ -3,6 +3,7 @@ import type { ApplyResult } from '../../../shared/api';
 import { ExactDate } from './ExactDate';
 import { resultsNeedAttention } from './apply-model';
 import { STATUS_LABELS } from '../../presentation/report-status';
+import { AchievementActionLabel } from '../../components/AchievementAction';
 export function Results({ result, zone }: { result: ApplyResult; zone: string }) {
   const unknown = result.state === 'unknown' || !result.report;
   const attention = resultsNeedAttention(result);
@@ -49,23 +50,32 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
                 <tr key={item.achievement_id}>
                   <th scope="row">
                     <strong>{item.name}</strong>
-                    <span
-                      className={`status ${['restored', 'skipped_already_unlocked', 'locked', 'skipped_already_locked'].includes(item.status) ? 'ready' : 'attention'}`}
-                    >
-                      {STATUS_LABELS[item.status]}
-                    </span>
+                    {[
+                      'restored',
+                      'skipped_already_unlocked',
+                      'locked',
+                      'skipped_already_locked',
+                    ].includes(item.status) ? (
+                      <AchievementActionLabel
+                        action={item.action ?? 'unlock'}
+                        className="status"
+                        label={STATUS_LABELS[item.status]}
+                      />
+                    ) : (
+                      <span className="status attention">{STATUS_LABELS[item.status]}</span>
+                    )}
                   </th>
                   <td>
                     {item.action === 'lock' ? (
                       <>
-                        <strong>Lock</strong>
+                        <AchievementActionLabel action="lock" />
                         <small className="result-previous-date">
                           Previous unlock: <ExactDate iso={item.previous_unlocked_at} zone={zone} />
                         </small>
                       </>
                     ) : (
                       <>
-                        <strong>Unlock</strong>
+                        <AchievementActionLabel action="unlock" />
                         <ExactDate iso={item.requested_unlocked_at} zone={zone} />
                       </>
                     )}

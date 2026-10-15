@@ -3,6 +3,7 @@ import type { Achievement, Report } from '../../../shared/api';
 import { formatTimestamp, localTimeOccurrence } from '../../date-time';
 import { Dialog } from '../../components/Dialog';
 import { Art } from '../../components/Art';
+import { AchievementActionLabel } from '../../components/AchievementAction';
 export function ApplyConfirmation({
   report,
   zone,
@@ -81,9 +82,7 @@ export function ApplyConfirmation({
                   />
                   <div className="confirmation-copy">
                     <strong>{item.name}</strong>
-                    <span className={`queue-action-label ${locking ? 'lock' : ''}`}>
-                      {locking ? 'Lock' : 'Unlock'}
-                    </span>
+                    <AchievementActionLabel action={locking ? 'lock' : 'unlock'} />
                     <p className="queue-description" title={description}>
                       {description}
                     </p>
