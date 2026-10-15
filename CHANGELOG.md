@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/opista/gog-achievements/compare/v0.2.1...v0.3.0) (2026-10-15)
+
+
+### Added
+
+* unlock and lock achievements in the desktop app ([#15](https://github.com/opista/gog-achievements/issues/15)) ([79a1f67](https://github.com/opista/gog-achievements/commit/79a1f670420e9f637c9972395ae3c87b489ad9e8))
+
+
+### Changed
+
+* virtualize large game libraries ([#17](https://github.com/opista/gog-achievements/issues/17)) ([b21e627](https://github.com/opista/gog-achievements/commit/b21e627110f181345cb41b0c2779eb2426d509a8))
+
 ## [0.2.1](https://github.com/opista/gog-achievements/compare/v0.2.0...v0.2.1) (2026-10-15)
 
 
