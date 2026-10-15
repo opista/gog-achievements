@@ -64,16 +64,19 @@ describe('desktop restoration flow', () => {
   it('checks automatically and never writes before final confirmation', async () => {
     const { api, user } = await connected();
     const apply = await confirm(api, user);
-    const dialog = screen.getByRole('dialog', { name: 'Apply 3 achievements?' });
+    const dialog = screen.getByRole('dialog', { name: 'Apply changes to 3 achievements?' });
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' }));
     await screen.findByRole('dialog');
-    await user.click(screen.getByRole('button', { name: 'Unlock 3 achievements' }));
-    await screen.findByRole('heading', { name: 'Results confirmed' });
+    await user.click(screen.getByRole('button', { name: 'Apply changes' }));
+    await screen.findByRole('heading', { name: 'Changes applied' });
     await ready();
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cyberpunk 2077' })).toHaveFocus();
     expect(apply).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Queue is empty.')).toBeVisible();
     expect(
@@ -100,9 +103,9 @@ describe('desktop restoration flow', () => {
     async (scenario) => {
       const { api, user } = await connected(scenario);
       const apply = await confirm(api, user);
-      await user.click(screen.getByRole('button', { name: 'Unlock 3 achievements' }));
+      await user.click(screen.getByRole('button', { name: 'Apply changes' }));
       await screen.findByRole('heading', {
-        name: scenario === 'partial' ? 'Results need attention' : 'Could not confirm changes',
+        name: scenario === 'partial' ? 'Changes need attention' : 'Could not confirm changes',
       });
       await ready();
       if (scenario === 'partial') {
@@ -112,15 +115,19 @@ describe('desktop restoration flow', () => {
           screen.queryByRole('button', { name: 'Edit date for The World' }),
         ).not.toBeInTheDocument();
       }
-      expect(screen.getByRole('button', { name: 'Edit date for Frequent Flyer' })).toBeEnabled();
-      await user.click(screen.getByRole('button', { name: 'Refresh achievements' }));
+      const check = vi.spyOn(api, 'checkCurrentState');
+      await user.click(screen.getByRole('button', { name: 'Check current state' }));
       await ready();
+      expect(check).toHaveBeenCalledExactlyOnceWith({ gameId: '1' });
+      expect(screen.getByRole('dialog')).toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Done' }));
+      expect(screen.getByRole('button', { name: 'Edit date for Frequent Flyer' })).toBeEnabled();
       expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
       expect(
         screen.queryByRole('heading', { name: 'Could not confirm changes' }),
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByRole('heading', { name: 'Results need attention' }),
+        screen.queryByRole('heading', { name: 'Changes need attention' }),
       ).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'History' }));
       await ready();
@@ -141,9 +148,13 @@ describe('desktop restoration flow', () => {
     await user.click(screen.getByRole('button', { name: 'Cyberpunk 2077' }));
     await ready();
     const apply = await confirm(api, user, 'The Witcher 3: Wild Hunt');
-    await user.click(screen.getByRole('button', { name: 'Unlock 1 achievement' }));
-    await screen.findByRole('heading', { name: 'Results confirmed' });
+    await user.click(screen.getByRole('button', { name: 'Apply changes' }));
+    await screen.findByRole('heading', { name: 'Changes applied' });
     await ready();
+    expect(
+      within(screen.getByRole('dialog')).getByRole('heading', { name: 'The Witcher 3: Wild Hunt' }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.getByLabelText('Queue for Cyberpunk 2077')).toBeVisible();
     expect(screen.queryByLabelText('Queue for The Witcher 3: Wild Hunt')).not.toBeInTheDocument();
     expect((await api.getQueue('1'))?.items).toHaveLength(3);
@@ -163,7 +174,7 @@ describe('desktop restoration flow', () => {
     await user.click(screen.getByRole('button', { name: 'History' }));
     await ready();
     expect(
-      within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole('listitem'),
+      within(screen.getByRole('list', { name: 'Confirmed changes' })).getAllByRole('listitem'),
     ).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Edit date for Card Collector' })).toBeEnabled();
     expect(
@@ -176,7 +187,7 @@ describe('desktop restoration flow', () => {
     await ready();
     expect(screen.getByRole('heading', { name: 'Achievement history' })).toBeVisible();
     expect(
-      within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole('listitem'),
+      within(screen.getByRole('list', { name: 'Confirmed changes' })).getAllByRole('listitem'),
     ).toHaveLength(4);
     await user.click(screen.getByRole('button', { name: 'Cyberpunk 2077' }));
     await ready();
@@ -271,4 +282,48 @@ it('uses one sign-in action and hides the queue and time zone while signed out',
   expect(screen.queryByLabelText('Time zone')).not.toBeInTheDocument();
   expect(screen.queryByText('Sign in to load your games.')).not.toBeInTheDocument();
   expect(screen.queryByText('Sign-in opens in a GOG window.')).not.toBeInTheDocument();
+});
+
+it('checks the applied game after an uncertain result even when another game was selected', async () => {
+  const { api, user } = await connected('unknown');
+  await user.click(screen.getByRole('button', { name: 'The Witcher 3: Wild Hunt' }));
+  await ready();
+  await user.click(screen.getByRole('button', { name: 'Queue unlock for Passed the Trial' }));
+  await ready();
+  await user.click(screen.getByRole('button', { name: 'Cyberpunk 2077' }));
+  await ready();
+  const apply = await confirm(api, user, 'The Witcher 3: Wild Hunt');
+  await user.click(screen.getByRole('button', { name: 'Apply changes' }));
+  await screen.findByRole('dialog', { name: 'Could not confirm changes' });
+  await ready();
+  const check = vi.spyOn(api, 'checkCurrentState');
+  await user.click(screen.getByRole('button', { name: 'Check current state' }));
+  await ready();
+  expect(check).toHaveBeenCalledExactlyOnceWith({ gameId: '2' });
+  expect(screen.getByRole('dialog', { name: 'Could not confirm changes' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Done' }));
+  expect(screen.getByRole('heading', { name: 'The Witcher 3: Wild Hunt', level: 2 })).toBeVisible();
+  expect(apply).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the confirmed result visible if the post-apply refresh fails and permits a read-only check', async () => {
+  const { api, user } = await connected();
+  const apply = await confirm(api, user);
+  vi.spyOn(api, 'listAchievements').mockRejectedValueOnce(new Error('Refresh failed.'));
+  await user.click(screen.getByRole('button', { name: 'Apply changes' }));
+  const outcome = await screen.findByRole('dialog', { name: 'Changes applied' });
+  await ready();
+  expect(within(outcome).getByText('3 unlocked')).toBeVisible();
+  expect(within(outcome).getByRole('alert')).toHaveTextContent(
+    'The latest data could not be refreshed.',
+  );
+  const check = vi.spyOn(api, 'checkCurrentState');
+  await user.click(within(outcome).getByRole('button', { name: 'Check current state' }));
+  await ready();
+  expect(check).toHaveBeenCalledExactlyOnceWith({ gameId: '1' });
+  expect(screen.getByRole('dialog', { name: 'Changes applied' })).toBe(outcome);
+  expect(within(outcome).queryByRole('alert')).not.toBeInTheDocument();
+  await user.click(within(outcome).getByRole('button', { name: 'Done' }));
+  expect(screen.getByRole('button', { name: 'Queue lock for The World' })).toBeEnabled();
+  expect(apply).toHaveBeenCalledTimes(1);
 });

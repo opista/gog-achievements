@@ -21,6 +21,7 @@ function props() {
     applyStatus: 'idle',
     achievementFor: () => achievement('1'),
     onRefresh: vi.fn(),
+    onClear: vi.fn().mockResolvedValue(true),
     onRemove: vi.fn(),
     onSaveDates: vi.fn().mockResolvedValue(true),
     onPrepareApply: vi.fn(),
@@ -39,13 +40,39 @@ it('shows loading, retry and empty states through its view inputs', async () => 
   const input = props();
   const { rerender } = render(<QueuePane {...input} loaded={false} busy />);
   expect(screen.getByRole('status', { name: 'Loading queue' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Clear queue' })).toBeDisabled();
   expect(screen.queryByText('Queue is empty.')).not.toBeInTheDocument();
   rerender(<QueuePane {...input} loaded={false} />);
+  expect(screen.getByRole('button', { name: 'Clear queue' })).toBeDisabled();
   await userEvent.click(screen.getByRole('button', { name: 'Retry queue' }));
   expect(input.onRefresh).toHaveBeenCalledTimes(1);
   rerender(<QueuePane {...input} queues={[]} />);
   expect(screen.getByText('Queue is empty.')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Clear queue' })).toBeDisabled();
   expect(screen.getByText('Use the buttons beside achievements to add them here.')).toBeVisible();
+});
+
+it('clears all games from the queue header and focuses the heading after success', async () => {
+  const input = props();
+  render(<QueuePane {...input} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Clear queue' }));
+  expect(input.onClear).toHaveBeenCalledExactlyOnceWith();
+  expect(screen.getByRole('heading', { name: 'Queue' })).toHaveFocus();
+  expect(input.onRemove).not.toHaveBeenCalled();
+  expect(input.onPrepareApply).not.toHaveBeenCalled();
+});
+
+it('clears only the chosen game and keeps counts in its action headers', async () => {
+  const input = props();
+  render(<QueuePane {...input} />);
+  const second = screen.getByRole('region', { name: 'Queue for Sample game 2' });
+  await userEvent.click(
+    within(second).getByRole('button', { name: 'Clear queue for Sample game 2' }),
+  );
+  expect(input.onClear).toHaveBeenCalledExactlyOnceWith('2');
+  expect(within(second).getByRole('heading', { level: 4, name: /^Unlock\s*1$/ })).toBeVisible();
+  expect(within(second).getByRole('heading', { level: 3, name: 'Sample game 2' })).toBeVisible();
+  expect(second.querySelector('.queue-game-heading')).toHaveTextContent('Sample game 2Clear');
 });
 
 it('sends remove and preview actions for the chosen game without a workspace or API', async () => {
@@ -71,7 +98,7 @@ it('groups saved actions and keeps keyboard removal in the visible group order',
       {
         achievement_id: '1',
         key: 'key-1',
-        name: 'Re-lock one',
+        name: 'Lock one',
         action: 'lock',
         previous_unlocked_at: DATE,
       },
@@ -85,7 +112,7 @@ it('groups saved actions and keeps keyboard removal in the visible group order',
       {
         achievement_id: '3',
         key: 'key-3',
-        name: 'Re-lock three',
+        name: 'Lock three',
         action: 'lock',
         previous_unlocked_at: DATE,
       },
@@ -94,7 +121,7 @@ it('groups saved actions and keeps keyboard removal in the visible group order',
   };
   const { rerender } = render(<QueuePane {...input} queues={[mixed]} />);
   const unlocks = screen.getByRole('region', { name: 'Unlock requests for Sample game 1' });
-  const relocks = screen.getByRole('region', { name: 'Re-lock requests for Sample game 1' });
+  const relocks = screen.getByRole('region', { name: 'Lock requests for Sample game 1' });
   expect(within(unlocks).getAllByRole('button', { name: /^Edit date/ })).toHaveLength(2);
   expect(within(relocks).queryByRole('button', { name: /^Edit date/ })).not.toBeInTheDocument();
   expect(
@@ -104,8 +131,8 @@ it('groups saved actions and keeps keyboard removal in the visible group order',
   ).toEqual([
     'Remove Unlock two from queue',
     'Remove Legacy unlock four from queue',
-    'Remove Re-lock one from queue',
-    'Remove Re-lock three from queue',
+    'Remove Lock one from queue',
+    'Remove Lock three from queue',
   ]);
   screen.getByRole('button', { name: 'Remove Unlock two from queue' }).focus();
   await userEvent.keyboard('{Enter}');
@@ -162,6 +189,8 @@ it.each([
 ] as const)('shows the %s state while queue controls are locked', (status, message) => {
   render(<QueuePane {...props()} applyStatus={status} busy />);
   expect(screen.getByText(message)).toBeVisible();
-  for (const button of screen.getAllByRole('button', { name: /^(Edit date|Remove|Apply changes)/ }))
+  for (const button of screen.getAllByRole('button', {
+    name: /^(Clear queue|Edit date|Remove|Review changes)/,
+  }))
     expect(button).toBeDisabled();
 });

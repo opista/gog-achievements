@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, CalendarDays, FileText, LoaderCircle, X } from 'lucide-react';
+import { ArrowRight, CalendarDays, FileText, LoaderCircle, Trash2, X } from 'lucide-react';
 import type { Achievement, Queue } from '../../../shared/api';
 import { achievementActionName, AchievementActionLabel } from '../../components/AchievementAction';
 import { PaneResize } from '../../components/PaneResize';
@@ -16,6 +16,7 @@ interface Props {
   applyStatus: 'idle' | 'applying' | 'recovery';
   achievementFor(gameId: string, achievementId: string): Achievement | undefined;
   onRefresh(): void;
+  onClear(gameId?: string): Promise<boolean>;
   onRemove(gameId: string, ids: string[]): void;
   onSaveDates(gameId: string, dates: Record<string, string>): Promise<boolean>;
   onPrepareApply(gameId: string): void;
@@ -37,6 +38,7 @@ function SignedInQueuePane({
   applyStatus,
   achievementFor,
   onRefresh,
+  onClear,
   onRemove,
   onSaveDates,
   onPrepareApply,
@@ -91,6 +93,18 @@ function SignedInQueuePane({
             {groups.length === 1 ? '' : 's'}
           </p>
         </div>
+        <button
+          title="Remove pending changes for all games"
+          disabled={busy || !loaded || total === 0 || applyStatus !== 'idle'}
+          onClick={() => {
+            void onClear().then((cleared) => {
+              if (cleared) headingRef.current?.focus();
+            });
+          }}
+        >
+          <Trash2 size={14} aria-hidden="true" />
+          Clear queue
+        </button>
       </div>
       <div className="queue-body">
         {!loaded && busy ? (
@@ -125,12 +139,25 @@ function SignedInQueuePane({
               >
                 <div className="queue-game-heading">
                   <h3 title={group.game.title}>{group.game.title}</h3>
-                  <span className="muted">{group.items.length}</span>
+                  <button
+                    className="queue-game-clear"
+                    aria-label={`Clear queue for ${group.game.title}`}
+                    title={`Clear pending changes for ${group.game.title}`}
+                    disabled={busy || !loaded || applyStatus !== 'idle'}
+                    onClick={() => {
+                      void onClear(group.game.id).then((cleared) => {
+                        if (cleared) headingRef.current?.focus();
+                      });
+                    }}
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    Clear
+                  </button>
                 </div>
                 <div className="queue-items">
                   {group.actions.map((actionGroup) => (
                     <section
-                      className="queue-action-group"
+                      className={`queue-action-group achievement-action-${actionGroup.action}`}
                       aria-label={`${achievementActionName(actionGroup.action)} requests for ${group.game.title}`}
                       key={actionGroup.action}
                     >

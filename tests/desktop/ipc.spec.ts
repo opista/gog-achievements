@@ -58,34 +58,47 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
     await expect(
       page.getByRole('button', { name: 'Review changes for Cyberpunk 2077', exact: true }),
     ).toBeEnabled();
+    await page.getByRole('button', { name: 'Clear queue for Cyberpunk 2077', exact: true }).click();
+    await expect(page.getByText('Queue is empty.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Unlock all', exact: true }).click();
+    await expect(page.locator('.queue-row')).toHaveCount(4);
+    await page.getByRole('button', { name: 'Lock all', exact: true }).click();
+    await expect(page.locator('.queue-row')).toHaveCount(2);
     for (const name of ['Full Body Conversion', 'Daemon In The Shell']) {
-      const lock = page.getByRole('button', { name: `Queue re-lock for ${name}`, exact: true });
-      await expect(lock).toBeEnabled();
-      await lock.click();
       await expect(
         page.getByRole('button', { name: `Remove ${name} from queue`, exact: true }),
       ).toBeEnabled();
     }
+    await page.getByRole('button', { name: 'Queue unlock for The World', exact: true }).click();
     await page
       .getByRole('button', { name: 'Review changes for Cyberpunk 2077', exact: true })
       .click();
-    const confirmation = page.getByRole('dialog', { name: 'Apply 5 achievements?', exact: true });
+    const confirmation = page.getByRole('dialog', {
+      name: 'Apply changes to 3 achievements?',
+      exact: true,
+    });
     await expect(confirmation).toBeVisible();
+    const modal = await confirmation.elementHandle();
     await confirmation
       .getByRole('button', {
-        name: 'Unlock 3 achievements and re-lock 2 achievements',
+        name: 'Apply changes',
         exact: true,
       })
       .click();
-    await expect(
-      page.getByText('All requested changes were confirmed.', { exact: true }),
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'History', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Changes applied', exact: true })).toBeVisible();
+    expect(
+      await modal!.evaluate((element) => element === document.querySelector('[role="dialog"]')),
+    ).toBe(true);
+    await expect(page.getByRole('dialog').getByText('1 unlocked', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog').getByText('2 locked', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'View history', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Achievement history', exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('region', { name: 'Locked achievements', exact: true }).getByRole('listitem'),
+      page
+        .getByRole('list', { name: 'Confirmed changes', exact: true })
+        .getByText('Locked', { exact: true }),
     ).toHaveCount(2);
     await expect(page.getByRole('button', { name: 'History', exact: true })).toBeEnabled();
     await page.screenshot({ path: test.info().outputPath('workspace.png') });

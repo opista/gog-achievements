@@ -9,9 +9,8 @@ export function ApplyProgress({
 }) {
   const checking = !signedIn || recovering;
   return (
-    <div className="active-state" role="status">
-      <LoaderCircle size={42} className="spinner" />
-      <h2>{checking ? 'Checking previous changes…' : 'Applying changes…'}</h2>
+    <div className="apply-progress" role="status">
+      <LoaderCircle size={36} className="spinner" aria-hidden="true" />
       <p>
         {checking
           ? 'Please keep the app open while this check finishes.'

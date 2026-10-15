@@ -8,10 +8,21 @@ interface Props {
   onClose(): void;
   busy?: boolean;
   wide?: boolean;
+  compact?: boolean;
+  focusKey?: string;
 }
 const FOCUSABLE =
   'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[href],[tabindex="0"]';
-export function Dialog({ title, children, footer, onClose, busy = false, wide = false }: Props) {
+export function Dialog({
+  title,
+  children,
+  footer,
+  onClose,
+  busy = false,
+  wide = false,
+  compact = false,
+  focusKey,
+}: Props) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -23,11 +34,23 @@ export function Dialog({ title, children, footer, onClose, busy = false, wide = 
       ref.current?.querySelector<HTMLElement>(FOCUSABLE) ??
       ref.current;
     target?.focus();
-    return () => previous?.focus();
+    return () => {
+      const target =
+        previous?.isConnected && !previous.matches(':disabled')
+          ? previous
+          : document.querySelector<HTMLElement>('[data-dialog-return-focus]');
+      target?.focus();
+    };
   }, []);
   useEffect(() => {
     if (busy && !ref.current?.querySelector(FOCUSABLE)) ref.current?.focus();
   }, [busy]);
+  useEffect(() => {
+    if (focusKey === undefined || busy) return;
+    const target =
+      ref.current?.querySelector<HTMLElement>('[data-initial-focus]:not(:disabled)') ?? ref.current;
+    target?.focus();
+  }, [focusKey, busy]);
   return (
     <div className="dialog-backdrop">
       <div
@@ -36,7 +59,7 @@ export function Dialog({ title, children, footer, onClose, busy = false, wide = 
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`dialog ${wide ? 'dialog-wide' : ''}`}
+        className={`dialog ${wide ? 'dialog-wide' : ''} ${compact ? 'dialog-compact' : ''}`}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && !busy) {
             event.stopPropagation();

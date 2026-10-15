@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Check, Eye, RefreshCw } from 'lucide-react';
+import { CalendarDays, Check, Eye, RefreshCw } from 'lucide-react';
 import type { Achievement, AchievementAction } from '../../../shared/api';
 import { Art } from '../../components/Art';
 import { achievementActionName, AchievementActionIcon } from '../../components/AchievementAction';
@@ -20,6 +20,7 @@ interface Props {
   zone: string;
   supportsLocking?: boolean;
   onAdd(ids: string[], action?: AchievementAction): void;
+  onQueueAll(ids: string[], action: AchievementAction): void;
   onRemove(ids: string[]): void;
   onRefresh(): void;
 }
@@ -32,6 +33,7 @@ export function Achievements({
   zone,
   supportsLocking = false,
   onAdd,
+  onQueueAll,
   onRemove,
   onRefresh,
 }: Props) {
@@ -40,6 +42,16 @@ export function Achievements({
   const [revealed, setRevealed] = useState(new Set<string>());
   const focusTarget = useRef<string | null>(null);
   const filtered = visibleAchievements(achievements, filter);
+  const available = filtered.filter(
+    (item) => !item.hidden || item.unlocked || revealed.has(item.id),
+  );
+  const unlockIds = available
+    .filter((item) => !item.unlocked && queued.get(item.id) !== 'unlock')
+    .map((item) => item.id);
+  const lockIds = available
+    .filter((item) => item.unlocked && item.unlocked_at !== null && queued.get(item.id) !== 'lock')
+    .map((item) => item.id);
+  const queuedActions = new Set(queued.values());
   function reveal(id: string) {
     focusTarget.current = id;
     setRevealed((previous) => new Set(previous).add(id));
@@ -59,6 +71,30 @@ export function Achievements({
               {value}
             </button>
           ))}
+        </div>
+        <div className="achievement-bulk-actions" role="group" aria-label="Queue achievements">
+          {filter !== 'Unlocked' ? (
+            <button
+              className="achievement-action-button achievement-action-unlock"
+              title="Queue all revealed locked achievements and remove lock requests for this game"
+              disabled={controlsBlocked || (unlockIds.length === 0 && !queuedActions.has('lock'))}
+              onClick={() => onQueueAll(unlockIds, 'unlock')}
+            >
+              <AchievementActionIcon action="unlock" />
+              Unlock all
+            </button>
+          ) : null}
+          {supportsLocking && filter !== 'Locked' ? (
+            <button
+              className="achievement-action-button achievement-action-lock"
+              title="Queue all unlocked achievements and remove unlock requests for this game"
+              disabled={controlsBlocked || (lockIds.length === 0 && !queuedActions.has('unlock'))}
+              onClick={() => onQueueAll(lockIds, 'lock')}
+            >
+              <AchievementActionIcon action="lock" />
+              Lock all
+            </button>
+          ) : null}
         </div>
         <button
           className="icon-button mobile-refresh"
@@ -99,49 +135,62 @@ export function Achievements({
                     demo={demo}
                   />
                   <div className="achievement-copy">
-                    <h3
-                      className="achievement-name"
-                      tabIndex={-1}
-                      ref={(element) => {
-                        if (
-                          element &&
-                          focusTarget.current === item.id &&
-                          !concealed &&
-                          !isQueued &&
-                          item.unlocked &&
-                          !supportsLocking
-                        ) {
-                          element.focus();
-                          focusTarget.current = null;
-                        }
-                      }}
-                    >
-                      {name}
-                    </h3>
+                    <div className="achievement-title">
+                      {!concealed ? (
+                        <span
+                          className={`achievement-state-icon achievement-action-${item.unlocked ? 'unlock' : 'lock'}`}
+                          role="img"
+                          aria-label={item.unlocked ? 'Unlocked' : 'Locked'}
+                          title={item.unlocked ? 'Unlocked' : 'Locked'}
+                        >
+                          <AchievementActionIcon
+                            action={item.unlocked ? 'unlock' : 'lock'}
+                            size={14}
+                          />
+                        </span>
+                      ) : null}
+                      <h3
+                        className="achievement-name"
+                        tabIndex={-1}
+                        ref={(element) => {
+                          if (
+                            element &&
+                            focusTarget.current === item.id &&
+                            !concealed &&
+                            !isQueued &&
+                            item.unlocked &&
+                            !supportsLocking
+                          ) {
+                            element.focus();
+                            focusTarget.current = null;
+                          }
+                        }}
+                      >
+                        {name}
+                      </h3>
+                    </div>
                     {!concealed ? (
                       <p className="achievement-description">
                         {item.description || 'No description available.'}
                       </p>
                     ) : null}
-                    {!concealed ? (
+                    {!concealed && item.unlocked && item.unlocked_at ? (
                       <p
-                        className="achievement-current-state"
-                        title={
-                          item.unlocked
-                            ? `Existing unlock: ${formatTimestamp(item.unlocked_at, zone)}. This date is read-only.`
-                            : undefined
-                        }
+                        className="achievement-unlock-date"
+                        title={`Unlocked: ${formatTimestamp(item.unlocked_at, zone)}. This date is read-only.`}
                       >
-                        {item.unlocked
-                          ? `Unlocked${item.unlocked_at ? ` · ${formatDate(item.unlocked_at, zone)}` : ''}`
-                          : 'Locked'}
+                        <CalendarDays size={12} aria-hidden="true" />
+                        <span className="sr-only">Unlocked on </span>
+                        <time dateTime={item.unlocked_at}>
+                          {formatDate(item.unlocked_at, zone)}
+                        </time>
                       </p>
                     ) : null}
                   </div>
                   <div className="achievement-status">
                     {!concealed && (isQueued || !item.unlocked || supportsLocking) ? (
                       <button
-                        className={`achievement-action-button${isQueued ? ' achievement-queued-button' : ''}`}
+                        className={`achievement-action-button achievement-action-${isQueued ? 'queued' : action}`}
                         aria-label={buttonLabel}
                         title={buttonLabel}
                         disabled={controlsBlocked}

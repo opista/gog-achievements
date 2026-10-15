@@ -91,7 +91,7 @@ export function useLibrary(
     cacheAchievements(data);
   }
 
-  async function loadGame(next: Game): Promise<void> {
+  async function loadGame(next: Game, currentState = false): Promise<void> {
     const stamp = ++generation.current;
     if (selected.current?.id !== next.id) {
       selected.current = next;
@@ -99,7 +99,7 @@ export function useLibrary(
       setAchievements([]);
       setAchievementsLoaded(false);
     }
-    const data = await readAchievements(next.id, stamp);
+    const data = await readAchievements(next.id, stamp, currentState);
     if (!data) return;
     metadata.current.set(next.id, data.game);
     await syncQueue(next.id, () => isCurrent(stamp, next.id));

@@ -1,60 +1,30 @@
 import { TriangleAlert } from 'lucide-react';
 import type { Achievement, Report } from '../../../shared/api';
 import { formatTimestamp, localTimeOccurrence } from '../../date-time';
-import { Dialog } from '../../components/Dialog';
 import { Art } from '../../components/Art';
 import { AchievementActionLabel } from '../../components/AchievementAction';
-export function ApplyConfirmation({
+
+export function ApplyReview({
   report,
   zone,
-  busy,
   demo,
   achievementFor,
-  onClose,
-  onApply,
 }: {
   report: Report;
   zone: string;
-  busy: boolean;
   demo: boolean;
   achievementFor(gameId: string, achievementId: string): Achievement | undefined;
-  onClose(): void;
-  onApply(): void;
 }) {
   const pending = report.results.filter((item) => item.status === 'pending');
-  const countLabel = `${pending.length} achievement${pending.length === 1 ? '' : 's'}`;
   const locks = pending.filter((item) => item.action === 'lock').length;
-  const unlocks = pending.length - locks;
-  const describe = (count: number) => `${count} achievement${count === 1 ? '' : 's'}`;
-  const actionLabel = [
-    unlocks ? `Unlock ${describe(unlocks)}` : '',
-    locks ? `re-lock ${describe(locks)}` : '',
-  ]
-    .filter(Boolean)
-    .join(' and ');
-  const buttonLabel = actionLabel.charAt(0).toUpperCase() + actionLabel.slice(1);
   const listLabel =
     locks === 0
       ? 'Achievements to unlock'
-      : unlocks === 0
-        ? 'Achievements to re-lock'
+      : locks === pending.length
+        ? 'Achievements to lock'
         : 'Achievements to change';
   return (
-    <Dialog
-      title={`Apply ${countLabel}?`}
-      busy={busy}
-      onClose={onClose}
-      footer={
-        <>
-          <button data-initial-focus disabled={busy} onClick={onClose}>
-            Cancel
-          </button>
-          <button className="primary" disabled={busy || pending.length === 0} onClick={onApply}>
-            {buttonLabel || 'Apply changes'}
-          </button>
-        </>
-      }
-    >
+    <>
       <p className="confirmation-warning" role="note" aria-label="Before applying">
         <TriangleAlert size={20} aria-hidden="true" />
         <span>Close the game before applying.</span>
@@ -70,8 +40,8 @@ export function ApplyConfirmation({
               const achievement = achievementFor(report.game.id, item.achievement_id);
               const description = achievement?.description || 'No description available.';
               const locking = item.action === 'lock';
-              const date = locking ? item.previous_unlocked_at : item.requested_unlocked_at;
-              const occurrence = localTimeOccurrence(date, zone);
+              const date = locking ? null : item.requested_unlocked_at;
+              const occurrence = date ? localTimeOccurrence(date, zone) : null;
               return (
                 <li className="confirmation-row" key={item.achievement_id}>
                   <Art
@@ -82,14 +52,13 @@ export function ApplyConfirmation({
                   />
                   <div className="confirmation-copy">
                     <strong>{item.name}</strong>
-                    <AchievementActionLabel action={locking ? 'lock' : 'unlock'} />
                     <p className="queue-description" title={description}>
                       {description}
                     </p>
                   </div>
                   <div className="confirmation-date">
-                    <small>{locking ? 'Previous unlock' : 'Unlock date'}</small>
-                    <time dateTime={date}>{formatTimestamp(date, zone)}</time>
+                    <AchievementActionLabel action={locking ? 'lock' : 'unlock'} />
+                    {date ? <time dateTime={date}>{formatTimestamp(date, zone)}</time> : null}
                     {occurrence ? <small>{occurrence}</small> : null}
                   </div>
                 </li>
@@ -103,6 +72,6 @@ export function ApplyConfirmation({
           Achievements already in the requested state will be skipped.
         </p>
       ) : null}
-    </Dialog>
+    </>
   );
 }

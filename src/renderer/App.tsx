@@ -6,10 +6,8 @@ import { Art } from './components/Art';
 import { AccountMenu } from './features/account/AccountMenu';
 import { Achievements } from './features/library/Achievements';
 import { AchievementSkeleton } from './features/library/AchievementSkeleton';
-import { ApplyConfirmation } from './features/apply/ApplyConfirmation';
+import { ApplyDialog } from './features/apply/ApplyDialog';
 import { useLocalTimeZone } from './use-local-time-zone';
-import { ApplyProgress } from './features/apply/ApplyProgress';
-import { Results } from './features/apply/Results';
 import { HistoryView } from './features/history/HistoryView';
 import { Library } from './features/library/Library';
 import { QueuePane } from './features/queue/QueuePane';
@@ -45,14 +43,13 @@ export function App({ api }: { api: DesktopApi }) {
   const recovery = w.error ? errorRecovery(w) : null;
   const applying =
     w.view === 'applying' || w.operation.kind === 'apply' || w.operation.kind === 'recovery';
-  const reportView = w.view === 'results' || applying;
-  const headingGame = reportView ? w.games.find((item) => item.id === w.resultGame?.id) : w.game;
-  const headingTitle = reportView
-    ? (w.resultGame?.title ?? w.game?.title)
-    : (w.game?.title ?? 'Your games');
+  const resultOpen = w.view === 'results' && w.result !== null;
+  const modalOpen = Boolean(w.preview || applying || resultOpen);
+  const headingGame = w.game;
+  const headingTitle = w.game?.title ?? 'Your games';
   return (
     <div className="app-shell">
-      <header className="app-header">
+      <header className="app-header" inert={modalOpen}>
         <div className="app-brand">
           <span className="app-mark">
             <img src="./assets/app-icon.png" alt="" />
@@ -122,6 +119,7 @@ export function App({ api }: { api: DesktopApi }) {
         </div>
       ) : null}
       <main
+        inert={modalOpen}
         className={`workspace ${!w.auth.authenticated ? 'signed-out' : ''}`}
         style={
           {
@@ -144,9 +142,7 @@ export function App({ api }: { api: DesktopApi }) {
           onResize={setLibraryWidth}
         />
         <section className="main-pane" aria-label="Game achievements">
-          {!w.auth.authenticated && applying ? (
-            <ApplyProgress signedIn={false} recovering />
-          ) : !w.auth.authenticated ? (
+          {!w.auth.authenticated ? (
             <div className="connect-state">
               <span className="connect-mark">
                 <Gamepad2 size={54} />
@@ -175,45 +171,26 @@ export function App({ api }: { api: DesktopApi }) {
                       demo={api.isDemo}
                     />
                   ) : null}
-                  <h2>{headingTitle}</h2>
-                  {w.game && w.view === 'browse' ? (
+                  <h2 tabIndex={-1} data-dialog-return-focus>
+                    {headingTitle}
+                  </h2>
+                  {w.game ? (
                     <button
-                      className="desktop-refresh"
+                      className="icon-button desktop-refresh"
                       disabled={w.busy}
                       onClick={() => w.refreshAchievements()}
                       aria-label="Refresh achievements"
+                      title="Refresh achievements"
                     >
                       <RefreshCw
-                        size={19}
+                        size={18}
                         className={w.loadingTarget === 'achievements' && w.loading ? 'spinner' : ''}
                       />
-                      Refresh
                     </button>
                   ) : null}
                 </div>
               ) : null}
-              {applying ? (
-                <ApplyProgress signedIn recovering={w.operation.kind === 'recovery'} />
-              ) : w.view === 'results' && w.result ? (
-                <>
-                  <Results result={w.result} zone={zone} />
-                  <div className="results-actions">
-                    <button disabled={w.busy} onClick={() => w.setView('browse')}>
-                      Back to achievements
-                    </button>
-                    <button
-                      disabled={w.busy}
-                      onClick={() => {
-                        const target = w.games.find((item) => item.id === w.resultGame?.id);
-                        if (target && target.id !== w.game?.id) w.selectGame(target);
-                        else w.refreshAchievements(true);
-                      }}
-                    >
-                      Refresh achievements
-                    </button>
-                  </div>
-                </>
-              ) : w.view === 'history' ? (
+              {w.view === 'history' ? (
                 <>
                   <HistoryView
                     records={w.history}
@@ -248,6 +225,7 @@ export function App({ api }: { api: DesktopApi }) {
                   zone={zone}
                   supportsLocking={w.supportsLocking}
                   onAdd={w.add}
+                  onQueueAll={w.queueAll}
                   onRemove={(ids) => {
                     if (w.game) void w.remove(w.game.id, ids);
                   }}
@@ -283,6 +261,7 @@ export function App({ api }: { api: DesktopApi }) {
           }
           achievementFor={w.achievementFor}
           onRefresh={w.refreshQueues}
+          onClear={w.clearQueue}
           onRemove={w.remove}
           onSaveDates={w.saveDates}
           onPrepareApply={w.prepareApply}
@@ -292,15 +271,28 @@ export function App({ api }: { api: DesktopApi }) {
           onResize={setQueueWidth}
         />
       </main>
-      {w.preview ? (
-        <ApplyConfirmation
-          report={w.preview.report}
+      {modalOpen ? (
+        <ApplyDialog
+          report={w.preview?.report ?? null}
+          result={resultOpen ? w.result : null}
+          gameTitle={
+            w.resultGame?.title ?? w.games.find((game) => game.id === w.operation.gameId)?.title
+          }
+          applying={applying}
+          recovering={w.operation.kind === 'recovery'}
+          signedIn={w.auth.authenticated}
           achievementFor={w.achievementFor}
           demo={api.isDemo}
           zone={zone}
           busy={w.busy}
-          onClose={w.cancelPreview}
+          onClose={w.closeApply}
           onApply={w.apply}
+          onHistory={() => {
+            w.closeApply();
+            w.showHistory();
+          }}
+          onCheckCurrentState={w.checkResult}
+          refreshError={resultOpen ? w.error?.message : undefined}
         />
       ) : null}
     </div>

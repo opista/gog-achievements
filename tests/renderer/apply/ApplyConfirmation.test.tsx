@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Achievement, Report, ReportItem, UnlockReportItem } from '../../../src/shared/api';
-import { ApplyConfirmation } from '../../../src/renderer/features/apply/ApplyConfirmation';
+import { ApplyDialog } from '../../../src/renderer/features/apply/ApplyDialog';
 import { formatTimestamp } from '../../../src/renderer/date-time';
 
 afterEach(cleanup);
@@ -47,7 +47,7 @@ function confirmation(results: ReportItem[] = [row()], busy = false, zone = 'Eur
   const onClose = vi.fn();
   const onApply = vi.fn();
   render(
-    <ApplyConfirmation
+    <ApplyDialog
       report={report}
       achievementFor={achievementFor}
       zone={zone}
@@ -55,6 +55,8 @@ function confirmation(results: ReportItem[] = [row()], busy = false, zone = 'Eur
       busy={busy}
       onClose={onClose}
       onApply={onApply}
+      onHistory={vi.fn()}
+      onCheckCurrentState={vi.fn()}
     />,
   );
   return { onClose, onApply, achievementFor };
@@ -70,7 +72,7 @@ it('shows pending achievements with game-specific descriptions and exact local d
     }),
     row({ achievement_id: '203', name: 'Existing unlock', status: 'skipped_already_unlocked' }),
   ]);
-  const dialog = screen.getByRole('dialog', { name: 'Apply 2 achievements?' });
+  const dialog = screen.getByRole('dialog', { name: 'Apply changes to 2 achievements?' });
   expect(within(dialog).getByRole('heading', { name: 'The Witcher 3: Wild Hunt' })).toBeVisible();
   expect(within(dialog).queryByText('GOG account 123456789')).not.toBeInTheDocument();
   expect(within(dialog).getByRole('note', { name: 'Before applying' })).toHaveTextContent(
@@ -106,8 +108,8 @@ it('shows pending achievements with game-specific descriptions and exact local d
 it('keeps Cancel as the initial focus and closes without applying', async () => {
   const user = userEvent.setup();
   const { onClose, onApply } = confirmation();
-  expect(screen.getByRole('dialog', { name: 'Apply 1 achievement?' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Unlock 1 achievement' })).toBeEnabled();
+  expect(screen.getByRole('dialog', { name: 'Apply changes to 1 achievement?' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Apply changes' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
   await user.keyboard('{Escape}');
   expect(onClose).toHaveBeenCalledExactlyOnceWith();
@@ -118,7 +120,7 @@ it('submits only after the apply button is clicked', async () => {
   const user = userEvent.setup();
   const { onApply, onClose } = confirmation([row(), row({ achievement_id: '202' })]);
   expect(onApply).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Unlock 2 achievements' }));
+  await user.click(screen.getByRole('button', { name: 'Apply changes' }));
   expect(onApply).toHaveBeenCalledTimes(1);
   expect(onClose).not.toHaveBeenCalled();
 });
@@ -167,7 +169,7 @@ it('distinguishes repeated local times without restoring time zone settings', ()
   expect(screen.queryByText(/UTC[+-]|America\/New_York/)).not.toBeInTheDocument();
 });
 it.each([false, true])(
-  'reviews locks with their previous dates and one action-specific confirmation (mixed: %s)',
+  'shows each lock action without its previous date and uses a fixed apply label (mixed: %s)',
   (mixed) => {
     const lock: ReportItem = {
       achievement_id: '205',
@@ -181,17 +183,72 @@ it.each([false, true])(
     const { onApply } = confirmation(mixed ? [row(), lock] : [lock]);
     expect(
       screen.getByRole('list', {
-        name: mixed ? 'Achievements to change' : 'Achievements to re-lock',
+        name: mixed ? 'Achievements to change' : 'Achievements to lock',
       }),
     ).toBeVisible();
-    expect(screen.getByText('Re-lock', { exact: true })).toBeVisible();
-    expect(screen.getByText('Previous unlock', { exact: true })).toBeVisible();
+    expect(screen.getByText('Lock', { exact: true })).toBeVisible();
+    expect(screen.queryByText('Previous unlock', { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(formatTimestamp(lock.previous_unlocked_at, 'Europe/London')),
+    ).not.toBeInTheDocument();
+    expect(lock.previous_unlocked_at).toBe('2020-01-01T12:34:56+0000');
     expect(
       screen.getByRole('button', {
-        name: mixed ? 'Unlock 1 achievement and re-lock 1 achievement' : 'Re-lock 1 achievement',
+        name: 'Apply changes',
       }),
     ).toBeEnabled();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(onApply).not.toHaveBeenCalled();
   },
 );
+
+it('keeps one dialog across review, progress and completion, with safe focus at each step', async () => {
+  const report: Report = {
+    dry_run: true,
+    complete: true,
+    user_id: '123456789',
+    game: { id: '1', title: 'Cyberpunk 2077', client_id: '100001' },
+    results: [row()],
+  };
+  const onClose = vi.fn();
+  const onApply = vi.fn();
+  const input = {
+    report,
+    zone: 'UTC',
+    demo: true,
+    busy: false,
+    achievementFor: () => undefined,
+    onClose,
+    onApply,
+    onHistory: vi.fn(),
+    onCheckCurrentState: vi.fn(),
+  };
+  const { rerender } = render(<ApplyDialog {...input} />);
+  const modal = screen.getByRole('dialog');
+  expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+  await userEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+  expect(onApply).toHaveBeenCalledTimes(1);
+  rerender(<ApplyDialog {...input} report={null} applying busy gameTitle="Cyberpunk 2077" />);
+  expect(screen.getByRole('dialog', { name: 'Applying changes…' })).toBe(modal);
+  expect(modal).toHaveFocus();
+  await userEvent.keyboard('{Escape}');
+  expect(onClose).not.toHaveBeenCalled();
+  const result = {
+    operationId: 'sample',
+    state: 'complete' as const,
+    report: {
+      ...report,
+      dry_run: false,
+      results: [row({ status: 'restored', actual_unlocked_at: row().requested_unlocked_at })],
+    },
+  };
+  rerender(<ApplyDialog {...input} report={null} result={result} busy />);
+  expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  rerender(<ApplyDialog {...input} report={null} result={result} />);
+  expect(screen.getByRole('dialog', { name: 'Changes applied' })).toBe(modal);
+  expect(screen.getByRole('button', { name: 'Done' })).toHaveFocus();
+  expect(screen.getByText('1 unlocked')).toBeVisible();
+  await userEvent.keyboard('{Enter}');
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onApply).toHaveBeenCalledTimes(1);
+});

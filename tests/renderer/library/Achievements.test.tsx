@@ -35,6 +35,7 @@ function show(
   overrides: Partial<ComponentProps<typeof Achievements>> = {},
 ) {
   const onAdd = vi.fn();
+  const onQueueAll = vi.fn();
   const onRemove = vi.fn();
   const props = {
     achievements: input,
@@ -43,11 +44,12 @@ function show(
     demo: false,
     zone: 'UTC',
     onAdd,
+    onQueueAll,
     onRemove,
     onRefresh: vi.fn(),
     ...overrides,
   };
-  return { onAdd, onRemove, props, ...render(<Achievements {...props} />) };
+  return { onAdd, onQueueAll, onRemove, props, ...render(<Achievements {...props} />) };
 }
 function rowNames() {
   return screen.getAllByRole('article').map((row) => within(row).getByRole('heading').textContent);
@@ -65,13 +67,31 @@ it('shows descriptions and keeps locked, hidden, newest unlocked order without m
   expect(screen.getByText('Locked B description')).toBeVisible();
   expect(input.map((item) => item.id)).toEqual(original);
 });
+it('shows labelled current-state icons and retains exact unlock dates without an extra state line', () => {
+  show();
+  const locked = screen.getByRole('article', { name: 'Locked B' });
+  const unlocked = screen.getByRole('article', { name: 'Newest unlock' });
+  expect(within(locked).getByRole('img', { name: 'Locked' })).toBeVisible();
+  expect(within(unlocked).getByRole('img', { name: 'Unlocked' })).toBeVisible();
+  expect(within(locked).queryByText('Locked', { exact: true })).not.toBeInTheDocument();
+  expect(unlocked.querySelector('time')).toHaveAttribute('datetime', '2025-01-01T12:00:00Z');
+  expect(unlocked.querySelector('.achievement-unlock-date')).toHaveAttribute(
+    'title',
+    expect.stringContaining('read-only'),
+  );
+  expect(
+    within(screen.getByRole('article', { name: 'Hidden achievement' })).queryByRole('img', {
+      name: 'Locked',
+    }),
+  ).not.toBeInTheDocument();
+});
 it.each(['unlock', 'lock'] as const)(
   'removes a queued %s through its single action while preserving the description and focus',
   async (action) => {
     const user = userEvent.setup();
     const id = action === 'lock' ? 'new' : 'locked-a';
     const name = action === 'lock' ? 'Newest unlock' : 'Locked A';
-    const actionName = action === 'lock' ? 're-lock' : 'unlock';
+    const actionName = action === 'lock' ? 'lock' : 'unlock';
     const { onRemove, onAdd, props, rerender } = show(new Map([[id, action]]), {
       supportsLocking: true,
     });
@@ -91,7 +111,7 @@ it.each(['unlock', 'lock'] as const)(
     ).toBeDisabled();
   },
 );
-it('adds one achievement directly without checkboxes or a bulk action', async () => {
+it('adds one achievement directly without checkbox selection', async () => {
   const user = userEvent.setup();
   const { onAdd } = show();
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
@@ -100,6 +120,90 @@ it('adds one achievement directly without checkboxes or a bulk action', async ()
   expect(add).toHaveAttribute('title', 'Queue unlock for Locked A');
   await user.click(add);
   expect(onAdd).toHaveBeenCalledExactlyOnceWith(['locked-a']);
+});
+it('keeps queued unlocks and concealed details when requesting all eligible unlocks', async () => {
+  const user = userEvent.setup();
+  const { onQueueAll, onRemove, props, rerender } = show(new Map([['locked-b', 'unlock']]));
+  const unlockAll = screen.getByRole('button', { name: 'Unlock all' });
+  await user.click(unlockAll);
+  expect(onQueueAll).toHaveBeenCalledExactlyOnceWith(['locked-a'], 'unlock');
+  expect(onRemove).not.toHaveBeenCalled();
+  expect(screen.queryByText('Secret title')).not.toBeInTheDocument();
+  rerender(
+    <Achievements
+      {...props}
+      queued={
+        new Map([
+          ['locked-b', 'unlock'],
+          ['locked-a', 'unlock'],
+        ])
+      }
+    />,
+  );
+  expect(unlockAll).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Reveal' }));
+  expect(unlockAll).toBeEnabled();
+  await user.click(unlockAll);
+  expect(onQueueAll).toHaveBeenLastCalledWith(['secret'], 'unlock');
+});
+it('includes eligible locks with opposite saved requests and revealed hidden unlocks', async () => {
+  const user = userEvent.setup();
+  const { onQueueAll } = show(new Map([['new', 'unlock']]), {
+    supportsLocking: true,
+    achievements: [
+      ...input,
+      achievement('hidden-unlocked', 'Revealed secret', {
+        hidden: true,
+        unlocked: true,
+        unlocked_at: '2023-01-01T12:00:00Z',
+      }),
+      achievement('missing-date', 'Unknown date', { unlocked: true }),
+    ],
+  });
+  await user.click(screen.getByRole('button', { name: 'Lock all' }));
+  expect(onQueueAll).toHaveBeenCalledExactlyOnceWith(['new', 'old', 'hidden-unlocked'], 'lock');
+});
+it.each(['unlock', 'lock'] as const)(
+  'allows bulk %s to remove opposite requests when there are no new eligible achievements',
+  async (action) => {
+    const { onQueueAll } = show(
+      new Map([['outside-list', action === 'unlock' ? 'lock' : 'unlock']]),
+      {
+        achievements: [],
+        supportsLocking: true,
+      },
+    );
+    const name = action === 'unlock' ? 'Unlock all' : 'Lock all';
+    const button = screen.getByRole('button', { name });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    expect(onQueueAll).toHaveBeenCalledExactlyOnceWith([], action);
+  },
+);
+it('shows bulk actions for the active filter and hides unsupported locks', async () => {
+  const user = userEvent.setup();
+  const { props, rerender } = show(new Map(), { supportsLocking: true });
+  expect(screen.getByRole('button', { name: 'Unlock all' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Lock all' })).toBeEnabled();
+  await user.click(screen.getByRole('button', { name: 'Locked' }));
+  expect(screen.getByRole('button', { name: 'Unlock all' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Lock all' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Unlocked' }));
+  expect(screen.getByRole('button', { name: 'Lock all' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Unlock all' })).not.toBeInTheDocument();
+  rerender(<Achievements {...props} supportsLocking={false} />);
+  expect(screen.queryByRole('button', { name: 'Lock all' })).not.toBeInTheDocument();
+});
+it.each(['busy', 'loading'] as const)('blocks bulk queue edits while %s', async (state) => {
+  const user = userEvent.setup();
+  const { onAdd, onQueueAll } = show(new Map(), { supportsLocking: true, [state]: true });
+  for (const name of ['Unlock all', 'Lock all']) {
+    const button = screen.getByRole('button', { name });
+    expect(button).toBeDisabled();
+    await user.click(button);
+  }
+  expect(onAdd).not.toHaveBeenCalled();
+  expect(onQueueAll).not.toHaveBeenCalled();
 });
 it('shows one queued action and blocks saves during other work', () => {
   const { props, rerender } = show(new Map([['locked-b', 'unlock']]));
@@ -118,22 +222,20 @@ it('shows one queued action and blocks saves during other work', () => {
 it('queues an explicit lock only when supported and preserves keyboard focus', async () => {
   const user = userEvent.setup();
   const { onAdd, props, rerender } = show(new Map(), { supportsLocking: true });
-  const lock = screen.getByRole('button', { name: 'Queue re-lock for Newest unlock' });
+  const lock = screen.getByRole('button', { name: 'Queue lock for Newest unlock' });
   lock.focus();
   await user.keyboard('{Enter}');
   expect(onAdd).toHaveBeenCalledExactlyOnceWith(['new'], 'lock');
   rerender(<Achievements {...props} queued={new Map([['new', 'lock']])} />);
   expect(
-    screen.queryByRole('button', { name: 'Queue re-lock for Newest unlock' }),
+    screen.queryByRole('button', { name: 'Queue lock for Newest unlock' }),
   ).not.toBeInTheDocument();
-  expect(
-    screen.getByRole('button', { name: 'Undo queued re-lock for Newest unlock' }),
-  ).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Undo queued lock for Newest unlock' })).toHaveFocus();
   expect(screen.getByText('Queued')).toBeVisible();
   rerender(<Achievements {...props} busy />);
-  expect(screen.getByRole('button', { name: 'Queue re-lock for Newest unlock' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Queue lock for Newest unlock' })).toBeDisabled();
   rerender(<Achievements {...props} supportsLocking={false} />);
-  expect(screen.queryByRole('button', { name: /Queue re-lock/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Queue lock/ })).not.toBeInTheDocument();
 });
 it('labels queued actions from the saved request after the live state changes', () => {
   show(
@@ -145,7 +247,7 @@ it('labels queued actions from the saved request after the live state changes', 
   );
   expect(
     within(screen.getByRole('article', { name: 'Locked B' })).getByRole('button', {
-      name: 'Undo queued re-lock for Locked B',
+      name: 'Undo queued lock for Locked B',
     }),
   ).toBeVisible();
   expect(

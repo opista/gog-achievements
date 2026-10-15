@@ -14,10 +14,12 @@ export function HistoryView({
   zone: string;
   loading?: boolean;
 }) {
-  const { unlocks, locks, attention } = useMemo(() => buildHistoryRows(records), [records]);
+  const { changes, attention } = useMemo(() => buildHistoryRows(records), [records]);
   return (
     <section className="history-view">
-      <h2>Achievement history</h2>
+      <h2 tabIndex={-1} data-dialog-return-focus>
+        Achievement history
+      </h2>
       {loading ? (
         <div className="history-skeleton" role="status" aria-label="Loading achievement history">
           <span className="sr-only">Loading achievement history…</span>
@@ -27,57 +29,34 @@ export function HistoryView({
             </div>
           ))}
         </div>
-      ) : unlocks.length === 0 && locks.length === 0 && attention.length === 0 ? (
+      ) : changes.length === 0 && attention.length === 0 ? (
         <div className="empty-state">
           <History size={34} />
           <p>No achievement history yet.</p>
         </div>
       ) : (
         <>
-          {locks.length > 0 ? (
-            <section aria-label="Locked achievements">
-              <h3>Locked achievements</h3>
-              <ul className="history-unlocks">
-                {locks.map((entry) => (
-                  <li className="history-unlock-row" key={entry.key}>
-                    <div className="history-entry-copy">
-                      <strong>{entry.name}</strong>
-                      <AchievementActionLabel action="lock" />
-                      <span>{entry.game}</span>
-                      <small>
-                        Previous unlock:{' '}
-                        <time dateTime={entry.previousUnlockedAt}>
-                          {formatTimestamp(entry.previousUnlockedAt, zone)}
-                        </time>
-                      </small>
-                    </div>
-                    <span className="history-unlock-date">
-                      Re-lock confirmed{' '}
-                      <time dateTime={entry.lockedAt}>{formatTimestamp(entry.lockedAt, zone)}</time>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-          {unlocks.length > 0 ? (
-            <ul className="history-unlocks" aria-label="Unlocked achievements">
-              {unlocks.map((entry) => (
-                <li className="history-unlock-row" key={entry.key}>
+          {changes.length > 0 ? (
+            <ul className="history-changes" aria-label="Confirmed changes">
+              {changes.map((entry) => (
+                <li className="history-change-row" key={entry.key}>
                   <div className="history-entry-copy">
                     <strong>{entry.name}</strong>
-                    <AchievementActionLabel action="unlock" />
                     <span>{entry.game}</span>
                     {entry.differentDate ? <small>Unlocked with a different date</small> : null}
                   </div>
-                  <time className="history-unlock-date" dateTime={entry.unlockedAt}>
-                    {formatTimestamp(entry.unlockedAt, zone)}
-                  </time>
+                  <div className="history-entry-result">
+                    <AchievementActionLabel
+                      action={entry.action}
+                      label={entry.action === 'lock' ? 'Locked' : 'Unlocked'}
+                    />
+                    <time dateTime={entry.timestamp}>{formatTimestamp(entry.timestamp, zone)}</time>
+                  </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="muted">No confirmed unlocks yet.</p>
+            <p className="muted">No confirmed changes yet.</p>
           )}
           {attention.length > 0 ? (
             <section className="history-attention" aria-label="Needs attention">
