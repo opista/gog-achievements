@@ -4,7 +4,7 @@ import {
   type SpawnOptionsWithoutStdio,
 } from 'node:child_process';
 import { readFile, access } from 'node:fs/promises';
-import { join, basename } from 'node:path';
+import { join, basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { DesktopError, cliError } from './errors';
 import { CLI_VERSION, CLI_TARGETS } from '../shared/cli-release';
@@ -153,6 +153,7 @@ export async function resolveCli({
   packaged,
   resourcesPath,
   projectPath,
+  developmentDirectory,
   platform = process.platform,
   architecture = process.arch,
   version = CLI_VERSION,
@@ -160,17 +161,23 @@ export async function resolveCli({
   packaged: boolean;
   resourcesPath: string;
   projectPath: string;
+  developmentDirectory?: string;
   platform?: string;
   architecture?: string;
   version?: string;
 }): Promise<string> {
   if (!['darwin', 'win32'].includes(platform) || !['arm64', 'x64'].includes(architecture))
     throw new DesktopError('UNSUPPORTED_PLATFORM', 'Use a supported Mac or Windows app package.');
+  if (developmentDirectory !== undefined && (packaged || !isAbsolute(developmentDirectory)))
+    throw new DesktopError(
+      'CLI_PACKAGE_INVALID',
+      'A local CLI build requires an absolute directory in development mode.',
+    );
   const target = `${platform === 'darwin' ? 'macos' : 'windows'}-${architecture}`;
   const requirement = CLI_TARGETS[target as keyof typeof CLI_TARGETS];
-  const folder = packaged
-    ? join(resourcesPath, 'cli')
-    : join(projectPath, 'resources', 'cli', target);
+  const folder =
+    developmentDirectory ??
+    (packaged ? join(resourcesPath, 'cli') : join(projectPath, 'resources', 'cli', target));
   const name = platform === 'win32' ? 'gog-achievements.exe' : 'gog-achievements';
   try {
     const metadata = JSON.parse(await readFile(join(folder, 'build.json'), 'utf8')) as Record<

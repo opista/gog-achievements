@@ -153,3 +153,38 @@ test('resolve bundled CLI by OS, architecture and version without PATH fallback'
     await rm(folder, { recursive: true, force: true });
   }
 });
+
+test('an explicit local CLI directory is validated and works only in development', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'gog-development-cli-'));
+  try {
+    const options = {
+      packaged: false,
+      resourcesPath: '/unused',
+      projectPath: '/unused',
+      developmentDirectory: folder,
+      platform: 'darwin',
+      architecture: 'arm64',
+    };
+    await writeFile(
+      join(folder, 'build.json'),
+      JSON.stringify({
+        version: '0.3.0',
+        platform: 'darwin',
+        architecture: 'arm64',
+        layout: 'single_executable',
+        runtime_included: true,
+        native_helper_included: true,
+      }),
+    );
+    await writeFile(join(folder, 'gog-achievements'), 'fixture');
+    expect(await resolveCli(options)).toBe(join(folder, 'gog-achievements'));
+    await expect(resolveCli({ ...options, packaged: true })).rejects.toThrow('development mode');
+    await expect(
+      resolveCli({ ...options, developmentDirectory: 'relative/build' }),
+    ).rejects.toThrow('absolute directory');
+    await expect(resolveCli({ ...options, version: '0.4.0' })).rejects.toThrow('does not match');
+    await expect(resolveCli({ ...options, architecture: 'x64' })).rejects.toThrow('does not match');
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});

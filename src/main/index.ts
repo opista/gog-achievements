@@ -64,6 +64,9 @@ else {
           packaged: app.isPackaged,
           resourcesPath: process.resourcesPath,
           projectPath: app.getAppPath(),
+          developmentDirectory: app.isPackaged
+            ? undefined
+            : process.env.GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY,
         },
       });
       const { api } = desktop;

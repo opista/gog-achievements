@@ -26,6 +26,8 @@ npm run dev
 
 Source builds download the pinned public CLI release and verify its checksum. If the CLI repository is private, use `GH_TOKEN`, `GITHUB_TOKEN`, or an existing `gh` login with read access. Installed app packages already contain the verified CLI and do not download it at startup.
 
+To test an unreleased CLI fix locally, set `GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY` to the absolute build directory that contains `build.json` and the executable, then run `npm run dev`. The build must match the pinned CLI version, platform and architecture. Installed apps ignore this development setting and use their bundled release. This does not change the release lock or downloaded CLI files.
+
 Windows sign-in also requires [Microsoft's WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). The CLI reports native prerequisites; credentials remain in macOS Keychain or Windows DPAPI. If a new Mac helper cannot read the saved login, choose **Sign in to GOG** and allow Keychain access locally when asked.
 
 ## Browser preview
