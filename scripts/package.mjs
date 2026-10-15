@@ -15,13 +15,17 @@ import {
 import { smokeCli } from './smoke-cli.mjs';
 
 const execute = promisify(execFile);
+const VITE_SCRIPT = 'electron-vite/bin/electron-vite.js';
+const BUILDER_SCRIPT = 'electron-builder/cli.js';
+const COMPILE_TIMEOUT_MS = 3 * 60 * 1000;
+const PACKAGE_TIMEOUT_MS = 10 * 60 * 1000;
 
 export function packageCommands(name, compileOnly = false) {
   const target = TARGETS[selectTarget(name)];
-  const commands = [['electron-vite/bin/electron-vite.js', ['build']]];
+  const commands = [[VITE_SCRIPT, ['build']]];
   if (!compileOnly)
     commands.push([
-      'electron-builder/cli.js',
+      BUILDER_SCRIPT,
       [
         target.platform === 'darwin' ? '--mac' : '--win',
         '--' + target.architecture,
@@ -32,6 +36,35 @@ export function packageCommands(name, compileOnly = false) {
       ],
     ]);
   return commands;
+}
+
+export async function runPackageCommand(
+  target,
+  [script, arguments_],
+  { run = execute, stdout = process.stdout, stderr = process.stderr } = {},
+) {
+  const timeout = script === BUILDER_SCRIPT ? PACKAGE_TIMEOUT_MS : COMPILE_TIMEOUT_MS;
+  try {
+    const result = await run(
+      process.execPath,
+      [join(PROJECT_ROOT, 'node_modules', script), ...arguments_],
+      {
+        cwd: PROJECT_ROOT,
+        env: { ...process.env, GOG_CLI_TARGET: target },
+        timeout,
+        maxBuffer: 5_000_000,
+        windowsHide: true,
+      },
+    );
+    stdout.write(result.stdout);
+    stderr.write(result.stderr);
+  } catch (error) {
+    if (typeof error.stdout === 'string') stdout.write(error.stdout);
+    if (typeof error.stderr === 'string') stderr.write(error.stderr);
+    if (error.killed && error.code === null && error.signal === 'SIGTERM')
+      stderr.write(`${script} timed out after ${timeout / 1000} seconds.\n`);
+    throw error;
+  }
 }
 
 export async function main(args = process.argv.slice(2)) {
@@ -49,21 +82,8 @@ export async function main(args = process.argv.slice(2)) {
   const name = selectTarget(options.target, process, true);
   const directory = await downloadCli(name);
   await smokeCli(directory, await readReleaseLock(), name);
-  for (const [script, arguments_] of packageCommands(name, options.compileOnly)) {
-    const result = await execute(
-      process.execPath,
-      [join(PROJECT_ROOT, 'node_modules', script), ...arguments_],
-      {
-        cwd: PROJECT_ROOT,
-        env: { ...process.env, GOG_CLI_TARGET: name },
-        timeout: 180000,
-        maxBuffer: 5_000_000,
-        windowsHide: true,
-      },
-    );
-    process.stdout.write(result.stdout);
-    process.stderr.write(result.stderr);
-  }
+  for (const command of packageCommands(name, options.compileOnly))
+    await runPackageCommand(name, command);
   if (!options.compileOnly) {
     const { version } = JSON.parse(await readFile(join(PROJECT_ROOT, 'package.json'), 'utf8'));
     const names = await writeArtifactChecksums(join(PROJECT_ROOT, 'dist'), version, name);
