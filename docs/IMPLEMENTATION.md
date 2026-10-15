@@ -6,6 +6,8 @@ Each IPC method uses `IpcBoundary` to check the sender's window and main frame, 
 
 Application shutdown disposes bridge handlers and closes the Nest context. Nest's recovery lifecycle provider stops its polling timer on close. Account checks, preview tokens, operation serialization, stored queue formats and GOG writes remain in the existing services and CLI. Feature-by-feature extraction follows this integration.
 
+The first renderer feature module is `features/history/`. It owns the history view, its pure row model and the hook that loads and clears account history. The workspace coordinates loading, errors and account checks through this hook; it does not own history records or display rules. Clearing history or replacing its API invalidates pending reads. Shared report labels live in `presentation/report-status.ts`, so history does not import the apply-confirmation feature. Other features will follow this structure in separate PRs.
+
 The workspace follows [A's three-pane layout](design/desktop-workspace.png), with the later UI reviews taking precedence over the original [state concepts](design/WORKFLOW.md). Signed-out users see a blank library and one sign-in action; the queue is hidden. The account menu uses a profile icon and arrow.
 
 The released CLI owns authentication, queue validation and GOG writes. Game and achievement images use trusted GOG image hosts. The CLI currently exposes landscape library thumbnails; portrait metadata lookups would require another request, so artwork remains unchanged under the user's constraint. Demo assets are sample content only, and demo mode never invokes the CLI.

@@ -1,5 +1,5 @@
 import { TriangleAlert } from 'lucide-react';
-import type { Achievement, Report, ReportItem } from '../../shared/api';
+import type { Achievement, Report } from '../../shared/api';
 import { formatTimestamp, localTimeOccurrence } from '../date-time';
 import { Dialog } from '../components/Dialog';
 import { Art } from '../components/Art';
@@ -93,12 +93,3 @@ export function ApplyConfirmation({
     </Dialog>
   );
 }
-export const STATUS_LABELS: Record<ReportItem['status'], string> = {
-  pending: 'Ready to restore',
-  restored: 'Confirmed',
-  skipped_already_unlocked: 'Already unlocked',
-  restored_with_different_date: 'Unlocked with a different date',
-  failed: 'Request failed',
-  unconfirmed: 'Outcome uncertain',
-  not_attempted: 'Not attempted',
-};

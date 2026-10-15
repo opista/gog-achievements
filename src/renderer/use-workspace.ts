@@ -6,12 +6,12 @@ import type {
   DesktopApi,
   Game,
   InitializeResult,
-  OperationRecord,
   OperationState,
   PreviewResult,
   Queue,
   QueueGame,
 } from '../shared/api';
+import { useHistory } from './features/history/use-history';
 
 export type View = 'browse' | 'applying' | 'results' | 'history';
 export type LoadingTarget =
@@ -45,7 +45,7 @@ export function useWorkspace(api: DesktopApi) {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
   const [resultGame, setResultGame] = useState<QueueGame | null>(null);
-  const [history, setHistory] = useState<OperationRecord[]>([]);
+  const history = useHistory(api, assertOwner);
   const [view, setView] = useState<View>('browse');
   const [loading, setLoading] = useState<string | null>('Checking GOG sign-in…');
   const [loadingTarget, setLoadingTarget] = useState<LoadingTarget>('session');
@@ -87,7 +87,7 @@ export function useWorkspace(api: DesktopApi) {
     setLibraryLoaded(false);
     setQueues([]);
     setQueuesLoaded(false);
-    setHistory([]);
+    history.clear();
     setAchievementCache({});
     gameMetadata.current.clear();
     clearGameState();
@@ -185,11 +185,6 @@ export function useWorkspace(api: DesktopApi) {
       setQueueDetailsLoading(false);
     }
   }
-  async function loadHistory() {
-    const records = await api.history({});
-    for (const record of records) assertOwner(record.user_id);
-    setHistory(records);
-  }
   async function loadGame(next: Game) {
     const sameGame = currentGame.current?.id === next.id;
     const stamp = ++generation.current;
@@ -231,7 +226,7 @@ export function useWorkspace(api: DesktopApi) {
       ) {
         try {
           await loadQueues();
-          await loadHistory();
+          await history.load();
         } catch (localFailure) {
           if (['ACCOUNT_CHANGED', 'ACCOUNT_MISMATCH'].includes(notice(localFailure).code ?? ''))
             throw localFailure;
@@ -249,7 +244,7 @@ export function useWorkspace(api: DesktopApi) {
     setGames(data.games);
     setLibraryLoaded(true);
     const savedQueues = await loadQueues();
-    await loadHistory();
+    await history.load();
     const first = data.games.find((item) => item.id === preferredId) ?? data.games[0];
     if (!first) clearGameState();
     else if (currentGame.current?.id !== first.id || !achievementsLoaded) await loadGame(first);
@@ -475,7 +470,7 @@ export function useWorkspace(api: DesktopApi) {
       try {
         // Refresh durable local state first; a later network failure must not restore stale rows.
         updateQueue(report.game.id, await api.getQueue(report.game.id));
-        await loadHistory();
+        await history.load();
         if (currentGame.current?.id === report.game.id) {
           const data = await api.listAchievements(report.game.id);
           assertOwner(data.user_id);
@@ -490,7 +485,7 @@ export function useWorkspace(api: DesktopApi) {
   function showHistory() {
     void run('Loading history…', 'history', async () => {
       setView('history');
-      await loadHistory();
+      await history.load();
     });
   }
   return {
@@ -509,7 +504,7 @@ export function useWorkspace(api: DesktopApi) {
     preview,
     result,
     resultGame,
-    history,
+    history: history.records,
     view,
     loading,
     loadingTarget,
