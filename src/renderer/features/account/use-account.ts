@@ -7,6 +7,7 @@ type AccountApi = Pick<DesktopApi, 'initialize' | 'login' | 'logout'>;
 export function useAccount(api: AccountApi, clearAccountData: () => void) {
   const [auth, setAuth] = useState<AuthStatus>({ authenticated: false });
   const [versions, setVersions] = useState({ app: '', cli: '' });
+  const [supportsLocking, setSupportsLocking] = useState(false);
   const current = useRef<AuthStatus>({ authenticated: false });
   const initialization = useRef<{ api: AccountApi; promise: Promise<InitializeResult> } | null>(
     null,
@@ -49,6 +50,7 @@ export function useAccount(api: AccountApi, clearAccountData: () => void) {
     if (stamp !== generation.current) return null;
     accept(initial.auth);
     setVersions({ app: initial.version, cli: initial.cliVersion });
+    setSupportsLocking(initial.supportsLocking === true);
     return initial;
   }
 
@@ -58,6 +60,7 @@ export function useAccount(api: AccountApi, clearAccountData: () => void) {
     const initial = await initialization.current.promise;
     if (stamp !== generation.current) return null;
     accept(initial.auth);
+    setSupportsLocking(initial.supportsLocking === true);
     return initial;
   }
 
@@ -92,6 +95,7 @@ export function useAccount(api: AccountApi, clearAccountData: () => void) {
   return {
     auth,
     versions,
+    supportsLocking,
     bootstrap,
     refresh,
     reconcileOwner,

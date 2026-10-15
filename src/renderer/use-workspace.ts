@@ -1,10 +1,11 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { DesktopApi, Game, Queue } from '../shared/api';
+import type { AchievementAction, DesktopApi, Game, Queue } from '../shared/api';
 import { useApply } from './features/apply/use-apply';
 import { useOperation } from './application/use-operation';
 import { useHistory } from './features/history/use-history';
 import { useLibrary } from './features/library/use-library';
 import { useQueues } from './features/queue/use-queues';
+import { queueGroups } from './features/queue/queue-model';
 import { useAccount } from './features/account/use-account';
 import { isAccountMismatch } from './features/account/account-errors';
 import { toNotice, type Notice } from './presentation/error-notice';
@@ -229,12 +230,13 @@ export function useWorkspace(api: DesktopApi) {
     });
     return succeeded;
   }
-  function add(ids: string[]) {
+  function add(ids: string[], action?: AchievementAction) {
     if (!game) return;
     void saveQueue(() =>
       queueState.add({
         gameId: game.id,
         achievementIds: ids,
+        ...(action ? { action } : {}),
         game: library.metadataFor(game.id),
         userId: account.current().user_id,
         achievements,
@@ -243,6 +245,43 @@ export function useWorkspace(api: DesktopApi) {
   }
   function remove(gameId: string, ids: string[]) {
     void saveQueue(() => queueState.remove(gameId, ids));
+  }
+  function queueAll(ids: string[], action: AchievementAction): Promise<boolean> {
+    if (!game || !queuesLoaded || (action === 'lock' && !account.supportsLocking))
+      return Promise.resolve(false);
+    const addition = {
+      gameId: game.id,
+      achievementIds: ids,
+      action,
+      game: library.metadataFor(game.id),
+      userId: account.current().user_id,
+      achievements,
+    };
+    return saveQueue(async () => {
+      const opposite =
+        queueState
+          .forGame(addition.gameId)
+          ?.items.filter((item) => (item.action ?? 'unlock') !== action)
+          .map((item) => item.achievement_id) ?? [];
+      if (opposite.length && !(await queueState.remove(addition.gameId, opposite))) return false;
+      return ids.length ? queueState.add(addition) : true;
+    });
+  }
+  function clearQueue(gameId?: string): Promise<boolean> {
+    if (!queuesLoaded) return Promise.resolve(false);
+    const pending = queueGroups(queues)
+      .filter((queue) => gameId === undefined || queue.game.id === gameId)
+      .map((queue) => ({
+        gameId: queue.game.id,
+        ids: queue.items.map((item) => item.achievement_id),
+      }));
+    if (pending.length === 0) return Promise.resolve(false);
+    return saveQueue(async () => {
+      for (const { gameId, ids } of pending) {
+        if (!(await queueState.remove(gameId, ids))) return false;
+      }
+      return true;
+    });
   }
   function saveDates(gameId: string, dates: Record<string, string>): Promise<boolean> {
     return saveQueue(() => queueState.saveDates(gameId, dates));
@@ -261,7 +300,18 @@ export function useWorkspace(api: DesktopApi) {
       await history.load();
     });
   }
+  function closeApply() {
+    if (working.current || operations.current().kind !== 'idle') return;
+    applyState.invalidate();
+    if (view === 'results') setView('browse');
+  }
+  function checkResult() {
+    if (!resultGame) return;
+    const target = games.find((item) => item.id === resultGame.id) ?? resultGame;
+    void run('Refreshing achievements…', 'achievements', () => library.loadGame(target, true));
+  }
   return {
+    supportsLocking: account.supportsLocking,
     auth,
     games,
     libraryLoaded,
@@ -294,7 +344,9 @@ export function useWorkspace(api: DesktopApi) {
     refreshAchievements,
     refreshQueues,
     add,
+    queueAll,
     remove,
+    clearQueue,
     saveDates,
     prepareApply: (gameId: string) => {
       void applyState.prepare(gameId);
@@ -303,6 +355,8 @@ export function useWorkspace(api: DesktopApi) {
       void applyState.apply();
     },
     showHistory,
+    closeApply,
+    checkResult,
     setView,
     cancelPreview: applyState.invalidate,
     clearError: () => setError(null),

@@ -143,9 +143,14 @@ export function useQueues(api: QueueApi, assertOwner: (userId: string) => void) 
   }
 
   function add(input: QueueAddition): Promise<boolean> {
-    const { gameId, achievementIds } = input;
+    const { gameId, achievementIds, action } = input;
     const optimistic = optimisticAddition(forGame(gameId), input, new Date().toISOString());
-    return mutate('add', gameId, () => api.addAchievements({ gameId, achievementIds }), optimistic);
+    return mutate(
+      'add',
+      gameId,
+      () => api.addAchievements({ gameId, achievementIds, ...(action ? { action } : {}) }),
+      optimistic,
+    );
   }
 
   return {

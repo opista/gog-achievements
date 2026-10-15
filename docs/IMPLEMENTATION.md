@@ -44,6 +44,12 @@ The queue groups all saved queues for the signed-in account and remains editable
 
 Each group's Apply action runs a dry-run check and opens one final confirmation. The saved snapshot and token bind it to the exact queue, account and game. Confirmed requests are removed under an exclusive queue lock after the immutable report is saved. Failed, unconfirmed and unattempted requests remain. Concurrent edits are preserved, and housekeeping failures retain the confirmed report. Reads can reconcile older confirmed requests only with matching digest-verified snapshots.
 
-Unlock history is a flat list of confirmed achievement unlocks with game names and actual unlock dates. Existing unlocks skipped by an attempt are excluded. Failed or unknown outcomes remain visible under Needs attention. Durable operation records and snapshots stay available for recovery; history does not provide rollback or relocking.
+Achievement history keeps the flat unlock list and adds confirmed locks with their previous unlock dates and local confirmation times. Skipped actions are excluded. Failed or unknown outcomes remain under Needs attention. History does not apply changes; unlocking or locking again requires a fresh queue and confirmation. Durable operation records and snapshots stay available for recovery.
+
+Queue schema 1 accepts legacy unlock rows, explicit `action: "unlock"` rows and `action: "lock"` rows. Lock rows contain `previous_unlocked_at` exactly as observed by the CLI and omit `unlocked_at`. One achievement can have only one queued action. IPC accepts `action` only for addition. Main passes it as a fixed argument to queue create/add and rejects every date save that selects a lock before saving any group. Lock rows have no calendar control. Confirmation states the pending unlock and lock counts.
+
+Report validation matches each action and date to the immutable snapshot. Cleanup removes confirmed locks only for `locked` or `skipped_already_locked`, with a matching action and prior date. A null actual date alone proves nothing. Uncertain, failed and unattempted locks remain queued, including after restart recovery.
+
+Initialization detects `--action` in JSON help for both `queue create` and `queue add`. Older builds keep restoration available while lock controls remain hidden; main also refuses their lock requests. Local development can use the existing CLI directory override. Update the pinned release and checksums only after the new CLI release is published.
 
 Native controls follow the host OS. Mobile layout supports the local browser demo; installers target desktop. Release builds still require validation on all four native targets, signing and notarization. Local Mac package checks do not prove Windows installation or public signing.

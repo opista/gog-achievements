@@ -76,6 +76,30 @@ describe('CLI command contract', () => {
       parseOutcome('{"ok":false,"error":{"code":"AUTH_REQUIRED","message":"x"}}', 0),
     ).toThrow();
   });
+  test('lock flags are explicit selections and never authorize writes', () => {
+    for (const command of [
+      {
+        kind: 'queue-create' as const,
+        gameId: '123',
+        file: '/private queue/file.json',
+        achievementIds: ['42'],
+        action: 'lock' as const,
+      },
+      {
+        kind: 'queue-add' as const,
+        file: '/private queue/file.json',
+        achievementIds: ['42'],
+        action: 'lock' as const,
+      },
+    ]) {
+      const args = commandArgs(command);
+      expect(args.slice(-3)).toEqual(['--action', 'lock', '--json']);
+      expect(args).not.toContain('--yes');
+    }
+    expect(commandArgs({ kind: 'queue-add', file: '/q', achievementIds: ['42'] })).not.toContain(
+      '--action',
+    );
+  });
   test('Node startup injection is removed even with Windows-style casing', () => {
     expect(
       cleanEnvironment({

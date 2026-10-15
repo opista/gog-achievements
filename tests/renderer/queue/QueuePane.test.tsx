@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueuePane } from '../../../src/renderer/features/queue/QueuePane';
 import { formatTimestamp } from '../../../src/renderer/date-time';
@@ -30,6 +30,7 @@ function QueueHarness({
       applyStatus="idle"
       achievementFor={missingDetails ? () => undefined : workspace.achievementFor}
       onRefresh={workspace.refreshQueues}
+      onClear={workspace.clearQueue}
       onRemove={workspace.remove}
       onSaveDates={workspace.saveDates}
       onPrepareApply={workspace.prepareApply}
@@ -146,7 +147,9 @@ it('keeps Apply scoped to one game and waits for the separate final confirmation
   const { user, api } = await connected({ witcher: true });
   const preview = vi.spyOn(api, 'preview');
   const apply = vi.spyOn(api, 'apply');
-  const button = screen.getByRole('button', { name: 'Apply changes for The Witcher 3: Wild Hunt' });
+  const button = screen.getByRole('button', {
+    name: 'Review changes for The Witcher 3: Wild Hunt',
+  });
   await user.click(button);
   await waitFor(() => expect(button).toBeEnabled());
   expect(preview).toHaveBeenCalledExactlyOnceWith({ gameId: '2' });
@@ -163,9 +166,9 @@ it.each(['before', 'after'] as const)(
     else await api.removeAchievements({ gameId: '1', achievementIds: ['1', '2', '3'] });
     render(<QueueHarness api={api} />);
     expect(await screen.findByText('Queue is empty.')).toBeVisible();
-    expect(screen.getByText('Use + beside an achievement to add it here.')).toBeVisible();
+    expect(screen.getByText('Use the buttons beside achievements to add them here.')).toBeVisible();
     expect(screen.queryByText(/Results are saved in history/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Apply changes for/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Review changes for/ })).not.toBeInTheDocument();
   },
 );
 
@@ -199,7 +202,27 @@ it('focuses the queue heading after removing its final achievement', async () =>
   screen.getByRole('button', { name: 'Remove The World from queue' }).focus();
   await user.keyboard('{Enter}');
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Queue' })).toHaveFocus());
-  expect(screen.getByText('Use + beside an achievement to add it here.')).toBeVisible();
+  expect(screen.getByText('Use the buttons beside achievements to add them here.')).toBeVisible();
+});
+
+it('clears saved requests from every game and returns keyboard focus to the empty queue', async () => {
+  const { user, api } = await connected({ witcher: true });
+  const before = await act(() => api.listAchievements('1'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Clear queue' })).toBeEnabled());
+  const apply = vi.spyOn(api, 'apply');
+  const remove = vi.spyOn(api, 'removeAchievements');
+  screen.getByRole('button', { name: 'Clear queue' }).focus();
+  await user.keyboard('{Enter}');
+  await waitFor(() => expect(screen.getByText('Queue is empty.')).toBeVisible());
+  expect(screen.getByRole('heading', { name: 'Queue' })).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Clear queue' })).toBeDisabled();
+  expect(remove.mock.calls).toEqual([
+    [{ gameId: '1', achievementIds: ['1', '2', '3'] }],
+    [{ gameId: '2', achievementIds: ['201'] }],
+  ]);
+  expect((await api.listQueues()).flatMap((queue) => queue.items)).toEqual([]);
+  expect((await api.listAchievements('1')).achievements).toEqual(before.achievements);
+  expect(apply).not.toHaveBeenCalled();
 });
 
 it('restores focus to the original remove action when removal fails', async () => {

@@ -68,6 +68,92 @@ test('queue edits make no apply call and preserve the actual saved queue', async
   expect((await api.getQueue(gameId))?.items.map((item) => item.achievement_id)).toEqual(['101']);
   expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
 });
+test('mixed actions pass through CLI creation, preview, apply and saved history with exact lock dates', async () => {
+  const { api, cli, store } = await fixture();
+  const previous = '2020-02-01T12:34:56.123456+0000';
+  cli.achievements[1]!.unlocked = true;
+  cli.achievements[1]!.unlocked_at = previous;
+  const first = await api.addAchievements({ gameId, achievementIds: ['102'], action: 'lock' });
+  expect(first.items[0]).toEqual({
+    achievement_id: '102',
+    key: 'KEY_102',
+    name: 'Achievement 102',
+    action: 'lock',
+    previous_unlocked_at: previous,
+  });
+  expect(cli.calls.find((call) => call.kind === 'queue-create')).toMatchObject({ action: 'lock' });
+  await api.addAchievements({ gameId, achievementIds: ['101'] });
+  await expect(
+    api.setDates({
+      gameId,
+      dates: { '101': '2020-03-01T00:00:00Z', '102': '2020-04-01T00:00:00Z' },
+    }),
+  ).rejects.toMatchObject({ code: 'INVALID_DATE_EDIT' });
+  expect(
+    cli.calls.some((command) => command.kind === 'queue-date' || command.kind === 'queue-apply'),
+  ).toBe(false);
+  const preview = await api.preview({ gameId });
+  expect(preview.report.results).toMatchObject([
+    { action: 'lock', status: 'pending', actual_unlocked_at: previous },
+    { status: 'pending' },
+  ]);
+  const bytes = await store.bytes(store.snapshotPath(userId, preview.token));
+  const result = await api.apply({ previewToken: preview.token });
+  expect(result.report?.results).toMatchObject([
+    { action: 'lock', status: 'locked', previous_unlocked_at: previous, actual_unlocked_at: null },
+    { status: 'restored' },
+  ]);
+  expect(result.report?.complete).toBe(true);
+  expect(await api.listQueues()).toEqual([]);
+  expect((await api.history({}))[0]?.report).toEqual(result.report);
+  expect(await store.bytes(store.snapshotPath(userId, preview.token))).toEqual(bytes);
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
+});
+test('old CLI builds refuse lock requests before a queue edit or apply', async () => {
+  const { api, cli } = await fixture();
+  cli.supportsLocking = false;
+  expect((await api.initialize()).supportsLocking).toBe(false);
+  await expect(
+    api.addAchievements({ gameId, achievementIds: ['102'], action: 'lock' }),
+  ).rejects.toMatchObject({ code: 'CLI_UPDATE_REQUIRED' });
+  expect(cli.calls.some((command) => command.kind.startsWith('queue-'))).toBe(false);
+  await api.addAchievements({ gameId, achievementIds: ['101'] });
+  expect(cli.calls.some((command) => command.kind === 'queue-create')).toBe(true);
+});
+test('partial lock reports with no actual date remain queued until a lock is confirmed', async () => {
+  const { api, cli } = await fixture();
+  cli.achievements[0]!.unlocked = true;
+  cli.achievements[0]!.unlocked_at = '2020-01-01T00:00:00+0000';
+  await api.addAchievements({ gameId, achievementIds: ['101'], action: 'lock' });
+  const before = await api.getQueue(gameId);
+  const preview = await api.preview({ gameId });
+  cli.mode = 'partial';
+  const result = await api.apply({ previewToken: preview.token });
+  expect(result.report?.complete).toBe(false);
+  expect(result.report?.results[0]).toMatchObject({
+    action: 'lock',
+    status: 'unconfirmed',
+    actual_unlocked_at: null,
+  });
+  expect(await api.getQueue(gameId)).toEqual(before);
+  expect((await api.listQueues())[0]?.items).toEqual(before?.items);
+});
+test('a lock-only apply clears its saved draft and reconciles saved evidence after restart', async () => {
+  const { api, cli, store } = await fixture();
+  cli.achievements[0]!.unlocked = true;
+  cli.achievements[0]!.unlocked_at = '2020-01-01T00:00:00+0000';
+  const queue = await api.addAchievements({ gameId, achievementIds: ['101'], action: 'lock' });
+  const preview = await api.preview({ gameId });
+  const result = await api.apply({ previewToken: preview.token });
+  expect(result.report?.results[0]?.status).toBe('locked');
+  const file = await store.draftPath(userId, gameId);
+  expect(JSON.parse(await readFile(file, 'utf8')).items).toEqual([]);
+  // Simulate a completed attempt whose post-write housekeeping did not persist.
+  await writeFile(file, JSON.stringify(queue));
+  const restarted = createWorkspace(cli, store, '0.1.0', '0.3.0', gone);
+  expect(await restarted.listQueues()).toEqual([]);
+  expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
+});
 test('date edits reject unlocked and unknown items before any saved mutation', async () => {
   const { api, cli, store } = await fixture();
   await seed(store);

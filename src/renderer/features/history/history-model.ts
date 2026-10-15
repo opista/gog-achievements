@@ -1,11 +1,12 @@
-import type { OperationRecord } from '../../../shared/api';
+import type { AchievementAction, OperationRecord } from '../../../shared/api';
 import { STATUS_LABELS } from '../../presentation/report-status';
 
-interface HistoryUnlock {
+interface HistoryChange {
   key: string;
   name: string;
   game: string;
-  unlockedAt: string;
+  action: AchievementAction;
+  timestamp: string;
   time: number;
   differentDate: boolean;
 }
@@ -15,13 +16,14 @@ interface HistoryAttention {
   game?: string;
   status: string;
   timestamp: string;
-  dateLabel: 'Requested' | 'Attempted';
+  dateLabel: 'Requested' | 'Attempted' | 'Previous unlock';
 }
 export function buildHistoryRows(records: OperationRecord[]): {
-  unlocks: HistoryUnlock[];
+  changes: HistoryChange[];
   attention: HistoryAttention[];
 } {
-  const unlocks = new Map<string, HistoryUnlock>();
+  const changes: HistoryChange[] = [];
+  const unlocks = new Set<string>();
   const attention: HistoryAttention[] = [];
   const attempts = records.toSorted(
     (left, right) => Date.parse(right.started_at) - Date.parse(left.started_at),
@@ -40,34 +42,54 @@ export function buildHistoryRows(records: OperationRecord[]): {
     }
     if (report.dry_run) continue;
     for (const item of report.results) {
-      if (item.status === 'skipped_already_unlocked') continue;
+      if (item.status === 'skipped_already_unlocked' || item.status === 'skipped_already_locked')
+        continue;
+      if (item.action === 'lock' && item.status === 'locked' && item.actual_unlocked_at === null) {
+        const timestamp = record.finished_at ?? record.started_at;
+        changes.push({
+          key: `lock:${record.id}:${item.achievement_id}`,
+          name: item.name,
+          game: report.game.title,
+          action: 'lock',
+          timestamp,
+          time: Date.parse(timestamp),
+          differentDate: false,
+        });
+        continue;
+      }
       const time = item.actual_unlocked_at ? Date.parse(item.actual_unlocked_at) : Number.NaN;
       const restored = item.status === 'restored' || item.status === 'restored_with_different_date';
       if (restored && Number.isFinite(time) && item.actual_unlocked_at) {
         const key = `${report.game.id}:${item.achievement_id}:${time}`;
-        if (!unlocks.has(key))
-          unlocks.set(key, {
-            key,
+        if (!unlocks.has(key)) {
+          unlocks.add(key);
+          changes.push({
+            key: `unlock:${key}`,
             name: item.name,
             game: report.game.title,
-            unlockedAt: item.actual_unlocked_at,
+            action: 'unlock',
+            timestamp: item.actual_unlocked_at,
             time,
             differentDate: item.status === 'restored_with_different_date',
           });
+        }
       } else {
         attention.push({
           key: `${record.id}:${item.achievement_id}`,
           name: item.name,
           game: report.game.title,
-          status: restored ? 'Unlock date unavailable' : STATUS_LABELS[item.status],
-          timestamp: item.requested_unlocked_at,
-          dateLabel: 'Requested',
+          status: restored
+            ? 'Unlock date unavailable'
+            : `${item.action === 'lock' ? 'Lock: ' : ''}${STATUS_LABELS[item.status]}`,
+          timestamp:
+            item.action === 'lock' ? item.previous_unlocked_at : item.requested_unlocked_at,
+          dateLabel: item.action === 'lock' ? 'Previous unlock' : 'Requested',
         });
       }
     }
   }
   return {
-    unlocks: [...unlocks.values()].sort((left, right) => right.time - left.time),
+    changes: changes.sort((left, right) => right.time - left.time),
     attention,
   };
 }

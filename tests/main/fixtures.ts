@@ -37,10 +37,21 @@ export const makeReport = (queue: Queue, dryRun: boolean): Report => ({
   results: queue.items.map((item) => ({
     achievement_id: item.achievement_id,
     name: item.name,
-    requested_unlocked_at: item.unlocked_at,
-    previous_unlocked_at: null,
-    actual_unlocked_at: dryRun ? null : item.unlocked_at,
-    status: dryRun ? 'pending' : 'restored',
+    ...(item.action === 'lock'
+      ? {
+          action: 'lock' as const,
+          requested_unlocked_at: null,
+          previous_unlocked_at: item.previous_unlocked_at,
+          actual_unlocked_at: dryRun ? item.previous_unlocked_at : null,
+          status: dryRun ? ('pending' as const) : ('locked' as const),
+        }
+      : {
+          ...(item.action ? { action: item.action } : {}),
+          requested_unlocked_at: item.unlocked_at,
+          previous_unlocked_at: null,
+          actual_unlocked_at: dryRun ? null : item.unlocked_at,
+          status: dryRun ? ('pending' as const) : ('restored' as const),
+        }),
   })),
 });
 const ok = (data: unknown): CliOutcome => ({ exitCode: 0, result: { ok: true, data } });
@@ -51,10 +62,18 @@ export class FakeCli implements CliRunner {
   mode: 'complete' | 'partial' | 'transport' | 'wrong-account' | 'invalid-report' = 'complete';
   pause: Promise<void> | null = null;
   failure: ((command: CliCommand) => void) | null = null;
+  supportsLocking = true;
   async run(command: CliCommand, onSpawn?: (pid: number) => Promise<void>): Promise<CliOutcome> {
     this.calls.push(command);
     this.failure?.(command);
-    if (command.kind === 'help') return ok({ version: '0.3.0' });
+    if (command.kind === 'help')
+      return ok({
+        version: '0.3.0',
+        commands: ['queue create', 'queue add'].map((command) => ({
+          command,
+          flags: this.supportsLocking ? ['action'] : [],
+        })),
+      });
     if (command.kind === 'doctor') return ok({ supported: true, credentials_available: true });
     if (command.kind === 'auth-status' || command.kind === 'auth-login')
       return ok({ authenticated: true, user_id: this.account, expired: false, storage: 'fixture' });
@@ -81,7 +100,13 @@ export class FakeCli implements CliRunner {
             achievement_id: id,
             key: item.key,
             name: item.name,
-            unlocked_at: '2020-01-01T00:00:00Z',
+            ...(command.action === 'lock'
+              ? {
+                  action: 'lock' as const,
+                  previous_unlocked_at: this.achievements.find((entry) => entry.id === id)!
+                    .unlocked_at!,
+                }
+              : { unlocked_at: '2020-01-01T00:00:00Z' }),
           };
         }),
       };
@@ -127,12 +152,18 @@ export class FakeCli implements CliRunner {
           achievement_id: id,
           key: item.key,
           name: item.name,
-          unlocked_at: '2020-01-01T00:00:00Z',
+          ...(command.action === 'lock'
+            ? {
+                action: 'lock' as const,
+                previous_unlocked_at: this.achievements.find((entry) => entry.id === id)!
+                  .unlocked_at!,
+              }
+            : { unlocked_at: '2020-01-01T00:00:00Z' }),
         });
       }
     if (command.kind === 'queue-date')
       for (const item of queue.items)
-        if (command.achievementIds.includes(item.achievement_id))
+        if (item.action !== 'lock' && command.achievementIds.includes(item.achievement_id))
           item.unlocked_at = command.timestamp;
     await writeFile(command.file, JSON.stringify(queue));
     return ok(queue);

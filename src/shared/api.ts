@@ -41,12 +41,23 @@ export interface AchievementsData {
   count: number;
   achievements: Achievement[];
 }
-export interface QueueItem {
+export interface UnlockQueueItem {
   achievement_id: string;
   key: string;
   name: string;
+  action?: 'unlock';
   unlocked_at: string;
 }
+export interface LockQueueItem {
+  achievement_id: string;
+  key: string;
+  name: string;
+  action: 'lock';
+  unlocked_at?: never;
+  previous_unlocked_at: string;
+}
+export type QueueItem = UnlockQueueItem | LockQueueItem;
+export type AchievementAction = 'unlock' | 'lock';
 export interface Queue {
   schema_version: 1;
   user_id: string;
@@ -55,7 +66,7 @@ export interface Queue {
   updated_at: string;
   items: QueueItem[];
 }
-export type ReportStatus =
+export type UnlockReportStatus =
   | 'pending'
   | 'restored'
   | 'skipped_already_unlocked'
@@ -63,15 +74,30 @@ export type ReportStatus =
   | 'failed'
   | 'unconfirmed'
   | 'not_attempted';
-export interface ReportItem {
+export type LockReportStatus =
+  'pending' | 'locked' | 'skipped_already_locked' | 'failed' | 'unconfirmed' | 'not_attempted';
+export type ReportStatus = UnlockReportStatus | LockReportStatus;
+export interface UnlockReportItem {
   achievement_id: string;
   name: string;
+  actual_unlocked_at: string | null;
+  error_code?: string;
+  action?: 'unlock';
   requested_unlocked_at: string;
   previous_unlocked_at: string | null;
-  actual_unlocked_at: string | null;
-  status: ReportStatus;
-  error_code?: string;
+  status: UnlockReportStatus;
 }
+export interface LockReportItem {
+  achievement_id: string;
+  name: string;
+  actual_unlocked_at: string | null;
+  error_code?: string;
+  action: 'lock';
+  requested_unlocked_at: null;
+  previous_unlocked_at: string;
+  status: LockReportStatus;
+}
+export type ReportItem = UnlockReportItem | LockReportItem;
 export interface Report {
   dry_run: boolean;
   user_id: string;
@@ -104,12 +130,16 @@ export interface OperationRecord {
 export interface InitializeResult {
   version: string;
   cliVersion: string;
+  supportsLocking?: boolean;
   auth: AuthStatus;
   operation: OperationState;
 }
 export interface SelectionInput {
   gameId: string;
   achievementIds: string[];
+}
+export interface AdditionInput extends SelectionInput {
+  action?: AchievementAction;
 }
 export interface DatesInput {
   gameId: string;
@@ -134,7 +164,7 @@ export interface WorkspaceApi {
   listAchievements(gameId: string): Promise<AchievementsData>;
   getQueue(gameId: string): Promise<Queue | null>;
   listQueues(): Promise<Queue[]>;
-  addAchievements(input: SelectionInput): Promise<Queue>;
+  addAchievements(input: AdditionInput): Promise<Queue>;
   removeAchievements(input: SelectionInput): Promise<Queue>;
   setDates(input: DatesInput): Promise<Queue>;
   preview(input: { gameId: string }): Promise<PreviewResult>;

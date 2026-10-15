@@ -28,6 +28,8 @@ export class ApplyService {
     this.previews.clear();
     const account = await this.session.requireAccount();
     const queue = await this.queues.readQueue(gameId, account);
+    if (queue?.items.some((item) => item.action === 'lock'))
+      await this.session.requireLockSupport();
     if (!queue?.items.length)
       throw new DesktopError('EMPTY_QUEUE', 'Add an achievement to the queue first.');
     const token = randomUUID();
@@ -62,7 +64,10 @@ export class ApplyService {
         'Your queue changed. Select Apply changes to review it again.',
       );
     if (!preview.report.results.some((item) => item.status === 'pending'))
-      throw new DesktopError('NOTHING_TO_APPLY', 'All selected achievements are already unlocked.');
+      throw new DesktopError(
+        'NOTHING_TO_APPLY',
+        'All selected achievements already have the requested state.',
+      );
     const record: StoredOperation = {
       id: previewToken,
       user_id: account,

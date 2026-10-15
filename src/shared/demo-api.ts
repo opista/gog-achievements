@@ -1,4 +1,5 @@
-import { isConfirmedUnlock, remainingQueueItems } from './queue-cleanup';
+import { isConfirmedChange, remainingQueueItems } from './queue-cleanup';
+import { queueSchema, reportSchema } from './schemas';
 import type {
   Achievement,
   ApplyResult,
@@ -12,6 +13,7 @@ import type {
   QueueGame,
   Report,
   ReportItem,
+  QueueItem,
 } from './api';
 
 export type DemoScenario = 'complete' | 'partial' | 'unknown' | 'empty' | 'error';
@@ -48,6 +50,7 @@ const NAMES = [
   'Legend of The Afterlife',
   'Full Body Conversion',
   'A sample hidden achievement',
+  'Daemon In The Shell',
 ];
 const WITCHER_NAMES = [
   'Passed the Trial',
@@ -56,6 +59,7 @@ const WITCHER_NAMES = [
   'Card Collector',
   'The King Is Dead',
   'A sample hidden Witcher achievement',
+  'Something More',
 ];
 function initialAchievements(gameId: string): Achievement[] {
   const names =
@@ -70,6 +74,7 @@ function initialAchievements(gameId: string): Achievement[] {
             'Collector',
             'Mastery',
             'A sample hidden achievement',
+            'Veteran',
           ];
   return names.map((name, index) => ({
     id: String(gameId === '1' ? index + 1 : Number(gameId) * 100 + index + 1),
@@ -79,8 +84,8 @@ function initialAchievements(gameId: string): Achievement[] {
       index === 5
         ? 'A concealed sample description.'
         : 'Sample achievement description. This is demo data, not a real game requirement.',
-    unlocked: index === 4,
-    unlocked_at: index === 4 ? '2026-10-04T11:00:00Z' : null,
+    unlocked: index === 4 || index === 6,
+    unlocked_at: index === 4 || index === 6 ? '2026-10-04T11:00:00+0000' : null,
     hidden: index === 5,
     image_locked: null,
     image_unlocked: null,
@@ -105,10 +110,16 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
     const stored = options.storage?.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as { queues?: Queue[]; records?: OperationRecord[] };
-      for (const queue of parsed.queues ?? [])
-        if (queue.schema_version === 1 && queue.user_id === USER_ID && Array.isArray(queue.items))
-          queues.set(queue.game.id, queue);
-      records = (parsed.records ?? []).filter((record) => record.user_id === USER_ID);
+      for (const queue of parsed.queues ?? []) {
+        const validated = queueSchema.safeParse(queue);
+        if (validated.success && validated.data.user_id === USER_ID)
+          queues.set(queue.game.id, validated.data);
+      }
+      records = (parsed.records ?? []).filter(
+        (record) =>
+          record.user_id === USER_ID &&
+          (!record.report || reportSchema.safeParse(record.report).success),
+      );
     }
   } catch {
     /* A corrupt or blocked demo store starts a clean fixture session. */
@@ -146,10 +157,10 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
       const source = initialAchievements(gameId);
       for (const record of records.filter((item) => item.game_id === gameId).toReversed()) {
         for (const result of record.report?.results ?? []) {
-          if (!isConfirmedUnlock(result)) continue;
+          if (!isConfirmedChange(result)) continue;
           const item = source.find((entry) => entry.id === result.achievement_id);
           if (item) {
-            item.unlocked = true;
+            item.unlocked = result.action !== 'lock';
             item.unlocked_at = result.actual_unlocked_at;
           }
         }
@@ -207,6 +218,7 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
       return {
         version: '0.1.0-demo',
         cliVersion: '0.3.0',
+        supportsLocking: true,
         auth: auth(),
         operation: structuredClone(operation),
       };
@@ -273,17 +285,33 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
         'read',
         () => {
           const value = queue(input.gameId);
+          const additions: QueueItem[] = [];
           for (const id of input.achievementIds) {
             const item = list(input.gameId).find((entry) => entry.id === id);
             if (!item) throw problem('INVALID_ACHIEVEMENT', 'Achievement not found.');
-            if (!item.unlocked && !value.items.some((entry) => entry.achievement_id === id))
-              value.items.push({
+            if (value.items.some((entry) => entry.achievement_id === id)) continue;
+            if (input.action === 'lock') {
+              if (!item.unlocked || !item.unlocked_at)
+                throw problem(
+                  'ALREADY_LOCKED',
+                  'Only unlocked achievements can be queued for locking.',
+                );
+              additions.push({
+                achievement_id: id,
+                key: item.key,
+                name: item.name,
+                action: 'lock',
+                previous_unlocked_at: item.unlocked_at,
+              });
+            } else if (!item.unlocked)
+              additions.push({
                 achievement_id: id,
                 key: item.key,
                 name: item.name,
                 unlocked_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
               });
           }
+          value.items.push(...additions);
           return changed(value);
         },
         input.gameId,
@@ -311,7 +339,11 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
           const value = queue(input.gameId);
           for (const [id, timestamp] of Object.entries(input.dates)) {
             const item = value.items.find((entry) => entry.achievement_id === id);
-            if (!item || list(input.gameId).find((entry) => entry.id === id)?.unlocked)
+            if (
+              !item ||
+              item.action === 'lock' ||
+              list(input.gameId).find((entry) => entry.id === id)?.unlocked
+            )
               throw problem(
                 'INVALID_DATE_EDIT',
                 'Only queued, locked achievements can have their dates edited.',
@@ -323,12 +355,11 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
             )
               throw problem('INVALID_DATE', 'Enter a valid unlock date that is not in the future.');
           }
-          for (const [id, timestamp] of Object.entries(input.dates))
-            value.items.find((item) => item.achievement_id === id)!.unlocked_at = new Date(
-              timestamp,
-            )
-              .toISOString()
-              .replace('.000Z', 'Z');
+          for (const item of value.items)
+            if (item.action !== 'lock' && input.dates[item.achievement_id])
+              item.unlocked_at = new Date(input.dates[item.achievement_id]!)
+                .toISOString()
+                .replace('.000Z', 'Z');
           return changed(value);
         },
         input.gameId,
@@ -342,6 +373,25 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
           const value = queue(input.gameId);
           const results: ReportItem[] = value.items.map((item) => {
             const current = list(input.gameId).find((entry) => entry.id === item.achievement_id)!;
+            if (item.action === 'lock') {
+              if (
+                current.unlocked &&
+                Date.parse(current.unlocked_at!) !== Date.parse(item.previous_unlocked_at)
+              )
+                throw problem(
+                  'UNLOCK_DATE_CHANGED',
+                  'The unlock date changed. Remove the queued lock and add it again.',
+                );
+              return {
+                achievement_id: item.achievement_id,
+                name: item.name,
+                action: 'lock',
+                requested_unlocked_at: null,
+                previous_unlocked_at: item.previous_unlocked_at,
+                actual_unlocked_at: current.unlocked_at,
+                status: current.unlocked ? 'pending' : 'skipped_already_locked',
+              };
+            }
             return {
               achievement_id: item.achievement_id,
               name: item.name,
@@ -402,8 +452,28 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
             ...reviewed,
             dry_run: false,
             complete: scenario !== 'partial',
-            results: reviewed.results.map((item, index) => {
-              if (item.status === 'skipped_already_unlocked') return item;
+            results: reviewed.results.map((item, index): ReportItem => {
+              if (
+                item.status === 'skipped_already_unlocked' ||
+                item.status === 'skipped_already_locked'
+              )
+                return item;
+              if (item.action === 'lock') {
+                const status =
+                  scenario !== 'partial' || index === 0
+                    ? 'locked'
+                    : index === 1
+                      ? 'unconfirmed'
+                      : 'not_attempted';
+                const current = list(reviewed.game.id).find(
+                  (entry) => entry.id === item.achievement_id,
+                )!;
+                if (status === 'locked') {
+                  current.unlocked = false;
+                  current.unlocked_at = null;
+                }
+                return { ...item, status, actual_unlocked_at: current.unlocked_at };
+              }
               const status =
                 scenario !== 'partial'
                   ? 'restored'

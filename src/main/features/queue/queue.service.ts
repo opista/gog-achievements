@@ -1,13 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Queue, SelectionInput, DatesInput, AchievementsData } from '../../../shared/api';
+import type {
+  Queue,
+  SelectionInput,
+  AdditionInput,
+  DatesInput,
+  AchievementsData,
+} from '../../../shared/api';
 import {
   idSchema,
   queueSchema,
   selectionSchema,
+  additionSchema,
   datesSchema,
   achievementsSchema,
 } from '../../../shared/schemas';
-import { isConfirmedUnlock, sameQueueRequest } from '../../../shared/queue-cleanup';
+import { isConfirmedChange, sameQueueRequest } from '../../../shared/queue-cleanup';
 import { QueueStore, digestBytes, type StoredOperation } from '../../queue-store';
 import { requireSuccess, type CliRunner, type CliCommand } from '../../cli-client';
 import { DesktopError } from '../../errors';
@@ -97,7 +104,7 @@ export class QueueService {
         // A newer unknown or unresolved attempt protects its matching requests.
         if (record.state !== 'complete' || !record.report) continue;
         const confirmed = new Set(
-          record.report.results.filter(isConfirmedUnlock).map((item) => item.achievement_id),
+          record.report.results.filter(isConfirmedChange).map((item) => item.achievement_id),
         );
         const completed = items.filter((item) => confirmed.has(item.achievement_id));
         if (!completed.length) continue;
@@ -111,8 +118,11 @@ export class QueueService {
     return cleaned;
   }
 
-  private async mutate(input: SelectionInput, kind: 'queue-add' | 'queue-remove'): Promise<Queue> {
-    const parsed = selectionSchema.parse(input);
+  private async mutate(input: AdditionInput, kind: 'queue-add' | 'queue-remove'): Promise<Queue> {
+    const parsed: AdditionInput =
+      kind === 'queue-add' ? additionSchema.parse(input) : selectionSchema.parse(input);
+    const action = parsed.action;
+    if (action === 'lock') await this.session.requireLockSupport();
     this.previews.clear();
     const account = await this.session.requireAccount();
     const file = await this.store.draftPath(account, parsed.gameId);
@@ -125,8 +135,11 @@ export class QueueService {
           file,
           gameId: parsed.gameId,
           achievementIds: parsed.achievementIds,
+          ...(action ? { action } : {}),
         }
-      : { kind, file, achievementIds: parsed.achievementIds };
+      : kind === 'queue-add'
+        ? { kind, file, achievementIds: parsed.achievementIds, ...(action ? { action } : {}) }
+        : { kind, file, achievementIds: parsed.achievementIds };
     const queue = queueSchema.parse(await this.read(command)) as Queue;
     this.session.assertOwner(queue.user_id, account);
     if (queue.game.id !== parsed.gameId)
@@ -136,7 +149,7 @@ export class QueueService {
       );
     return queue;
   }
-  add(input: SelectionInput): Promise<Queue> {
+  add(input: AdditionInput): Promise<Queue> {
     return this.mutate(input, 'queue-add');
   }
   remove(input: SelectionInput): Promise<Queue> {
@@ -148,6 +161,15 @@ export class QueueService {
     const account = await this.session.requireAccount();
     const queue = await this.readQueue(parsed.gameId, account);
     if (!queue) throw new DesktopError('QUEUE_MISSING', 'There is no saved queue for this game.');
+    if (
+      queue.items.some(
+        (item) => item.action === 'lock' && Object.hasOwn(parsed.dates, item.achievement_id),
+      )
+    )
+      throw new DesktopError(
+        'INVALID_DATE_EDIT',
+        'Only queued unlocks can have their dates edited.',
+      );
     const live = achievementsSchema.parse(
       await this.read({ kind: 'achievements', gameId: parsed.gameId }),
     ) as AchievementsData;

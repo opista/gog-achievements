@@ -2,12 +2,17 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
-import type { OperationRecord, ReportItem } from '../../../src/shared/api';
+import type {
+  LockReportItem,
+  OperationRecord,
+  ReportItem,
+  UnlockReportItem,
+} from '../../../src/shared/api';
 import { HistoryView } from '../../../src/renderer/features/history/HistoryView';
 import { formatTimestamp } from '../../../src/renderer/date-time';
 
 afterEach(cleanup);
-function row(overrides: Partial<ReportItem> = {}): ReportItem {
+function row(overrides: Partial<UnlockReportItem> = {}): UnlockReportItem {
   return {
     achievement_id: '1',
     name: 'The World',
@@ -15,6 +20,18 @@ function row(overrides: Partial<ReportItem> = {}): ReportItem {
     requested_unlocked_at: '2026-10-10T17:30:00Z',
     previous_unlocked_at: null,
     actual_unlocked_at: '2026-10-10T17:30:00Z',
+    ...overrides,
+  };
+}
+function lockRow(overrides: Partial<LockReportItem> = {}): LockReportItem {
+  return {
+    achievement_id: '7',
+    name: 'Confirmed lock',
+    action: 'lock',
+    requested_unlocked_at: null,
+    previous_unlocked_at: '2020-01-01T12:34:56+0000',
+    actual_unlocked_at: null,
+    status: 'locked',
     ...overrides,
   };
 }
@@ -61,8 +78,8 @@ it('shows flat unlock rows sorted by actual unlock time with game context and lo
     row({ name: 'Middle unlock', actual_unlocked_at: '2026-10-05T12:00:00Z' }),
   ]);
   render(<HistoryView records={[oldest, newest, middle]} zone="Europe/London" />);
-  expect(screen.getByRole('heading', { name: 'Unlock history' })).toBeVisible();
-  const entries = within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole(
+  expect(screen.getByRole('heading', { name: 'Achievement history' })).toBeVisible();
+  const entries = within(screen.getByRole('list', { name: 'Confirmed changes' })).getAllByRole(
     'listitem',
   );
   expect(entries.map((entry) => entry.querySelector('strong')?.textContent)).toEqual([
@@ -90,11 +107,50 @@ it('deduplicates the same game, achievement and actual instant without merging d
   const records = [original, equivalent, otherGame, otherDate];
   const before = structuredClone(records);
   render(<HistoryView records={records} zone="UTC" />);
-  const entries = within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole(
+  const entries = within(screen.getByRole('list', { name: 'Confirmed changes' })).getAllByRole(
     'listitem',
   );
   expect(entries).toHaveLength(3);
   expect(within(entries[0]!).getByText('Another recorded unlock')).toBeVisible();
+  expect(records).toEqual(before);
+});
+it('interleaves locks and unlocks newest first by their displayed dates across games', () => {
+  const earlierUnlock = record(
+    'earlier-unlock',
+    [row({ name: 'SAVE THE WORLD', actual_unlocked_at: '2026-10-15T20:19:12Z' })],
+    { gameId: '2', title: '60 Minutes to Extinction', startedAt: '2026-10-15T20:50:00Z' },
+  );
+  const locked: OperationRecord = {
+    ...record('lock', [lockRow({ name: 'SAVE THE WORLD' })], {
+      gameId: '2',
+      title: '60 Minutes to Extinction',
+      startedAt: '2026-10-15T20:38:00Z',
+    }),
+    finished_at: '2026-10-15T20:38:11Z',
+  };
+  const latestUnlock = record('latest-unlock', [
+    row({ name: 'Gun Fu', actual_unlocked_at: '2026-10-15T20:43:14Z' }),
+  ]);
+  const records = [earlierUnlock, locked, latestUnlock];
+  const before = structuredClone(records);
+  render(<HistoryView records={records} zone="UTC" />);
+  const entries = within(screen.getByRole('list', { name: 'Confirmed changes' })).getAllByRole(
+    'listitem',
+  );
+  expect(entries.map((entry) => entry.querySelector('strong')?.textContent)).toEqual([
+    'Gun Fu',
+    'SAVE THE WORLD',
+    'SAVE THE WORLD',
+  ]);
+  expect(entries.map((entry) => entry.querySelector('time')?.dateTime)).toEqual([
+    '2026-10-15T20:43:14Z',
+    '2026-10-15T20:38:11Z',
+    '2026-10-15T20:19:12Z',
+  ]);
+  expect(within(entries[0]!).getByText('Unlocked')).toBeVisible();
+  expect(within(entries[1]!).getByText('Locked')).toBeVisible();
+  expect(within(entries[2]!).getByText('Unlocked')).toBeVisible();
+  expect(screen.queryByRole('heading', { name: 'Locked achievements' })).not.toBeInTheDocument();
   expect(records).toEqual(before);
 });
 it('keeps partial confirmed unlocks separate from unresolved results and never claims skipped existing unlocks', () => {
@@ -131,7 +187,7 @@ it('keeps partial confirmed unlocks separate from unresolved results and never c
     />,
   );
   expect(
-    within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole('listitem'),
+    within(screen.getByRole('list', { name: 'Confirmed changes' })).getAllByRole('listitem'),
   ).toHaveLength(1);
   expect(screen.getByText(formatTimestamp('2026-10-10T17:32:00Z', 'UTC'))).toBeVisible();
   expect(screen.getByText('Unlocked with a different date')).toBeVisible();
@@ -154,8 +210,8 @@ it('preserves reportless unknown and interrupted attempts without inventing achi
     report: null,
   };
   render(<HistoryView records={[unknown, interrupted]} zone="Europe/London" />);
-  expect(screen.queryByRole('list', { name: 'Unlocked achievements' })).not.toBeInTheDocument();
-  expect(screen.getByText('No confirmed unlocks yet.')).toBeVisible();
+  expect(screen.queryByRole('list', { name: 'Confirmed changes' })).not.toBeInTheDocument();
+  expect(screen.getByText('No confirmed changes yet.')).toBeVisible();
   const attention = screen.getByRole('list', { name: 'Results needing attention' });
   expect(within(attention).getByText('Cyberpunk 2077')).toBeVisible();
   expect(within(attention).getByText('The Witcher 3')).toBeVisible();
@@ -173,7 +229,7 @@ it('never infers a confirmed unlock from an unknown record or a preview, and sur
     row({ actual_unlocked_at: null, name: 'Date missing' }),
   ]);
   render(<HistoryView records={[unknown, preview, malformed]} zone="UTC" />);
-  expect(screen.queryByRole('list', { name: 'Unlocked achievements' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('list', { name: 'Confirmed changes' })).not.toBeInTheDocument();
   expect(screen.queryByText('The World')).not.toBeInTheDocument();
   expect(screen.getByText('Outcome unknown')).toBeVisible();
   expect(screen.getByText('Date missing')).toBeVisible();
@@ -181,10 +237,50 @@ it('never infers a confirmed unlock from an unknown record or a preview, and sur
 });
 it('shows a bounded loading state and an empty history without stale rows', () => {
   const view = render(<HistoryView records={[record('old', [row()])]} zone="UTC" loading />);
-  expect(screen.getByRole('status', { name: 'Loading unlock history' })).toBeVisible();
+  expect(screen.getByRole('status', { name: 'Loading achievement history' })).toBeVisible();
   expect(screen.queryByText('The World')).not.toBeInTheDocument();
-  expect(screen.queryByText('No unlock history yet.')).not.toBeInTheDocument();
+  expect(screen.queryByText('No achievement history yet.')).not.toBeInTheDocument();
   view.rerender(<HistoryView records={[]} zone="UTC" />);
-  expect(screen.getByText('No unlock history yet.')).toBeVisible();
+  expect(screen.getByText('No achievement history yet.')).toBeVisible();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+it('shows only the confirmation date for confirmed locks, retaining uncertain results for attention', () => {
+  const lock = lockRow();
+  render(
+    <HistoryView
+      zone="UTC"
+      records={[
+        record('lock', [
+          lock,
+          { ...lock, achievement_id: '8', name: 'Uncertain lock', status: 'unconfirmed' },
+          {
+            ...lock,
+            achievement_id: '9',
+            name: 'Already locked',
+            status: 'skipped_already_locked',
+          },
+        ]),
+      ]}
+    />,
+  );
+  const locked = screen.getByText('Confirmed lock').closest('li')!;
+  expect(within(locked).getByText('Confirmed lock')).toBeVisible();
+  expect(within(locked).getByText(formatTimestamp('2026-10-14T10:01:00Z', 'UTC'))).toHaveAttribute(
+    'datetime',
+    '2026-10-14T10:01:00Z',
+  );
+  expect(within(locked).queryByText(/Previous unlock/)).not.toBeInTheDocument();
+  expect(
+    within(locked).queryByText(formatTimestamp(lock.previous_unlocked_at, 'UTC')),
+  ).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole('region', { name: 'Needs attention' })).getByText(
+      'Lock: Outcome uncertain',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText('Already locked')).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole('list', { name: 'Confirmed changes' })).getAllByRole('listitem'),
+  ).toHaveLength(1);
+  expect(screen.queryByText('No confirmed changes yet.')).not.toBeInTheDocument();
 });

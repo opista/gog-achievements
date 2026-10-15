@@ -346,10 +346,22 @@ test('smoke checks execute only JSON help and an offline queue read on every tar
               stderr: '',
               stdout: JSON.stringify({
                 ok: true,
-                data: { name: 'gog-achievements', version: VERSION },
+                data: {
+                  name: 'gog-achievements',
+                  version: VERSION,
+                  commands: ['queue create', 'queue add'].map((command) => ({
+                    command,
+                    flags: ['action'],
+                  })),
+                },
               }),
             };
           const queue = JSON.parse(await readFile(args[3], 'utf8'));
+          assert.deepEqual(
+            queue.items.map((item) => item.action ?? 'unlock'),
+            ['unlock', 'lock'],
+          );
+          assert.equal(queue.items[1].previous_unlocked_at, '2020-02-01T12:34:56.123456+0000');
           return { stderr: '', stdout: JSON.stringify({ ok: true, data: queue }) };
         },
         { platform: target.platform, arch: target.architecture },
