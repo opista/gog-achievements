@@ -1,8 +1,8 @@
-import { useDeferredValue, useRef, useState } from 'react';
+import { useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Search, X } from 'lucide-react';
 import type { Game } from '../../../shared/api';
-import { Art } from '../../components/Art';
 import { PaneResize } from '../../components/PaneResize';
+import { GameList } from './GameList';
 import { filterGames } from './library-model';
 
 interface Props {
@@ -34,8 +34,14 @@ export function Library({
 }: Props) {
   const [search, setSearch] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const query = useDeferredValue(search.trim());
-  const filtered = filterGames(games, query);
+  const filtered = useMemo(() => filterGames(games, query), [games, query]);
+  useLayoutEffect(() => {
+    if (!list.current) return;
+    list.current.scrollTop = 0;
+    list.current.scrollLeft = 0;
+  }, [query]);
   function clearSearch() {
     setSearch('');
     searchInput.current?.focus();
@@ -76,7 +82,7 @@ export function Library({
           </button>
         ) : null}
       </div>
-      <div className="library-list">
+      <div className="library-list" ref={list}>
         {!signedIn ? null : loading ? (
           <div className="library-skeleton">
             <p className="sr-only" role="status">
@@ -97,19 +103,14 @@ export function Library({
             {!busy ? <button onClick={onRefresh}>Retry library</button> : null}
           </div>
         ) : filtered.length > 0 ? (
-          filtered.map((game) => (
-            <button
-              key={game.id}
-              className={`game-row ${game.id === gameId ? 'selected' : ''}`}
-              title={game.title}
-              disabled={busy}
-              aria-pressed={game.id === gameId}
-              onClick={() => onSelect(game)}
-            >
-              <Art image={game.image} name={game.title} demo={demo} />
-              <span className="game-title">{game.title}</span>
-            </button>
-          ))
+          <GameList
+            key={query}
+            games={filtered}
+            gameId={gameId}
+            busy={busy}
+            demo={demo}
+            onSelect={onSelect}
+          />
         ) : (
           <div className="library-placeholder">
             <p>{query ? 'No games match your search.' : 'No GOG games found.'}</p>
