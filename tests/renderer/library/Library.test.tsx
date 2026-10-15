@@ -3,9 +3,9 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Library } from '../../src/renderer/features/Library';
+import { Library } from '../../../src/renderer/features/library/Library';
 import type { ComponentProps } from 'react';
-import type { Game } from '../../src/shared/api';
+import type { Game } from '../../../src/shared/api';
 afterEach(cleanup);
 const games: Game[] = [
   { id: '1', title: 'Cyberpunk 2077', image: 'https://images.gog-statics.com/demo-image.jpg' },

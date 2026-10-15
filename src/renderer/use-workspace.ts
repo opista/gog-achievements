@@ -1,6 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type {
-  Achievement,
   ApplyResult,
   AuthStatus,
   DesktopApi,
@@ -12,6 +11,7 @@ import type {
   QueueGame,
 } from '../shared/api';
 import { useHistory } from './features/history/use-history';
+import { useLibrary } from './features/library/use-library';
 
 export type View = 'browse' | 'applying' | 'results' | 'history';
 export type LoadingTarget =
@@ -31,16 +31,10 @@ function notice(error: unknown): Notice {
 export function useWorkspace(api: DesktopApi) {
   const [auth, setAuth] = useState<AuthStatus>({ authenticated: false });
   const currentAuth = useRef<AuthStatus>({ authenticated: false });
-  const currentGame = useRef<Game | null>(null);
-  const gameMetadata = useRef(new Map<string, QueueGame>());
-  const [games, setGames] = useState<Game[]>([]);
-  const [libraryLoaded, setLibraryLoaded] = useState(false);
-  const [achievementsLoaded, setAchievementsLoaded] = useState(false);
+  const library = useLibrary(api, { assertOwner, syncQueue: syncSelectedQueue });
+  const { games, libraryLoaded, game, achievements, achievementsLoaded } = library;
   const [queuesLoaded, setQueuesLoaded] = useState(false);
-  const [game, setGame] = useState<Game | null>(null);
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [queues, setQueues] = useState<Queue[]>([]);
-  const [achievementCache, setAchievementCache] = useState<Record<string, Achievement[]>>({});
   const [queueDetailsLoading, setQueueDetailsLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
@@ -57,7 +51,6 @@ export function useWorkspace(api: DesktopApi) {
   const [error, setError] = useState<Notice | null>(null);
   const [operation, setOperation] = useState<OperationState>({ kind: 'idle' });
   const [versions, setVersions] = useState({ app: '', cli: '' });
-  const generation = useRef(0);
   const working = useRef(false);
   const initialization = useRef<{ api: DesktopApi; promise: Promise<InitializeResult> } | null>(
     null,
@@ -71,26 +64,22 @@ export function useWorkspace(api: DesktopApi) {
   function invalidate() {
     setPreview(null);
   }
-  function clearGameState() {
-    generation.current += 1;
-    currentGame.current = null;
-    setGame(null);
-    setAchievements([]);
-    setAchievementsLoaded(false);
+  function clearGamePresentation() {
     setResult(null);
     setResultGame(null);
     setView('browse');
     invalidate();
   }
+  function clearGameState() {
+    library.clearSelection();
+    clearGamePresentation();
+  }
   function clearAccountState() {
-    setGames([]);
-    setLibraryLoaded(false);
+    library.clear();
     setQueues([]);
     setQueuesLoaded(false);
     history.clear();
-    setAchievementCache({});
-    gameMetadata.current.clear();
-    clearGameState();
+    clearGamePresentation();
   }
   function setAccount(status: AuthStatus) {
     if (status.user_id !== currentAuth.current.user_id || !status.authenticated)
@@ -152,6 +141,10 @@ export function useWorkspace(api: DesktopApi) {
       ...(value ? [value] : []),
     ]);
   }
+  async function syncSelectedQueue(gameId: string, isCurrent: () => boolean) {
+    const value = await api.getQueue(gameId);
+    if (isCurrent()) updateQueue(gameId, value);
+  }
   async function loadQueues() {
     const values = await api.listQueues();
     for (const value of values) assertOwner(value.user_id);
@@ -163,8 +156,8 @@ export function useWorkspace(api: DesktopApi) {
     const missing = values.filter(
       (value) =>
         value.items.length &&
-        value.game.id !== currentGame.current?.id &&
-        !achievementCache[value.game.id],
+        value.game.id !== library.currentGame()?.id &&
+        !library.hasAchievements(value.game.id),
     );
     if (!missing.length) return;
     setLoadingTarget('queue');
@@ -172,9 +165,7 @@ export function useWorkspace(api: DesktopApi) {
     try {
       for (const value of missing) {
         try {
-          const data = await api.listAchievements(value.game.id);
-          assertOwner(data.user_id);
-          setAchievementCache((previous) => ({ ...previous, [value.game.id]: data.achievements }));
+          await library.loadDetails(value.game.id);
         } catch (failure) {
           if (['ACCOUNT_CHANGED', 'ACCOUNT_MISMATCH'].includes(notice(failure).code ?? ''))
             throw failure;
@@ -186,31 +177,10 @@ export function useWorkspace(api: DesktopApi) {
     }
   }
   async function loadGame(next: Game) {
-    const sameGame = currentGame.current?.id === next.id;
-    const stamp = ++generation.current;
     setLoadingTarget('achievements');
-    if (!sameGame) {
-      currentGame.current = next;
-      setGame(next);
-      setAchievements([]);
-      setAchievementsLoaded(false);
-      setResult(null);
-      setResultGame(null);
-      setView('browse');
-      invalidate();
-    } else setPreview(null);
-    const data = await api.listAchievements(next.id);
-    assertOwner(data.user_id);
-    if (stamp !== generation.current) return;
-    gameMetadata.current.set(next.id, data.game);
-    const nextQueue = await api.getQueue(next.id);
-    if (stamp !== generation.current) return;
-    updateQueue(next.id, nextQueue);
-    currentGame.current = next;
-    setGame(next);
-    setAchievements(data.achievements);
-    setAchievementCache((previous) => ({ ...previous, [next.id]: data.achievements }));
-    setAchievementsLoaded(true);
+    if (library.currentGame()?.id !== next.id) clearGamePresentation();
+    else invalidate();
+    await library.loadGame(next);
   }
   async function loadLibrary(preferredId?: string) {
     setLoadingTarget('library');
@@ -240,14 +210,11 @@ export function useWorkspace(api: DesktopApi) {
       setAuth(currentAuth.current);
       setAccount((await api.initialize()).auth);
     }
-    assertOwner(data.user_id);
-    setGames(data.games);
-    setLibraryLoaded(true);
+    const first = library.acceptGames(data, preferredId);
     const savedQueues = await loadQueues();
     await history.load();
-    const first = data.games.find((item) => item.id === preferredId) ?? data.games[0];
     if (!first) clearGameState();
-    else if (currentGame.current?.id !== first.id || !achievementsLoaded) await loadGame(first);
+    else if (library.currentGame()?.id !== first.id || !achievementsLoaded) await loadGame(first);
     await loadQueueDetails(savedQueues);
   }
   const handleOperation = useEffectEvent((state: OperationState) => {
@@ -295,7 +262,6 @@ export function useWorkspace(api: DesktopApi) {
     void start(() => mounted);
     return () => {
       mounted = false;
-      generation.current += 1;
       unsubscribe();
     };
   }, [api]);
@@ -333,23 +299,10 @@ export function useWorkspace(api: DesktopApi) {
     void run('Loading library…', 'library', () => loadLibrary(game?.id));
   }
   function refreshAchievements(currentState = false) {
-    const selected = currentGame.current;
-    if (!selected) return;
+    if (!library.currentGame()) return;
     void run('Refreshing achievements…', 'achievements', async () => {
-      if (!achievementsLoaded) {
-        await loadGame(selected);
-        if (currentState) setView('browse');
-        return;
-      }
-      setPreview(null);
-      const data = currentState
-        ? await api.checkCurrentState({ gameId: selected.id })
-        : await api.listAchievements(selected.id);
-      assertOwner(data.user_id);
-      const nextQueue = await api.getQueue(selected.id);
-      updateQueue(selected.id, nextQueue);
-      setAchievements(data.achievements);
-      setAchievementCache((previous) => ({ ...previous, [selected.id]: data.achievements }));
+      invalidate();
+      await library.refreshSelected(currentState);
       if (currentState) setView('browse');
     });
   }
@@ -388,7 +341,7 @@ export function useWorkspace(api: DesktopApi) {
   }
   function add(ids: string[]) {
     if (!game) return;
-    const metadata = gameMetadata.current.get(game.id);
+    const metadata = library.metadataFor(game.id);
     const timestamp = new Date().toISOString();
     const provisional: Queue | undefined =
       metadata && currentAuth.current.user_id
@@ -471,12 +424,7 @@ export function useWorkspace(api: DesktopApi) {
         // Refresh durable local state first; a later network failure must not restore stale rows.
         updateQueue(report.game.id, await api.getQueue(report.game.id));
         await history.load();
-        if (currentGame.current?.id === report.game.id) {
-          const data = await api.listAchievements(report.game.id);
-          assertOwner(data.user_id);
-          setAchievements(data.achievements);
-          setAchievementCache((previous) => ({ ...previous, [report.game.id]: data.achievements }));
-        }
+        await library.refreshAfterApply(report.game.id);
       } catch (failure) {
         await handleFailure(failure);
       }
@@ -498,8 +446,7 @@ export function useWorkspace(api: DesktopApi) {
     achievements,
     queues,
     queueDetailsLoading,
-    achievementFor: (gameId: string, achievementId: string) =>
-      achievementCache[gameId]?.find((item) => item.id === achievementId),
+    achievementFor: library.achievementFor,
     queue,
     preview,
     result,

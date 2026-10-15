@@ -1,8 +1,9 @@
 import { useDeferredValue, useRef, useState } from 'react';
 import { RefreshCw, Search, X } from 'lucide-react';
-import type { Game } from '../../shared/api';
-import { Art } from '../components/Art';
-import { PaneResize } from '../components/PaneResize';
+import type { Game } from '../../../shared/api';
+import { Art } from '../../components/Art';
+import { PaneResize } from '../../components/PaneResize';
+import { filterGames } from './library-model';
 
 interface Props {
   games: Game[];
@@ -33,8 +34,8 @@ export function Library({
 }: Props) {
   const [search, setSearch] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
-  const query = useDeferredValue(search.trim().toLocaleLowerCase());
-  const filtered = games.filter((game) => game.title.toLocaleLowerCase().includes(query));
+  const query = useDeferredValue(search.trim());
+  const filtered = filterGames(games, query);
   function clearSearch() {
     setSearch('');
     searchInput.current?.focus();
