@@ -2,9 +2,9 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
-import type { OperationRecord, ReportItem } from '../../src/shared/api';
-import { HistoryView } from '../../src/renderer/features/Results';
-import { formatTimestamp } from '../../src/renderer/date-time';
+import type { OperationRecord, ReportItem } from '../../../src/shared/api';
+import { HistoryView } from '../../../src/renderer/features/history/HistoryView';
+import { formatTimestamp } from '../../../src/renderer/date-time';
 
 afterEach(cleanup);
 function row(overrides: Partial<ReportItem> = {}): ReportItem {
