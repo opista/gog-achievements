@@ -5,6 +5,7 @@ const target =
   `${process.platform === 'darwin' ? 'macos' : 'windows'}-${process.arch}`;
 if (!/^(macos|windows)-(arm64|x64)$/.test(target)) throw new Error('Unsupported CLI target.');
 const icon = path.join(__dirname, 'resources/ui/assets/app-icon.png');
+const macEntitlements = path.join(__dirname, 'resources/entitlements.mac.plist');
 module.exports = {
   appId: 'com.metacurb.gogachievements',
   productName: 'GOG Achievements',
@@ -20,7 +21,13 @@ module.exports = {
     target: ['dmg', 'zip'],
     category: 'public.app-category.utilities',
     minimumSystemVersion: '13.5',
+    // Seal the full bundle without a Developer ID certificate. This is not notarization.
+    identity: '-',
+    notarize: false,
     hardenedRuntime: true,
+    entitlements: macEntitlements,
+    entitlementsInherit: macEntitlements,
+    strictVerify: true,
   },
   win: { target: ['nsis'] },
   nsis: {

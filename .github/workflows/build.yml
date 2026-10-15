@@ -103,7 +103,7 @@ jobs:
           # Public CLI releases need no token. Private releases require this secret.
           GH_TOKEN: ${{ secrets.CLI_RELEASE_TOKEN }}
         run: npm run package -- --target=${{ matrix.target }}
-      - name: Verify the CLI inside the packaged application
+      - name: Verify the packaged app and CLI
         shell: bash
         run: node scripts/verify-package.mjs --target=${{ matrix.target }} --directory="$PACKAGE_DIRECTORY"
       - name: Verify Nest and IPC inside the packaged application
