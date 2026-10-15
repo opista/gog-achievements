@@ -1,5 +1,11 @@
 # Implementation notes
 
+The main process uses a standalone Nest application context. `DesktopModule` provides the CLI runner, queue store and existing operation manager; `WorkspaceController` exposes typed methods through Electron IPC Bridge. Constructor dependencies use explicit `@Inject` tokens so Vite builds do not depend on a decorator-metadata compiler transform. Nest provides dependency injection and lifecycle hooks; no HTTP server is started.
+
+Each IPC method uses `IpcBoundary` to check the sender's window and main frame, validate its payload with the existing Zod schema, and return a sanitized result envelope with a stable error code. Standalone Nest does not automatically apply HTTP guards or pipes. The preload bundles the bridge helper for the sandbox and exposes a readiness promise before the renderer starts. A renderer transport adapter unwraps envelopes into the existing `DesktopApi`, so feature components and demo behavior keep their current contract. Main-to-renderer operation events retain one narrow subscription with an unsubscribe function.
+
+Application shutdown disposes bridge handlers and closes the Nest context. Nest's recovery lifecycle provider stops its polling timer on close. Account checks, preview tokens, operation serialization, stored queue formats and GOG writes remain in the existing services and CLI. Feature-by-feature extraction follows this integration.
+
 The workspace follows [A's three-pane layout](design/desktop-workspace.png), with the later UI reviews taking precedence over the original [state concepts](design/WORKFLOW.md). Signed-out users see a blank library and one sign-in action; the queue is hidden. The account menu uses a profile icon and arrow.
 
 The released CLI owns authentication, queue validation and GOG writes. Game and achievement images use trusted GOG image hosts. The CLI currently exposes landscape library thumbnails; portrait metadata lookups would require another request, so artwork remains unchanged under the user's constraint. Demo assets are sample content only, and demo mode never invokes the CLI.

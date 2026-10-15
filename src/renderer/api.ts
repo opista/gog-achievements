@@ -1,13 +1,18 @@
-import type { DesktopApi } from '../shared/api';
+import type { DesktopApi, DesktopPlatform } from '../shared/api';
+import { createDesktopApi } from './platform/desktop-api';
 
 declare global {
   interface Window {
-    gogAchievements?: DesktopApi;
+    gogPlatform?: DesktopPlatform;
   }
 }
 
 export async function getDesktopApi(): Promise<DesktopApi> {
-  if (window.gogAchievements) return window.gogAchievements;
+  if (window.gogPlatform) {
+    await window.gogPlatform.ready();
+    if (window.ipc?.workspace) return createDesktopApi(window.ipc, window.gogPlatform);
+    throw new Error('The desktop bridge could not load. Restart the app.');
+  }
   const isElectron = navigator.userAgent.includes('Electron');
   if (!isElectron && new URLSearchParams(location.search).get('demo') === '1') {
     const { createDemoApi } = await import('../shared/demo-api');

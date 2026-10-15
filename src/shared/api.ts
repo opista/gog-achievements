@@ -146,7 +146,9 @@ export interface WorkspaceApi {
 export interface DesktopApi extends WorkspaceApi {
   checkForUpdates(): Promise<void>;
 }
+export interface DesktopPlatform extends Pick<WorkspaceApi, 'isDemo' | 'onOperation'> {
+  ready(): Promise<void>;
+}
 export type ApiMethod = Exclude<keyof DesktopApi, 'isDemo' | 'onOperation'>;
-export type IpcResult = { ok: true; data: unknown } | { ok: false; error: PublicError };
-export const IPC_REQUEST = 'gog-achievements:request';
+export type IpcResult<T = unknown> = { ok: true; data: T } | { ok: false; error: PublicError };
 export const IPC_OPERATION = 'gog-achievements:operation';

@@ -2,7 +2,17 @@ import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 export default [
-  { ignores: ['node_modules/**', 'out/**', 'dist/**', 'dist-web/**', 'resources/**', '.cache/**'] },
+  {
+    ignores: [
+      'node_modules/**',
+      'out/**',
+      'dist/**',
+      'dist-web/**',
+      'resources/**',
+      '.cache/**',
+      'src/**/ipc.generated.*',
+    ],
+  },
   js.configs.recommended,
   ...ts.configs.recommended,
   {

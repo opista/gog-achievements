@@ -9,6 +9,8 @@ export default defineConfig({
     // Keep jsdom workers within hosted runners' CPU and memory limits.
     maxWorkers: 4,
     setupFiles: ['tests/setup.ts'],
+    // Run bridge imports through Vitest so its real IPC code uses the Electron mock.
+    server: { deps: { inline: ['@electron-ipc-bridge/core'] } },
     testTimeout: 10000,
   },
 });

@@ -44,6 +44,7 @@ A browser without `?demo=1` shows that the desktop bridge is unavailable.
 npm run check
 npm run test:e2e
 npm run build -- --target=macos-arm64
+npm run test:desktop
 npm run package -- --target=macos-arm64
 ```
 
@@ -56,6 +57,8 @@ node scripts/verify-package.mjs --target=macos-arm64 --directory 'dist/mac-arm64
 
 Tests use fake CLI responses and sample accounts. Browser tests run the demo flow on a separate temporary server. Offline smoke checks read help and a fixture queue. Neither makes achievement writes.
 
+The desktop test launches the compiled app in demo mode and checks the real renderer → sandboxed preload → IPC bridge → Nest service flow. After packaging, set `GOG_DESKTOP_PACKAGE_DIRECTORY` to the unpacked app directory to run the same check against that package. The test uses sample data and makes no GOG writes.
+
 Packages are currently unsigned. Developer ID signing, notarization and Windows signing remain distribution tasks. Native login and installation still need checks on each supported platform.
 
 ## CI and source layout
@@ -66,13 +69,15 @@ Release Please maintains a version pull request from conventional commits on `ma
 
 Installed apps check for a newer public stable release once at startup. Open the top-right account menu and choose **Check for updates…** to check again. This is also available through **GOG Achievements → Check for Updates…** on macOS, or **Help → Check for Updates…** on Windows. An update notice opens the matching installer in your browser; you install it yourself. Notices wait until active CLI work finishes. Update checks need no GOG or GitHub login.
 
-| Area            | Responsibility                                                                 |
-| --------------- | ------------------------------------------------------------------------------ |
-| `src/shared/`   | CLI data contracts, IPC validation and shared demo backend                     |
-| `src/main/`     | Fixed CLI commands, drafts, reviewed snapshots, operation records and recovery |
-| `src/preload/`  | Narrow typed desktop bridge                                                    |
-| `src/renderer/` | Workspace, dates, review and report screens                                    |
-| `scripts/`      | Verified CLI download, native packaging, checksums and offline smoke           |
-| `tests/`        | Backend, renderer, date and archive/packaging behaviour                        |
+| Area            | Responsibility                                                           |
+| --------------- | ------------------------------------------------------------------------ |
+| `src/shared/`   | CLI data contracts, IPC validation and shared demo backend               |
+| `src/main/`     | Nest providers, IPC controllers, fixed CLI commands, drafts and recovery |
+| `src/preload/`  | Generated IPC bridge setup, readiness and operation event subscription   |
+| `src/renderer/` | Transport adapter, workspace, dates, review and report screens           |
+| `scripts/`      | Verified CLI download, native packaging, checksums and offline smoke     |
+| `tests/`        | Backend, renderer, date and archive/packaging behaviour                  |
 
 Read the [plan](PLAN.md), [screen design](docs/design/WORKFLOW.md), [implementation notes](docs/IMPLEMENTATION.md) and [CLI release lock](cli-release.lock.json).
+
+IPC method types are generated from the main-process controller by `@electron-ipc-bridge/vite-plugin`. `npm run dev`, desktop builds and `npm run typecheck` generate them automatically. Run `npm run ipc:generate` to refresh editor types directly. Generated files are ignored by Git and need no manual edits.
