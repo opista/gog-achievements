@@ -15,13 +15,22 @@ interface HistoryAttention {
   game?: string;
   status: string;
   timestamp: string;
-  dateLabel: 'Requested' | 'Attempted';
+  dateLabel: 'Requested' | 'Attempted' | 'Previous unlock';
+}
+interface HistoryLock {
+  key: string;
+  name: string;
+  game: string;
+  lockedAt: string;
+  previousUnlockedAt: string;
 }
 export function buildHistoryRows(records: OperationRecord[]): {
   unlocks: HistoryUnlock[];
+  locks: HistoryLock[];
   attention: HistoryAttention[];
 } {
   const unlocks = new Map<string, HistoryUnlock>();
+  const locks: HistoryLock[] = [];
   const attention: HistoryAttention[] = [];
   const attempts = records.toSorted(
     (left, right) => Date.parse(right.started_at) - Date.parse(left.started_at),
@@ -40,7 +49,18 @@ export function buildHistoryRows(records: OperationRecord[]): {
     }
     if (report.dry_run) continue;
     for (const item of report.results) {
-      if (item.status === 'skipped_already_unlocked') continue;
+      if (item.status === 'skipped_already_unlocked' || item.status === 'skipped_already_locked')
+        continue;
+      if (item.action === 'lock' && item.status === 'locked' && item.actual_unlocked_at === null) {
+        locks.push({
+          key: `${record.id}:${item.achievement_id}`,
+          name: item.name,
+          game: report.game.title,
+          lockedAt: record.finished_at ?? record.started_at,
+          previousUnlockedAt: item.previous_unlocked_at,
+        });
+        continue;
+      }
       const time = item.actual_unlocked_at ? Date.parse(item.actual_unlocked_at) : Number.NaN;
       const restored = item.status === 'restored' || item.status === 'restored_with_different_date';
       if (restored && Number.isFinite(time) && item.actual_unlocked_at) {
@@ -59,15 +79,19 @@ export function buildHistoryRows(records: OperationRecord[]): {
           key: `${record.id}:${item.achievement_id}`,
           name: item.name,
           game: report.game.title,
-          status: restored ? 'Unlock date unavailable' : STATUS_LABELS[item.status],
-          timestamp: item.requested_unlocked_at,
-          dateLabel: 'Requested',
+          status: restored
+            ? 'Unlock date unavailable'
+            : `${item.action === 'lock' ? 'Lock: ' : ''}${STATUS_LABELS[item.status]}`,
+          timestamp:
+            item.action === 'lock' ? item.previous_unlocked_at : item.requested_unlocked_at,
+          dateLabel: item.action === 'lock' ? 'Previous unlock' : 'Requested',
         });
       }
     }
   }
   return {
     unlocks: [...unlocks.values()].sort((left, right) => right.time - left.time),
+    locks,
     attention,
   };
 }

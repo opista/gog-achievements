@@ -1,6 +1,11 @@
-import type { ApplyResult, PreviewResult, Report, ReportStatus } from '../../../src/shared/api';
+import type {
+  ApplyResult,
+  PreviewResult,
+  Report,
+  UnlockReportStatus,
+} from '../../../src/shared/api';
 
-export function report(status: ReportStatus = 'pending', gameId = '1'): Report {
+export function report(status: UnlockReportStatus = 'pending', gameId = '1'): Report {
   return {
     dry_run: status === 'pending',
     user_id: '123456789',

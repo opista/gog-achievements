@@ -4,9 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueueDateModal } from '../../../src/renderer/features/queue/QueueDateModal';
-import type { QueueItem } from '../../../src/shared/api';
+import type { UnlockQueueItem } from '../../../src/shared/api';
 
-const item: QueueItem = {
+const item: UnlockQueueItem = {
   achievement_id: '1',
   key: 'THE_WORLD',
   name: 'The World',

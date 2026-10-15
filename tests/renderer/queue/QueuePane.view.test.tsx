@@ -44,7 +44,7 @@ it('shows loading, retry and empty states through its view inputs', async () => 
   expect(input.onRefresh).toHaveBeenCalledTimes(1);
   rerender(<QueuePane {...input} queues={[]} />);
   expect(screen.getByText('Queue is empty.')).toBeVisible();
-  expect(screen.getByText('Use + beside an achievement to add it here.')).toBeVisible();
+  expect(screen.getByText('Use the buttons beside achievements to add them here.')).toBeVisible();
 });
 
 it('sends remove and preview actions for the chosen game without a workspace or API', async () => {

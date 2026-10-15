@@ -7,7 +7,8 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
   const unknown = result.state === 'unknown' || !result.report;
   const attention = resultsNeedAttention(result);
   const hasSkipped = result.report?.results.some(
-    (item) => item.status === 'skipped_already_unlocked',
+    (item) =>
+      item.status === 'skipped_already_unlocked' || item.status === 'skipped_already_locked',
   );
   return (
     <section className="results">
@@ -20,12 +21,12 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
       </h2>
       <p className="muted">
         {unknown
-          ? 'Refresh achievements to check which achievements are unlocked before trying again.'
+          ? 'Refresh achievements to check which are locked or unlocked before trying again.'
           : attention
             ? 'Review each result. No further changes will be sent automatically.'
             : hasSkipped
-              ? 'Existing unlocks kept their dates.'
-              : 'All requested unlocks and dates were confirmed.'}
+              ? 'Achievements already in the requested state were skipped.'
+              : 'All requested changes were confirmed.'}
       </p>
       {result.error && !unknown ? (
         <p className="info-note">
@@ -49,16 +50,33 @@ export function Results({ result, zone }: { result: ApplyResult; zone: string })
                   <th scope="row">
                     <strong>{item.name}</strong>
                     <span
-                      className={`status ${['restored', 'skipped_already_unlocked'].includes(item.status) ? 'ready' : 'attention'}`}
+                      className={`status ${['restored', 'skipped_already_unlocked', 'locked', 'skipped_already_locked'].includes(item.status) ? 'ready' : 'attention'}`}
                     >
                       {STATUS_LABELS[item.status]}
                     </span>
                   </th>
                   <td>
-                    <ExactDate iso={item.requested_unlocked_at} zone={zone} />
+                    {item.action === 'lock' ? (
+                      <>
+                        <strong>Lock</strong>
+                        <small className="result-previous-date">
+                          Previous unlock: <ExactDate iso={item.previous_unlocked_at} zone={zone} />
+                        </small>
+                      </>
+                    ) : (
+                      <>
+                        <strong>Unlock</strong>
+                        <ExactDate iso={item.requested_unlocked_at} zone={zone} />
+                      </>
+                    )}
                   </td>
                   <td>
-                    <ExactDate iso={item.actual_unlocked_at} zone={zone} />
+                    {item.action === 'lock' &&
+                    ['locked', 'skipped_already_locked'].includes(item.status) ? (
+                      'Locked'
+                    ) : (
+                      <ExactDate iso={item.actual_unlocked_at} zone={zone} />
+                    )}
                   </td>
                 </tr>
               ))}

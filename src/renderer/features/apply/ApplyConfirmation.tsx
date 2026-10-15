@@ -22,6 +22,22 @@ export function ApplyConfirmation({
 }) {
   const pending = report.results.filter((item) => item.status === 'pending');
   const countLabel = `${pending.length} achievement${pending.length === 1 ? '' : 's'}`;
+  const locks = pending.filter((item) => item.action === 'lock').length;
+  const unlocks = pending.length - locks;
+  const describe = (count: number) => `${count} achievement${count === 1 ? '' : 's'}`;
+  const actionLabel = [
+    unlocks ? `Unlock ${describe(unlocks)}` : '',
+    locks ? `lock ${describe(locks)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' and ');
+  const buttonLabel = actionLabel.charAt(0).toUpperCase() + actionLabel.slice(1);
+  const listLabel =
+    locks === 0
+      ? 'Achievements to unlock'
+      : unlocks === 0
+        ? 'Achievements to lock'
+        : 'Achievements to change';
   return (
     <Dialog
       title={`Apply ${countLabel}?`}
@@ -33,7 +49,7 @@ export function ApplyConfirmation({
             Cancel
           </button>
           <button className="primary" disabled={busy || pending.length === 0} onClick={onApply}>
-            Apply {countLabel}
+            {buttonLabel || 'Apply changes'}
           </button>
         </>
       }
@@ -44,33 +60,37 @@ export function ApplyConfirmation({
       </p>
       <h3 className="confirmation-game">{report.game.title}</h3>
       {pending.length === 0 ? (
-        <p>All queued achievements are already unlocked. Existing dates are kept.</p>
+        <p>All queued achievements already have the requested state.</p>
       ) : (
         <>
-          <h4 className="confirmation-list-heading">Achievements to unlock</h4>
-          <ul className="confirmation-rows" aria-label="Achievements to unlock">
+          <h4 className="confirmation-list-heading">{listLabel}</h4>
+          <ul className="confirmation-rows" aria-label={listLabel}>
             {pending.map((item) => {
               const achievement = achievementFor(report.game.id, item.achievement_id);
               const description = achievement?.description || 'No description available.';
-              const occurrence = localTimeOccurrence(item.requested_unlocked_at, zone);
+              const locking = item.action === 'lock';
+              const date = locking ? item.previous_unlocked_at : item.requested_unlocked_at;
+              const occurrence = localTimeOccurrence(date, zone);
               return (
                 <li className="confirmation-row" key={item.achievement_id}>
                   <Art
                     name={item.name}
                     kind="achievement"
-                    image={achievement?.image_locked}
+                    image={locking ? achievement?.image_unlocked : achievement?.image_locked}
                     demo={demo}
                   />
                   <div className="confirmation-copy">
                     <strong>{item.name}</strong>
+                    <span className={`queue-action-label ${locking ? 'lock' : ''}`}>
+                      {locking ? 'Lock' : 'Unlock'}
+                    </span>
                     <p className="queue-description" title={description}>
                       {description}
                     </p>
                   </div>
                   <div className="confirmation-date">
-                    <time dateTime={item.requested_unlocked_at}>
-                      {formatTimestamp(item.requested_unlocked_at, zone)}
-                    </time>
+                    <small>{locking ? 'Previous unlock' : 'Unlock date'}</small>
+                    <time dateTime={date}>{formatTimestamp(date, zone)}</time>
                     {occurrence ? <small>{occurrence}</small> : null}
                   </div>
                 </li>
@@ -80,7 +100,9 @@ export function ApplyConfirmation({
         </>
       )}
       {report.results.length > pending.length && pending.length > 0 ? (
-        <p className="confirmation-kept">Already unlocked achievements keep their dates.</p>
+        <p className="confirmation-kept">
+          Achievements already in the requested state will be skipped.
+        </p>
       ) : null}
     </Dialog>
   );

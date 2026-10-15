@@ -2,6 +2,14 @@
 
 Design pass, 14 October 2026, following the chosen **A — Desktop workspace**. All images and examples use sample data and generated artwork. These are design references for implementation.
 
+## Mixed actions update, 15 October 2026
+
+This update takes precedence over the restoration-only concepts below. Keep the current three panes and one confirmation per game. Locked achievements use **+** to queue an unlock. Unlocked achievements use a lock button to queue a lock when the CLI supports it. Each queue row states **Unlock** or **Lock**. Lock rows retain the previous unlock date and have no date editor. **×** only removes the queued request.
+
+**Apply changes** checks all requests, then shows their actions and exact dates in one dialog. The final button states the pending counts: **Unlock 2 achievements**, **Lock 2 achievements**, or **Unlock 2 achievements and lock 2 achievements**. Cancel sends no writes. Keep Cancel as the initial focus.
+
+Results distinguish confirmed **Locked**, **Already locked**, and uncertain outcomes. A missing date alone must not show a successful lock. Only confirmed matching requests leave the queue. **Achievement history** retains previous unlock dates for confirmed locks and keeps failed, uncertain and unattempted actions under **Needs attention**. Unlocking again is a new reviewed request; history provides no automatic undo.
+
 | Screen                                               | Main action                     |
 | ---------------------------------------------------- | ------------------------------- |
 | [Connect GOG](states/sign-in.png)                    | Sign in to GOG                  |

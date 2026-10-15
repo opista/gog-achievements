@@ -14,6 +14,7 @@ import type {
   PreviewResult,
   Queue,
   SelectionInput,
+  AdditionInput,
   WorkspaceApi,
 } from '../shared/api';
 import { IpcBoundary } from './ipc';
@@ -99,7 +100,7 @@ export class WorkspaceController {
   @IpcHandle()
   addAchievements(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: SelectionInput,
+    input: AdditionInput,
   ): Promise<IpcResult<Queue>> {
     return this.boundary.execute(event, 'addAchievements', input, () =>
       this.api.addAchievements(input),

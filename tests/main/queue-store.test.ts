@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { QueueStore } from '../../src/main/queue-store';
+import type { Queue } from '../../src/shared/api';
 import { remainingQueueItems } from '../../src/shared/queue-cleanup';
 import { gameId, userId, makeQueue, makeReport } from './fixtures';
 
@@ -34,6 +35,30 @@ test('cleanup owns a CLI-compatible lock through atomic replacement and removes 
   expect(JSON.parse(await readFile(file, 'utf8')).items).toEqual([]);
   expect(await readdir(dirname(file))).toEqual([`${gameId}.json`]);
 });
+test.each(['locked', 'skipped_already_locked'] as const)(
+  'cleanup removes a lock-only queue for %s',
+  async (status) => {
+    const { store, file } = await fixture();
+    const queue: Queue = {
+      ...makeQueue(),
+      items: [
+        {
+          achievement_id: '101',
+          key: 'KEY_101',
+          name: 'Earned achievement',
+          action: 'lock',
+          previous_unlocked_at: '2020-01-01T00:00:00+0000',
+        },
+      ],
+    };
+    await writeFile(file, JSON.stringify(queue));
+    const report = makeReport(queue, false);
+    report.results[0]!.status = status;
+    await store.clearConfirmedItems(queue, report);
+    expect(JSON.parse(await readFile(file, 'utf8')).items).toEqual([]);
+    expect(await readdir(dirname(file))).toEqual([`${gameId}.json`]);
+  },
+);
 
 test.each(['user_id', 'game_id', 'client_id'] as const)(
   'cleanup rejects a changed %s without replacing its draft',

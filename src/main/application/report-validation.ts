@@ -1,13 +1,10 @@
 import type { Queue, Report } from '../../shared/api';
 import { DesktopError } from '../errors';
+import { reportMatchesRequest } from '../../shared/queue-cleanup';
 export function validateReport(report: Report, queue: Queue, dryRun: boolean): void {
   const rowsMatch =
     report.results.length === queue.items.length &&
-    report.results.every(
-      (row, index) =>
-        row.achievement_id === queue.items[index]?.achievement_id &&
-        Date.parse(row.requested_unlocked_at) === Date.parse(queue.items[index]!.unlocked_at),
-    );
+    report.results.every((row, index) => reportMatchesRequest(row, queue.items[index]!));
   if (
     report.dry_run !== dryRun ||
     report.user_id !== queue.user_id ||

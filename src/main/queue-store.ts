@@ -7,7 +7,7 @@ import type { OperationRecord, Queue, Report } from '../shared/api';
 import { idSchema, tokenSchema, reportSchema, queueSchema } from '../shared/schemas';
 import type { ProcessIdentity } from './process-identity';
 import { DesktopError } from './errors';
-import { isConfirmedUnlock, remainingQueueItems } from '../shared/queue-cleanup';
+import { isConfirmedChange, remainingQueueItems } from '../shared/queue-cleanup';
 const errorSchema = z.object({ code: z.string(), message: z.string() });
 const identitySchema = z.object({ pid: z.number().int().positive(), startedAt: z.string() });
 const recordSchema = z.object({
@@ -97,7 +97,7 @@ export class QueueStore {
     );
   }
   async clearConfirmedItems(reviewed: Queue, report: Report): Promise<void> {
-    if (!report.results.some(isConfirmedUnlock)) return;
+    if (!report.results.some(isConfirmedChange)) return;
     const destination = await this.draftPath(reviewed.user_id, reviewed.game.id);
     // Use the CLI's lock protocol. Never reclaim another command's lock.
     const lockPath = `${destination}.lock`;

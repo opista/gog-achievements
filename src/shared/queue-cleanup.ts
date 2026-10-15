@@ -9,11 +9,29 @@ export function isConfirmedUnlock(
   );
 }
 
+export function isConfirmedChange(item: ReportItem): boolean {
+  return item.action === 'lock'
+    ? item.actual_unlocked_at === null && ['locked', 'skipped_already_locked'].includes(item.status)
+    : isConfirmedUnlock(item);
+}
+
+export function reportMatchesRequest(result: ReportItem, request: QueueItem): boolean {
+  if (result.achievement_id !== request.achievement_id) return false;
+  return request.action === 'lock'
+    ? result.action === 'lock' &&
+        Date.parse(result.previous_unlocked_at) === Date.parse(request.previous_unlocked_at)
+    : result.action !== 'lock' &&
+        Date.parse(result.requested_unlocked_at) === Date.parse(request.unlocked_at);
+}
+
 export function sameQueueRequest(left: QueueItem, right: QueueItem): boolean {
   return (
     left.achievement_id === right.achievement_id &&
     left.key === right.key &&
-    Date.parse(left.unlocked_at) === Date.parse(right.unlocked_at)
+    (left.action === 'lock'
+      ? right.action === 'lock' &&
+        Date.parse(left.previous_unlocked_at) === Date.parse(right.previous_unlocked_at)
+      : right.action !== 'lock' && Date.parse(left.unlocked_at) === Date.parse(right.unlocked_at))
   );
 }
 
@@ -28,7 +46,7 @@ export function remainingQueueItems(draft: Queue, reviewed: Queue, report: Repor
     return [...draft.items];
   const requests = new Map(reviewed.items.map((item) => [item.achievement_id, item]));
   const confirmed = new Map(
-    report.results.filter(isConfirmedUnlock).map((item) => [item.achievement_id, item]),
+    report.results.filter(isConfirmedChange).map((item) => [item.achievement_id, item]),
   );
   return draft.items.filter((item) => {
     const request = requests.get(item.achievement_id);
@@ -37,7 +55,7 @@ export function remainingQueueItems(draft: Queue, reviewed: Queue, report: Repor
       !request ||
       !result ||
       !sameQueueRequest(item, request) ||
-      Date.parse(result.requested_unlocked_at) !== Date.parse(request.unlocked_at)
+      !reportMatchesRequest(result, request)
     );
   });
 }

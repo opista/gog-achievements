@@ -81,6 +81,19 @@ export const achievementsSchema = z
     achievements: z.array(achievementSchema),
   })
   .refine((value) => value.count === value.achievements.length);
+const requestIdentity = { achievement_id: idSchema, key: z.string(), name: z.string() };
+const queueItemSchema = z.union([
+  z
+    .object({
+      ...requestIdentity,
+      action: z.literal('unlock').optional(),
+      unlocked_at: timestampSchema,
+    })
+    .strict(),
+  z
+    .object({ ...requestIdentity, action: z.literal('lock'), previous_unlocked_at: observedDate })
+    .strict(),
+]);
 export const queueSchema = z
   .object({
     schema_version: z.literal(1),
@@ -88,30 +101,27 @@ export const queueSchema = z
     game: queueGameSchema.strict(),
     created_at: timestampSchema,
     updated_at: timestampSchema,
-    items: z
-      .array(
-        z
-          .object({
-            achievement_id: idSchema,
-            key: z.string(),
-            name: z.string(),
-            unlocked_at: timestampSchema,
-          })
-          .strict(),
-      )
-      .max(1000),
+    items: z.array(queueItemSchema).max(1000),
   })
   .strict()
   .refine(
     (value) => new Set(value.items.map((item) => item.achievement_id)).size === value.items.length,
   );
-const reportItemSchema = z
+const reportIdentity = {
+  achievement_id: idSchema,
+  name: z.string(),
+  actual_unlocked_at: observedDate.nullable(),
+  error_code: z
+    .string()
+    .regex(/^[A-Z][A-Z0-9_]{0,63}$/)
+    .optional(),
+};
+const unlockReportItemSchema = z
   .object({
-    achievement_id: idSchema,
-    name: z.string(),
+    ...reportIdentity,
+    action: z.literal('unlock').optional(),
     requested_unlocked_at: timestampSchema,
     previous_unlocked_at: observedDate.nullable(),
-    actual_unlocked_at: observedDate.nullable(),
     status: z.enum([
       'pending',
       'restored',
@@ -121,10 +131,6 @@ const reportItemSchema = z
       'unconfirmed',
       'not_attempted',
     ]),
-    error_code: z
-      .string()
-      .regex(/^[A-Z][A-Z0-9_]{0,63}$/)
-      .optional(),
   })
   .refine((value) => {
     if (value.status === 'restored')
@@ -141,6 +147,32 @@ const reportItemSchema = z
     if (value.status === 'pending') return value.actual_unlocked_at === null;
     return true;
   });
+const lockReportItemSchema = z
+  .object({
+    ...reportIdentity,
+    action: z.literal('lock'),
+    requested_unlocked_at: z.null(),
+    previous_unlocked_at: observedDate,
+    status: z.enum([
+      'pending',
+      'locked',
+      'skipped_already_locked',
+      'failed',
+      'unconfirmed',
+      'not_attempted',
+    ]),
+  })
+  .refine((value) => {
+    if (value.status === 'locked' || value.status === 'skipped_already_locked')
+      return value.actual_unlocked_at === null;
+    if (value.status === 'pending')
+      return (
+        value.actual_unlocked_at !== null &&
+        Date.parse(value.actual_unlocked_at) === Date.parse(value.previous_unlocked_at)
+      );
+    return true;
+  });
+const reportItemSchema = z.union([unlockReportItemSchema, lockReportItemSchema]);
 export const reportSchema = z
   .object({
     dry_run: z.boolean(),
@@ -152,17 +184,24 @@ export const reportSchema = z
   .refine((value) =>
     value.dry_run
       ? value.complete &&
-        value.results.every((item) => ['pending', 'skipped_already_unlocked'].includes(item.status))
+        value.results.every((item) =>
+          ['pending', 'skipped_already_unlocked', 'skipped_already_locked'].includes(item.status),
+        )
       : !value.results.some((item) => item.status === 'pending') &&
         value.complete ===
           value.results.every((item) =>
-            ['restored', 'skipped_already_unlocked'].includes(item.status),
+            ['restored', 'skipped_already_unlocked', 'locked', 'skipped_already_locked'].includes(
+              item.status,
+            ),
           ),
   );
 export const selectionSchema = z
   .object({ gameId: idSchema, achievementIds: z.array(idSchema).min(1).max(1000) })
   .strict()
   .refine((value) => new Set(value.achievementIds).size === value.achievementIds.length);
+export const additionSchema = selectionSchema.safeExtend({
+  action: z.enum(['unlock', 'lock']).optional(),
+});
 export const datesSchema = z
   .object({ gameId: idSchema, dates: z.record(idSchema, timestampSchema) })
   .strict()
@@ -181,7 +220,7 @@ export const ipcSchemas = {
   listAchievements: idSchema,
   getQueue: idSchema,
   listQueues: z.undefined(),
-  addAchievements: selectionSchema,
+  addAchievements: additionSchema,
   removeAchievements: selectionSchema,
   setDates: datesSchema,
   preview: gameInputSchema,

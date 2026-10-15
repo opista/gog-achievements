@@ -5,6 +5,37 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { Results } from '../../../src/renderer/features/apply/Results';
 import { formatTimestamp } from '../../../src/renderer/date-time';
 afterEach(cleanup);
+it('confirms lock status without treating every missing date as a successful lock', () => {
+  const row = {
+    achievement_id: '7',
+    name: 'Lock target',
+    action: 'lock' as const,
+    requested_unlocked_at: null,
+    previous_unlocked_at: '2020-01-01T12:34:56+0000',
+    actual_unlocked_at: null,
+    status: 'locked' as const,
+  };
+  const result = {
+    operationId: 'mixed',
+    state: 'complete' as const,
+    report: {
+      dry_run: false,
+      complete: false,
+      user_id: '123456789',
+      game: { id: '1', title: 'Game', client_id: '100001' },
+      results: [
+        row,
+        { ...row, achievement_id: '8', name: 'Uncertain lock', status: 'unconfirmed' as const },
+      ],
+    },
+  };
+  const { container } = render(<Results result={result} zone="UTC" />);
+  expect(screen.getByRole('heading', { name: 'Results need attention' })).toBeVisible();
+  const rows = container.querySelectorAll('tbody tr');
+  expect(rows[0]?.querySelector('td:last-child')).toHaveTextContent('Locked');
+  expect(rows[1]?.querySelector('td:last-child')).toHaveTextContent('Not confirmed');
+  expect(screen.getByText('Outcome uncertain')).toBeVisible();
+});
 it('does not claim requested dates were confirmed for skipped existing unlocks', () => {
   render(
     <Results
@@ -39,10 +70,10 @@ it('does not claim requested dates were confirmed for skipped existing unlocks',
       }}
     />,
   );
-  expect(screen.getByText('Existing unlocks kept their dates.')).toBeVisible();
   expect(
-    screen.queryByText('All requested unlocks and dates were confirmed.'),
-  ).not.toBeInTheDocument();
+    screen.getByText('Achievements already in the requested state were skipped.'),
+  ).toBeVisible();
+  expect(screen.queryByText('All requested changes were confirmed.')).not.toBeInTheDocument();
   expect(screen.getByText(formatTimestamp('2026-10-04T11:00:00Z', 'Europe/London'))).toBeVisible();
   expect(screen.getByText('Already unlocked')).toBeVisible();
 });
@@ -62,7 +93,7 @@ it('keeps immediate unknown apply feedback separate from the history feed', () =
   expect(screen.getByRole('heading', { name: 'Could not confirm changes' })).toBeVisible();
   expect(
     screen.getByText(
-      'Refresh achievements to check which achievements are unlocked before trying again.',
+      'Refresh achievements to check which are locked or unlocked before trying again.',
     ),
   ).toBeVisible();
   expect(screen.queryByRole('table')).not.toBeInTheDocument();

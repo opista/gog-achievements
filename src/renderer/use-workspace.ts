@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { DesktopApi, Game, Queue } from '../shared/api';
+import type { AchievementAction, DesktopApi, Game, Queue } from '../shared/api';
 import { useApply } from './features/apply/use-apply';
 import { useOperation } from './application/use-operation';
 import { useHistory } from './features/history/use-history';
@@ -229,12 +229,13 @@ export function useWorkspace(api: DesktopApi) {
     });
     return succeeded;
   }
-  function add(ids: string[]) {
+  function add(ids: string[], action?: AchievementAction) {
     if (!game) return;
     void saveQueue(() =>
       queueState.add({
         gameId: game.id,
         achievementIds: ids,
+        ...(action ? { action } : {}),
         game: library.metadataFor(game.id),
         userId: account.current().user_id,
         achievements,
@@ -262,6 +263,7 @@ export function useWorkspace(api: DesktopApi) {
     });
   }
   return {
+    supportsLocking: account.supportsLocking,
     auth,
     games,
     libraryLoaded,

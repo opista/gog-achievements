@@ -239,6 +239,7 @@ export function App({ api }: { api: DesktopApi }) {
                   loading={w.loading !== null && w.loadingTarget === 'achievements'}
                   demo={api.isDemo}
                   zone={zone}
+                  supportsLocking={w.supportsLocking}
                   onAdd={w.add}
                   onRefresh={() => w.refreshAchievements()}
                 />

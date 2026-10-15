@@ -31,15 +31,21 @@ Requires macOS 13.5 or later, or Windows 10/11. Current builds are unsigned, so 
 2. Choose a game from **Your Library**. You can search for it by name.
 3. Select **+** beside a locked achievement to add it to the **Queue**.
 4. To set its unlock date, select the calendar button beside the queued achievement, choose the date and time, then select **Save date**. Dates use your computer’s local time.
-5. Close the game, then select **Apply changes** in its queue. Check the achievements and dates in the confirmation window, then select **Apply** to confirm.
+5. Close the game, then select **Apply changes** in its queue. Check the achievements and dates in the confirmation window, then select **Unlock N achievements** to confirm.
 
 You can queue achievements from several games and apply one game at a time. Your queue is saved between visits. Use **×** to remove an item before applying.
 
-**Unlocks cannot be undone.** Only add achievements you have already earned. Achievements that are already unlocked keep their existing dates; the app cannot relock them or change those dates. Queue changes stay on your computer until you confirm **Apply**.
+Only unlock achievements you have already earned. Existing unlock dates cannot be edited. Queue changes stay on your computer until you confirm the reviewed actions.
+
+### Lock achievements again
+
+When the CLI supports locking, unlocked achievements have a lock button. Select it to queue a **Lock** action. Its previous unlock date stays visible in the queue and history. Lock actions have no date editor.
+
+Unlock and lock actions can share one game queue. **Apply changes** checks the whole queue before showing one confirmation. Its button states the actions, for example **Unlock 2 achievements and lock 2 achievements**. Cancel sends no changes. After applying, check each result; uncertain and unattempted actions stay queued. Removing a queue item only cancels that request.
 
 ## History and updates
 
-Open **History** to see confirmed unlocks and their dates. Any results the app could not confirm are shown separately. Keep the app open while changes are being applied and check the result before trying again.
+Open **History** to see confirmed unlocks, locks and their previous dates. Any results the app could not confirm are shown separately. Keep the app open while changes are being applied and check the result before trying again.
 
 The app tells you when a newer release is available. You can also open the account menu in the top-right corner and choose **Check for updates…**. Choose **Download** to open the new installer in your browser, then install it yourself. Your saved queue and history stay on your computer.
 
@@ -49,7 +55,9 @@ If sign-in fails on Windows, check that [Microsoft’s WebView2 Runtime](https:/
 
 ## Developer information
 
-The app uses Electron, React, NestJS and a typed IPC bridge. It bundles [CLI v0.4.0](https://github.com/opista/gog-achievements-cli/releases/tag/v0.4.0), which handles GOG login and achievement requests. Installed packages include the CLI; they do not download it at startup.
+The app uses Electron, React, NestJS and a typed IPC bridge. It bundles [CLI v0.5.0](https://github.com/opista/gog-achievements-cli/releases/tag/v0.5.0), which handles GOG login and achievement requests. Installed packages include the CLI; they do not download it at startup.
+
+Startup checks the CLI's JSON help for `--action` on both queue creation and addition. Older builds keep unlocks available and hide lock controls. Main also rejects lock requests with an older CLI. The local CLI override below must match the pinned version and include mixed actions. Packaged builds ignore this override.
 
 ### Run from source
 
@@ -104,7 +112,7 @@ Mac package verification checks the complete bundle signature before running the
 
 Development runs use the stock Electron executable, so the Mac Dock can show **Electron** and its icon. The packaged `.app` uses the GOG Achievements name and icon. Update checks require a packaged app (`app.isPackaged`); compiling with `npm run build` alone does not enable them. You can run the generated `.app` directly from `dist`.
 
-The supported OS versions combine the [bundled CLI runtime](https://github.com/opista/gog-achievements-cli/blob/v0.4.0/README.md) and [Electron 44](https://releases.electronjs.org/release/v44.0.0). Dates are displayed and edited in local time; stored timestamps retain their UTC instants. Durable operation records support recovery and the history view.
+The supported OS versions combine the [bundled CLI runtime](https://github.com/opista/gog-achievements-cli/blob/v0.5.0/README.md) and [Electron 44](https://releases.electronjs.org/release/v44.0.0). Dates are displayed and edited in local time; stored timestamps retain their UTC instants. Durable operation records support recovery and the history view.
 
 ### CI and source layout
 

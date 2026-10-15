@@ -102,7 +102,7 @@ function SignedInQueuePane({
           <div className="empty-state">
             <FileText size={34} />
             <p>Queue is empty.</p>
-            <p>Use + beside an achievement to add it here.</p>
+            <p>Use the buttons beside achievements to add them here.</p>
           </div>
         ) : (
           groups.map((group) => {
@@ -122,10 +122,9 @@ function SignedInQueuePane({
                   {group.items.map((item) => {
                     const achievement = achievementFor(group.game.id, item.achievement_id);
                     const description = achievement?.description || 'No description available.';
-                    const savedDate = [
-                      formatTimestamp(item.unlocked_at, zone),
-                      localTimeOccurrence(item.unlocked_at, zone),
-                    ]
+                    const locking = item.action === 'lock';
+                    const date = locking ? item.previous_unlocked_at : item.unlocked_at;
+                    const savedDate = [formatTimestamp(date, zone), localTimeOccurrence(date, zone)]
                       .filter(Boolean)
                       .join(' · ');
                     return (
@@ -133,31 +132,41 @@ function SignedInQueuePane({
                         <Art
                           name={item.name}
                           kind="achievement"
-                          image={achievement?.image_locked}
+                          image={locking ? achievement?.image_unlocked : achievement?.image_locked}
                           demo={demo}
                         />
                         <div className="queue-row-content">
                           <strong title={item.name}>{item.name}</strong>
+                          <span className={`queue-action-label ${locking ? 'lock' : ''}`}>
+                            {locking ? 'Lock' : 'Unlock'}
+                          </span>
                           <p className="queue-description" title={description}>
                             {description}
                           </p>
+                          {locking ? (
+                            <small className="queue-previous-date" title={date}>
+                              Previous unlock: {savedDate}
+                            </small>
+                          ) : null}
                         </div>
                         <div className="queue-row-controls">
-                          <button
-                            className="icon-button"
-                            aria-label={`Edit date for ${item.name}`}
-                            title={savedDate}
-                            disabled={busy}
-                            onClick={() =>
-                              setEditing({
-                                gameId: group.game.id,
-                                userId: group.user_id,
-                                achievementId: item.achievement_id,
-                              })
-                            }
-                          >
-                            <CalendarDays size={18} />
-                          </button>
+                          {!locking ? (
+                            <button
+                              className="icon-button"
+                              aria-label={`Edit date for ${item.name}`}
+                              title={savedDate}
+                              disabled={busy}
+                              onClick={() =>
+                                setEditing({
+                                  gameId: group.game.id,
+                                  userId: group.user_id,
+                                  achievementId: item.achievement_id,
+                                })
+                              }
+                            >
+                              <CalendarDays size={18} />
+                            </button>
+                          ) : null}
                           <button
                             ref={(element) => {
                               const key = `${group.game.id}:${item.achievement_id}`;
@@ -218,7 +227,7 @@ function SignedInQueuePane({
           </p>
         ) : null}
       </div>
-      {editing && editingItem ? (
+      {editing && editingItem && editingItem.action !== 'lock' ? (
         <QueueDateModal
           item={editingItem}
           description={achievementFor(editing.gameId, editing.achievementId)?.description}

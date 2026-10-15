@@ -13,8 +13,15 @@ export type CliCommand =
   | { kind: 'help' | 'doctor' | 'auth-status' | 'auth-login' | 'auth-logout' | 'games' }
   | { kind: 'achievements'; gameId: string }
   | { kind: 'queue-show' | 'queue-preview' | 'queue-apply'; file: string }
-  | { kind: 'queue-create'; file: string; gameId: string; achievementIds: string[] }
-  | { kind: 'queue-add' | 'queue-remove'; file: string; achievementIds: string[] }
+  | {
+      kind: 'queue-create';
+      file: string;
+      gameId: string;
+      achievementIds: string[];
+      action?: 'unlock' | 'lock';
+    }
+  | { kind: 'queue-add'; file: string; achievementIds: string[]; action?: 'unlock' | 'lock' }
+  | { kind: 'queue-remove'; file: string; achievementIds: string[] }
   | { kind: 'queue-date'; file: string; achievementIds: string[]; timestamp: string };
 export interface CliOutcome {
   exitCode: number | null;
@@ -51,6 +58,7 @@ export function commandArgs(command: CliCommand): string[] {
   if ('achievementIds' in command)
     for (const id of command.achievementIds) args.push('--achievement', id);
   if ('timestamp' in command) args.push('--unlocked-at', command.timestamp);
+  if ('action' in command && command.action) args.push('--action', command.action);
   if (command.kind === 'queue-preview') args.push('--dry-run');
   if (command.kind === 'queue-apply') args.push('--yes');
   return [...args, '--json'];

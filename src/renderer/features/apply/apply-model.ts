@@ -16,7 +16,10 @@ export function resultsNeedAttention(result: ApplyResult): boolean {
     !result.report ||
     result.state === 'unknown' ||
     result.report.results.some(
-      (row) => !['restored', 'skipped_already_unlocked'].includes(row.status),
+      (row) =>
+        !['restored', 'skipped_already_unlocked', 'locked', 'skipped_already_locked'].includes(
+          row.status,
+        ),
     )
   );
 }

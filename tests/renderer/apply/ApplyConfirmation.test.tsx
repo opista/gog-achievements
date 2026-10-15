@@ -3,13 +3,13 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Achievement, Report, ReportItem } from '../../../src/shared/api';
+import type { Achievement, Report, ReportItem, UnlockReportItem } from '../../../src/shared/api';
 import { ApplyConfirmation } from '../../../src/renderer/features/apply/ApplyConfirmation';
 import { formatTimestamp } from '../../../src/renderer/date-time';
 
 afterEach(cleanup);
 
-function row(overrides: Partial<ReportItem> = {}): ReportItem {
+function row(overrides: Partial<UnlockReportItem> = {}): UnlockReportItem {
   return {
     achievement_id: '201',
     name: 'Passed the Trial',
@@ -96,7 +96,9 @@ it('shows pending achievements with game-specific descriptions and exact local d
   expect(within(dialog).queryByText(/Europe\/London|UTC[+-]/)).not.toBeInTheDocument();
   expect(within(entries[1]!).getByText('No description available.')).toBeVisible();
   expect(within(dialog).queryByText('Existing unlock')).not.toBeInTheDocument();
-  expect(within(dialog).getByText('Already unlocked achievements keep their dates.')).toBeVisible();
+  expect(
+    within(dialog).getByText('Achievements already in the requested state will be skipped.'),
+  ).toBeVisible();
   expect(achievementFor).toHaveBeenCalledWith('2', '201');
   expect(onApply).not.toHaveBeenCalled();
 });
@@ -105,7 +107,7 @@ it('keeps Cancel as the initial focus and closes without applying', async () => 
   const user = userEvent.setup();
   const { onClose, onApply } = confirmation();
   expect(screen.getByRole('dialog', { name: 'Apply 1 achievement?' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Apply 1 achievement' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Unlock 1 achievement' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
   await user.keyboard('{Escape}');
   expect(onClose).toHaveBeenCalledExactlyOnceWith();
@@ -116,7 +118,7 @@ it('submits only after the apply button is clicked', async () => {
   const user = userEvent.setup();
   const { onApply, onClose } = confirmation([row(), row({ achievement_id: '202' })]);
   expect(onApply).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Apply 2 achievements' }));
+  await user.click(screen.getByRole('button', { name: 'Unlock 2 achievements' }));
   expect(onApply).toHaveBeenCalledTimes(1);
   expect(onClose).not.toHaveBeenCalled();
 });
@@ -134,10 +136,10 @@ it('blocks apply and closing while a write is active', async () => {
 it('does not offer to apply achievements that are all already unlocked', () => {
   const { onApply } = confirmation([row({ status: 'skipped_already_unlocked' })]);
   expect(
-    screen.getByText('All queued achievements are already unlocked. Existing dates are kept.'),
+    screen.getByText('All queued achievements already have the requested state.'),
   ).toBeVisible();
   expect(screen.queryByRole('list')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Apply 0 achievements' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled();
   expect(onApply).not.toHaveBeenCalled();
 });
 
@@ -164,3 +166,30 @@ it('distinguishes repeated local times without restoring time zone settings', ()
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   expect(screen.queryByText(/UTC[+-]|America\/New_York/)).not.toBeInTheDocument();
 });
+it.each([false, true])(
+  'reviews locks with their previous dates and one action-specific confirmation (mixed: %s)',
+  (mixed) => {
+    const lock: ReportItem = {
+      achievement_id: '205',
+      name: 'Earned achievement',
+      action: 'lock',
+      requested_unlocked_at: null,
+      previous_unlocked_at: '2020-01-01T12:34:56+0000',
+      actual_unlocked_at: '2020-01-01T12:34:56+0000',
+      status: 'pending',
+    };
+    const { onApply } = confirmation(mixed ? [row(), lock] : [lock]);
+    expect(
+      screen.getByRole('list', { name: mixed ? 'Achievements to change' : 'Achievements to lock' }),
+    ).toBeVisible();
+    expect(screen.getByText('Lock', { exact: true })).toBeVisible();
+    expect(screen.getByText('Previous unlock', { exact: true })).toBeVisible();
+    expect(
+      screen.getByRole('button', {
+        name: mixed ? 'Unlock 1 achievement and lock 1 achievement' : 'Lock 1 achievement',
+      }),
+    ).toBeEnabled();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(onApply).not.toHaveBeenCalled();
+  },
+);

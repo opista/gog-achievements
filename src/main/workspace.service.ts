@@ -4,6 +4,7 @@ import type {
   InitializeResult,
   OperationState,
   SelectionInput,
+  AdditionInput,
   DatesInput,
 } from '../shared/api';
 import { OperationCoordinator } from './application/operation-coordinator';
@@ -74,7 +75,7 @@ export class WorkspaceService implements WorkspaceApi {
   listQueues() {
     return this.run('read', () => this.queues.list());
   }
-  addAchievements(input: SelectionInput) {
+  addAchievements(input: AdditionInput) {
     return this.run('read', () => this.queues.add(input), input.gameId);
   }
   removeAchievements(input: SelectionInput) {

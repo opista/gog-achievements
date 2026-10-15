@@ -1,4 +1,10 @@
-import type { Achievement, Queue, QueueGame } from '../../../shared/api';
+import type {
+  Achievement,
+  AchievementAction,
+  Queue,
+  QueueGame,
+  QueueItem,
+} from '../../../shared/api';
 
 export interface QueueAction {
   kind: 'add' | 'remove' | 'date';
@@ -8,6 +14,7 @@ export interface QueueAction {
 export interface QueueAddition {
   gameId: string;
   achievementIds: string[];
+  action?: AchievementAction;
   game?: QueueGame;
   userId?: string;
   achievements: Achievement[];
@@ -25,7 +32,7 @@ export function queueGroups(queues: Queue[]): Queue[] {
 
 export function optimisticAddition(
   previous: Queue | null,
-  { game, userId, achievements, achievementIds }: QueueAddition,
+  { game, userId, achievements, achievementIds, action = 'unlock' }: QueueAddition,
   timestamp: string,
 ): Queue | undefined {
   if (!game || !userId) return undefined;
@@ -40,12 +47,19 @@ export function optimisticAddition(
     items: [
       ...(previous?.items ?? []),
       ...achievements
-        .filter((item) => requested.has(item.id) && !item.unlocked && !saved.has(item.id))
-        .map((item) => ({
+        .filter(
+          (item) =>
+            requested.has(item.id) &&
+            (action === 'lock' ? item.unlocked && item.unlocked_at !== null : !item.unlocked) &&
+            !saved.has(item.id),
+        )
+        .map((item): QueueItem => ({
           achievement_id: item.id,
           key: item.key,
           name: item.name,
-          unlocked_at: timestamp,
+          ...(action === 'lock'
+            ? { action: 'lock' as const, previous_unlocked_at: item.unlocked_at! }
+            : { unlocked_at: timestamp }),
         })),
     ],
   };

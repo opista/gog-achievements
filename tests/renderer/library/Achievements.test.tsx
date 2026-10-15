@@ -69,7 +69,7 @@ it('adds one achievement directly without checkboxes or a bulk action', async ()
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Add selected' })).not.toBeInTheDocument();
   const add = screen.getByRole('button', { name: 'Add Locked A to queue' });
-  expect(add).toHaveAttribute('title', 'Add Locked A to queue');
+  expect(add).toHaveAttribute('title', 'Queue unlock for Locked A');
   await user.click(add);
   expect(onAdd).toHaveBeenCalledExactlyOnceWith(['locked-a']);
 });
@@ -84,6 +84,24 @@ it('omits actions for queued and unlocked rows and blocks saves during other wor
   ).not.toBeInTheDocument();
   rerender(<Achievements {...props} busy />);
   expect(screen.getByRole('button', { name: 'Add Locked A to queue' })).toBeDisabled();
+});
+it('queues an explicit lock only when supported and preserves keyboard focus', async () => {
+  const user = userEvent.setup();
+  const { onAdd, props, rerender } = show(new Set(), { supportsLocking: true });
+  const lock = screen.getByRole('button', { name: 'Queue lock for Newest unlock' });
+  lock.focus();
+  await user.keyboard('{Enter}');
+  expect(onAdd).toHaveBeenCalledExactlyOnceWith(['new'], 'lock');
+  rerender(<Achievements {...props} queued={new Set(['new'])} />);
+  expect(
+    screen.queryByRole('button', { name: 'Queue lock for Newest unlock' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Newest unlock' })).toHaveFocus();
+  expect(screen.getByText('Queued')).toBeVisible();
+  rerender(<Achievements {...props} busy />);
+  expect(screen.getByRole('button', { name: 'Queue lock for Newest unlock' })).toBeDisabled();
+  rerender(<Achievements {...props} supportsLocking={false} />);
+  expect(screen.queryByRole('button', { name: /Queue lock/ })).not.toBeInTheDocument();
 });
 it('conceals hidden information and focuses the direct add action after reveal', async () => {
   const user = userEvent.setup();

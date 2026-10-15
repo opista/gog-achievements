@@ -35,13 +35,34 @@ export async function smokeCli(directory, lock, name, run = execute, host = proc
     assert.equal(info.ok, true);
     assert.equal(info.data.version, lock.version);
     assert.equal(info.data.name, 'gog-achievements');
+    for (const command of ['queue create', 'queue add'])
+      assert.ok(
+        info.data.commands?.some(
+          (entry) => entry.command === command && entry.flags?.includes('action'),
+        ),
+        command + ' must support explicit achievement actions.',
+      );
     const queue = {
       schema_version: 1,
       user_id: '123',
       game: { id: '1423049311', title: 'Offline smoke test', client_id: '53652320436400298' },
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
-      items: [],
+      items: [
+        {
+          achievement_id: '101',
+          key: 'OFFLINE_UNLOCK',
+          name: 'Offline unlock',
+          unlocked_at: '2020-01-01T00:00:00Z',
+        },
+        {
+          achievement_id: '102',
+          key: 'OFFLINE_LOCK',
+          name: 'Offline lock',
+          action: 'lock',
+          previous_unlocked_at: '2020-02-01T12:34:56.123456+0000',
+        },
+      ],
     };
     const queuePath = join(temporary, 'queue with spaces.json');
     await writeFile(queuePath, JSON.stringify(queue));

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { Eye, Plus, RefreshCw } from 'lucide-react';
-import type { Achievement } from '../../../shared/api';
+import { Eye, LockKeyhole, Plus, RefreshCw } from 'lucide-react';
+import type { Achievement, AchievementAction } from '../../../shared/api';
 import { Art } from '../../components/Art';
 import { formatDate, formatTimestamp } from '../../date-time';
 import { AchievementSkeleton } from './AchievementSkeleton';
@@ -17,7 +17,8 @@ interface Props {
   loading?: boolean;
   demo: boolean;
   zone: string;
-  onAdd(ids: string[]): void;
+  supportsLocking?: boolean;
+  onAdd(ids: string[], action?: AchievementAction): void;
   onRefresh(): void;
 }
 export function Achievements({
@@ -27,6 +28,7 @@ export function Achievements({
   loading = false,
   demo,
   zone,
+  supportsLocking = false,
   onAdd,
   onRefresh,
 }: Props) {
@@ -77,11 +79,7 @@ export function Achievements({
             const name = concealed ? 'Hidden achievement' : item.name;
             const isQueued = queued.has(item.id);
             return (
-              <article
-                className={`achievement-row ${item.unlocked ? 'read-only' : ''}`}
-                key={item.id}
-                aria-label={name}
-              >
+              <article className="achievement-row" key={item.id} aria-label={name}>
                 <div className="achievement-main">
                   <Art
                     name={name}
@@ -111,15 +109,20 @@ export function Achievements({
                     ) : null}
                   </div>
                   <div className="achievement-status">
-                    {!item.unlocked && !concealed && !isQueued ? (
+                    {!concealed && !isQueued && (!item.unlocked || supportsLocking) ? (
                       <button
                         className="icon-button achievement-add"
-                        aria-label={`Add ${name} to queue`}
-                        title={`Add ${name} to queue`}
+                        aria-label={
+                          item.unlocked ? `Queue lock for ${name}` : `Add ${name} to queue`
+                        }
+                        title={
+                          item.unlocked ? `Queue lock for ${name}` : `Queue unlock for ${name}`
+                        }
                         disabled={controlsBlocked}
                         onClick={(event) => {
                           if (event.detail === 0) focusTarget.current = item.id;
-                          onAdd([item.id]);
+                          if (item.unlocked) onAdd([item.id], 'lock');
+                          else onAdd([item.id]);
                         }}
                         ref={(element) => {
                           if (element && focusTarget.current === item.id && !element.disabled) {
@@ -128,7 +131,7 @@ export function Achievements({
                           }
                         }}
                       >
-                        <Plus size={19} />
+                        {item.unlocked ? <LockKeyhole size={19} /> : <Plus size={19} />}
                       </button>
                     ) : null}
                     {concealed ? (
@@ -136,6 +139,8 @@ export function Achievements({
                         <Eye size={16} />
                         Reveal
                       </button>
+                    ) : isQueued ? (
+                      <span className="status queued">Queued</span>
                     ) : item.unlocked ? (
                       <span
                         className="status ready"

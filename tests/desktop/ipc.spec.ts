@@ -58,17 +58,32 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
     await expect(
       page.getByRole('button', { name: 'Apply changes for Cyberpunk 2077', exact: true }),
     ).toBeEnabled();
+    for (const name of ['Full Body Conversion', 'Daemon In The Shell']) {
+      const lock = page.getByRole('button', { name: `Queue lock for ${name}`, exact: true });
+      await expect(lock).toBeEnabled();
+      await lock.click();
+      await expect(
+        page.getByRole('button', { name: `Remove ${name} from queue`, exact: true }),
+      ).toBeEnabled();
+    }
     await page
       .getByRole('button', { name: 'Apply changes for Cyberpunk 2077', exact: true })
       .click();
-    const confirmation = page.getByRole('dialog', { name: 'Apply 3 achievements?', exact: true });
+    const confirmation = page.getByRole('dialog', { name: 'Apply 5 achievements?', exact: true });
     await expect(confirmation).toBeVisible();
-    await confirmation.getByRole('button', { name: 'Apply 3 achievements', exact: true }).click();
+    await confirmation
+      .getByRole('button', { name: 'Unlock 3 achievements and lock 2 achievements', exact: true })
+      .click();
     await expect(
-      page.getByText('All requested unlocks and dates were confirmed.', { exact: true }),
+      page.getByText('All requested changes were confirmed.', { exact: true }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'History', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Unlock history', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Achievement history', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Locked achievements', exact: true }).getByRole('listitem'),
+    ).toHaveCount(2);
     await expect(page.getByRole('button', { name: 'History', exact: true })).toBeEnabled();
     await page.screenshot({ path: test.info().outputPath('workspace.png') });
     const observed = await page.evaluate(() => {

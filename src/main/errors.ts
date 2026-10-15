@@ -32,6 +32,11 @@ const messages: Record<string, string> = {
     "This game's achievement list changed. Remove its queued achievements and add them again.",
   ACHIEVEMENT_CHANGED: 'An achievement changed. Refresh achievements and review your queue.',
   ALREADY_UNLOCKED: 'This achievement is already unlocked. Its date will be kept.',
+  ALREADY_LOCKED:
+    'This achievement is already locked. Refresh achievements before queuing it again.',
+  UNLOCK_DATE_CHANGED: 'The unlock date changed. Remove the queued lock and add it again.',
+  INVALID_DATE_EDIT: 'Only queued unlocks can have their dates edited.',
+  CLI_UPDATE_REQUIRED: 'Locking achievements needs a newer CLI. Update the app to continue.',
   DUPLICATE_ACHIEVEMENT: 'This achievement is already queued.',
   ACHIEVEMENT_NOT_FOUND: 'This game does not have the selected achievement.',
   ACHIEVEMENT_NOT_QUEUED: 'A selected achievement is not in the queue.',

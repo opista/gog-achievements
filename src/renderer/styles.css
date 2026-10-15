@@ -1875,6 +1875,27 @@ small {
 .queue-row-content {
   gap: 0;
 }
+.queue-action-label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 4px 0;
+}
+.queue-action-label.lock {
+  color: var(--text);
+}
+.queue-previous-date,
+.result-previous-date {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.result-table td > strong {
+  display: block;
+  margin-bottom: 6px;
+}
 .queue-description {
   display: -webkit-box;
   -webkit-line-clamp: 2;

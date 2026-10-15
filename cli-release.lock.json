@@ -1,36 +1,36 @@
 {
   "schema_version": 1,
   "repository": "opista/gog-achievements-cli",
-  "version": "0.4.0",
-  "tag": "v0.4.0",
-  "commit": "73e1cb4255a4d7f28d73c9ed054470bda292cfca",
+  "version": "0.5.0",
+  "tag": "v0.5.0",
+  "commit": "1d85fcb401e47ea63542c3a44683c55edd81c22c",
   "targets": {
     "macos-arm64": {
       "platform": "darwin",
       "architecture": "arm64",
-      "archive": "gog-achievements-0.4.0-macos-arm64.zip",
-      "sha256": "179b1785a904a3e64c44621970d91aa510801f7585b8ffb08e430440d8cbbc16",
+      "archive": "gog-achievements-0.5.0-macos-arm64.zip",
+      "sha256": "8c4fcae0e651091950c9db62a3be8ed7b14934ddfdd249aa6a0c6f5137b4467a",
       "layout": "single_executable"
     },
     "macos-x64": {
       "platform": "darwin",
       "architecture": "x64",
-      "archive": "gog-achievements-0.4.0-macos-x64.zip",
-      "sha256": "967786f996a496d9b13c401d091662d2adacb4833277626efac3d55500e622f9",
+      "archive": "gog-achievements-0.5.0-macos-x64.zip",
+      "sha256": "89c9ea478ded7155664c3e9f3abfd3f1effdb34ebaaaf147d8a597c0ee92bd82",
       "layout": "native_launcher_with_private_runtime"
     },
     "windows-arm64": {
       "platform": "win32",
       "architecture": "arm64",
-      "archive": "gog-achievements-0.4.0-windows-arm64.zip",
-      "sha256": "86ce8735525d68a147409233d51bf1df408cca434246a9946d70cd2e5728fbf9",
+      "archive": "gog-achievements-0.5.0-windows-arm64.zip",
+      "sha256": "037508e74a046db9c616c06ceab5953f9e0d6e0fed239843acccdc5057e30438",
       "layout": "single_executable"
     },
     "windows-x64": {
       "platform": "win32",
       "architecture": "x64",
-      "archive": "gog-achievements-0.4.0-windows-x64.zip",
-      "sha256": "f6b8e73a7b19875c2422ffaaed4071bc5901599908b2c389bf9105a7ee9866b1",
+      "archive": "gog-achievements-0.5.0-windows-x64.zip",
+      "sha256": "0e2ac22bf47cc4255ea3204cca05dc6b7184da3fd8e5de09a1960c092db97cdd",
       "layout": "single_executable"
     }
   }

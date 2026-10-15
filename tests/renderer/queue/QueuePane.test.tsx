@@ -163,7 +163,7 @@ it.each(['before', 'after'] as const)(
     else await api.removeAchievements({ gameId: '1', achievementIds: ['1', '2', '3'] });
     render(<QueueHarness api={api} />);
     expect(await screen.findByText('Queue is empty.')).toBeVisible();
-    expect(screen.getByText('Use + beside an achievement to add it here.')).toBeVisible();
+    expect(screen.getByText('Use the buttons beside achievements to add them here.')).toBeVisible();
     expect(screen.queryByText(/Results are saved in history/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Apply changes for/ })).not.toBeInTheDocument();
   },
@@ -199,7 +199,7 @@ it('focuses the queue heading after removing its final achievement', async () =>
   screen.getByRole('button', { name: 'Remove The World from queue' }).focus();
   await user.keyboard('{Enter}');
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Queue' })).toHaveFocus());
-  expect(screen.getByText('Use + beside an achievement to add it here.')).toBeVisible();
+  expect(screen.getByText('Use the buttons beside achievements to add them here.')).toBeVisible();
 });
 
 it('restores focus to the original remove action when removal fails', async () => {

@@ -2,12 +2,12 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
-import type { OperationRecord, ReportItem } from '../../../src/shared/api';
+import type { OperationRecord, ReportItem, UnlockReportItem } from '../../../src/shared/api';
 import { HistoryView } from '../../../src/renderer/features/history/HistoryView';
 import { formatTimestamp } from '../../../src/renderer/date-time';
 
 afterEach(cleanup);
-function row(overrides: Partial<ReportItem> = {}): ReportItem {
+function row(overrides: Partial<UnlockReportItem> = {}): UnlockReportItem {
   return {
     achievement_id: '1',
     name: 'The World',
@@ -61,7 +61,7 @@ it('shows flat unlock rows sorted by actual unlock time with game context and lo
     row({ name: 'Middle unlock', actual_unlocked_at: '2026-10-05T12:00:00Z' }),
   ]);
   render(<HistoryView records={[oldest, newest, middle]} zone="Europe/London" />);
-  expect(screen.getByRole('heading', { name: 'Unlock history' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Achievement history' })).toBeVisible();
   const entries = within(screen.getByRole('list', { name: 'Unlocked achievements' })).getAllByRole(
     'listitem',
   );
@@ -181,10 +181,49 @@ it('never infers a confirmed unlock from an unknown record or a preview, and sur
 });
 it('shows a bounded loading state and an empty history without stale rows', () => {
   const view = render(<HistoryView records={[record('old', [row()])]} zone="UTC" loading />);
-  expect(screen.getByRole('status', { name: 'Loading unlock history' })).toBeVisible();
+  expect(screen.getByRole('status', { name: 'Loading achievement history' })).toBeVisible();
   expect(screen.queryByText('The World')).not.toBeInTheDocument();
-  expect(screen.queryByText('No unlock history yet.')).not.toBeInTheDocument();
+  expect(screen.queryByText('No achievement history yet.')).not.toBeInTheDocument();
   view.rerender(<HistoryView records={[]} zone="UTC" />);
-  expect(screen.getByText('No unlock history yet.')).toBeVisible();
+  expect(screen.getByText('No achievement history yet.')).toBeVisible();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+it('shows confirmed locks with their previous dates, retaining uncertain null-date results for attention', () => {
+  const lock: ReportItem = {
+    achievement_id: '7',
+    name: 'Confirmed lock',
+    action: 'lock',
+    requested_unlocked_at: null,
+    previous_unlocked_at: '2020-01-01T12:34:56+0000',
+    actual_unlocked_at: null,
+    status: 'locked',
+  };
+  render(
+    <HistoryView
+      zone="UTC"
+      records={[
+        record('lock', [
+          lock,
+          { ...lock, achievement_id: '8', name: 'Uncertain lock', status: 'unconfirmed' },
+          {
+            ...lock,
+            achievement_id: '9',
+            name: 'Already locked',
+            status: 'skipped_already_locked',
+          },
+        ]),
+      ]}
+    />,
+  );
+  expect(
+    within(screen.getByRole('region', { name: 'Locked achievements' })).getByText('Confirmed lock'),
+  ).toBeVisible();
+  expect(screen.getByText(/Previous unlock:/)).toBeVisible();
+  expect(
+    within(screen.getByRole('region', { name: 'Needs attention' })).getByText(
+      'Lock: Outcome uncertain',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText('Already locked')).not.toBeInTheDocument();
+  expect(screen.queryByRole('list', { name: 'Unlocked achievements' })).not.toBeInTheDocument();
 });
