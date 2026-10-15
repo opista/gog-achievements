@@ -4,9 +4,9 @@ Restore missing GOG achievements you have already earned, on Mac and Windows. Ch
 
 [Get the app](#download-and-install) · [How to use it](#restore-an-achievement)
 
-![GOG Achievements running on a Mac, with The Wandering Fool from Cyberpunk 2077 queued for review.](docs/images/app-queue.jpg)
+![GOG Achievements showing Cyberpunk 2077 achievements and separate Unlock and Lock queue sections.](docs/images/app-queue.jpg)
 
-_The Mac app with one achievement queued._
+_The Mac app with an unlock and a lock queued._
 
 ## Download and install
 
