@@ -35,12 +35,14 @@ else {
         minWidth: 1120,
         minHeight: 720,
         title: 'GOG Achievements',
+        autoHideMenuBar: process.platform === 'win32',
         backgroundColor: '#f2f4f8',
         webPreferences: {
           preload,
           contextIsolation: true,
           sandbox: true,
           nodeIntegration: false,
+          devTools: !app.isPackaged,
           additionalArguments: demo ? ['--gog-achievements-demo'] : [],
         },
       });
