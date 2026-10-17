@@ -57,7 +57,7 @@ If sign-in fails on Windows, check that [Microsoft’s WebView2 Runtime](https:/
 
 ## Developer information
 
-The app uses Electron, React, NestJS and a typed IPC bridge. It bundles [CLI v0.5.0](https://github.com/opista/gog-achievements-cli/releases/tag/v0.5.0), which handles GOG login and achievement requests. Installed packages include the CLI; they do not download it at startup.
+The app uses Electron, React, NestJS and a typed IPC bridge. It bundles [CLI v0.5.1](https://github.com/opista/gog-achievements-cli/releases/tag/v0.5.1), which handles GOG login and achievement requests. Installed packages include the CLI; they do not download it at startup.
 
 Startup checks the CLI's JSON help for `--action` on both queue creation and addition. Older builds keep unlocks available and hide lock controls. Main also rejects lock requests with an older CLI. The local CLI override below must match the pinned version and include mixed actions. Packaged builds ignore this override.
 
@@ -114,7 +114,7 @@ Mac package verification checks the complete bundle signature before running the
 
 Development runs use the stock Electron executable, so the Mac Dock can show **Electron** and its icon. The packaged `.app` uses the GOG Achievements name and icon. Update checks require a packaged app (`app.isPackaged`); compiling with `npm run build` alone does not enable them. You can run the generated `.app` directly from `dist`.
 
-The supported OS versions combine the [bundled CLI runtime](https://github.com/opista/gog-achievements-cli/blob/v0.5.0/README.md) and [Electron 44](https://releases.electronjs.org/release/v44.0.0). Dates are displayed and edited in local time; stored timestamps retain their UTC instants. Durable operation records support recovery and the history view.
+The supported OS versions combine the [bundled CLI runtime](https://github.com/opista/gog-achievements-cli/blob/v0.5.1/README.md) and [Electron 44](https://releases.electronjs.org/release/v44.0.0). Dates are displayed and edited in local time; stored timestamps retain their UTC instants. Durable operation records support recovery and the history view.
 
 ### CI and source layout
 
@@ -122,7 +122,7 @@ The supported OS versions combine the [bundled CLI runtime](https://github.com/o
 
 Release Please maintains a version pull request from conventional commits on `main`. Merging that pull request creates a draft release, runs the checks and native builds, verifies all packages and checksums, then publishes the release. Read the [release guide](docs/RELEASING.md) for setup and retries.
 
-Installed apps check for a newer public stable release once at startup. The native menu also offers **GOG Achievements → Check for Updates…** on macOS, or **Help → Check for Updates…** on Windows. Notices wait until active CLI work finishes. Update checks need no GOG or GitHub login.
+Installed apps check for a newer public stable release once at startup. The native menu also offers **GOG Achievements → Check for Updates…** on macOS, or **Help → Check for Updates…** on Windows. Press **Alt** to show the Windows menu bar. Release menus include display controls and omit reload and developer tools. Notices wait until active CLI work finishes. Update checks need no GOG or GitHub login.
 
 | Area            | Responsibility                                                           |
 | --------------- | ------------------------------------------------------------------------ |

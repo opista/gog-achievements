@@ -26,6 +26,16 @@
 * {
   box-sizing: border-box;
 }
+@media not (forced-colors: active) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  :hover,
+  :focus-within {
+    scrollbar-color: var(--muted) transparent;
+  }
+}
 body {
   margin: 0;
 }

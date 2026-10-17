@@ -421,3 +421,25 @@ test('the default Windows menu retains File, Edit, View and Window beside Help',
   expect(f.menu()!.items.at(-1)!.submenu!.items[0]!.id).toBe('check-for-updates');
   f.updates.cleanup();
 });
+
+test.each(['win32', 'darwin'] as const)(
+  'the packaged %s menu replaces Electron defaults and keeps only display controls in View',
+  (platform) => {
+    const original = menuFrom([
+      { role: 'viewMenu', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }] },
+    ]);
+    const f = fixture({ platform, existing: original });
+    const view = f.menu()!.items.find((item) => item.role === 'viewMenu')!;
+    expect(view).not.toBe(original.items[0]);
+    expect(view.submenu!.items.map((item) => item.role ?? item.type)).toEqual([
+      'resetZoom',
+      'zoomIn',
+      'zoomOut',
+      'separator',
+      'togglefullscreen',
+    ]);
+    expect(f.updateItem()?.label).toBe('Check for Updates…');
+    f.updates.cleanup();
+    expect(f.menu()).toBe(original);
+  },
+);

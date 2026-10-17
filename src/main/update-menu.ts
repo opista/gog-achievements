@@ -26,11 +26,24 @@ interface UpdateMenuOptions {
 type Notice = { result: UpdateCheck; manual: boolean } | { development: true };
 const updateItemId = 'check-for-updates';
 
-function standardMenu(mac: boolean): MenuItemConstructorOptions[] {
+function standardMenu(mac: boolean, packaged: boolean): MenuItemConstructorOptions[] {
   const template: MenuItemConstructorOptions[] = [
     { role: 'fileMenu' },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      role: 'viewMenu',
+      ...(packaged
+        ? {
+            submenu: [
+              { role: 'resetZoom' as const },
+              { role: 'zoomIn' as const },
+              { role: 'zoomOut' as const },
+              { type: 'separator' as const },
+              { role: 'togglefullscreen' as const },
+            ],
+          }
+        : {}),
+    },
     { role: 'windowMenu' },
     { role: 'help', submenu: [] },
   ];
@@ -176,9 +189,8 @@ export function installUpdates(options: UpdateMenuOptions) {
 
   const previousMenu = Menu.getApplicationMenu();
   const mac = platform === 'darwin';
-  const template: (MenuItemConstructorOptions | MenuItem)[] = previousMenu
-    ? [...previousMenu.items]
-    : standardMenu(mac);
+  const template: (MenuItemConstructorOptions | MenuItem)[] =
+    !app.isPackaged && previousMenu ? [...previousMenu.items] : standardMenu(mac, app.isPackaged);
   let hostIndex = mac
     ? template.findIndex((item) => item.role === 'appMenu')
     : template.findIndex(

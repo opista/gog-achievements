@@ -33,6 +33,22 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
     await expect(page).toHaveTitle('GOG Achievements');
     await expect(page.getByRole('heading', { name: 'Get unlocking' })).toBeVisible();
     await expect(page.getByText('DEMO DATA', { exact: true })).toBeVisible();
+    const nativeWindow = await application.browserWindow(page);
+    expect(await nativeWindow.evaluate((window) => window.autoHideMenuBar)).toBe(
+      process.platform === 'win32',
+    );
+    if (packageDirectory) {
+      await nativeWindow.evaluate((window) => window.webContents.openDevTools());
+      const viewRoles = await application.evaluate(({ Menu }) =>
+        Menu.getApplicationMenu()
+          ?.items.find((item) => item.role?.toLowerCase() === 'viewmenu')
+          ?.submenu?.items.map((item) => item.role?.toLowerCase()),
+      );
+      expect(viewRoles).toContain('resetzoom');
+      expect(viewRoles).not.toContain('reload');
+      expect(viewRoles).not.toContain('forcereload');
+      expect(viewRoles).not.toContain('toggledevtools');
+    }
     expect(
       await page.evaluate(() => ({ require: typeof require, process: typeof process })),
     ).toEqual({
@@ -110,6 +126,10 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
     expect(observed).toContain('login');
     expect(observed).toContain('apply');
     expect(observed.at(-1)).toBe('idle');
+    if (packageDirectory)
+      expect(await nativeWindow.evaluate((window) => window.webContents.isDevToolsOpened())).toBe(
+        false,
+      );
     expect(errors).toEqual([]);
   } finally {
     await application.close();
