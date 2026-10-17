@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/opista/gog-achievements/compare/v0.3.0...v0.3.1) (2026-10-17)
+
+
+### Fixed
+
+* improve Windows sign-in, menus and scrolling ([53b67bf](https://github.com/opista/gog-achievements/commit/53b67bfbf069546349bf3d4f58e6f908c2d111e4))
+
 ## [0.3.0](https://github.com/opista/gog-achievements/compare/v0.2.1...v0.3.0) (2026-10-15)
 
 
