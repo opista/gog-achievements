@@ -26,6 +26,13 @@ export function filterGames(games: Game[], search: string): Game[] {
   return games.filter((game) => game.title.toLocaleLowerCase().includes(query));
 }
 
+export function pinnedGamesFirst(games: Game[], pinnedIds: ReadonlySet<string>): Game[] {
+  const pinned: Game[] = [];
+  const unpinned: Game[] = [];
+  for (const game of games) (pinnedIds.has(game.id) ? pinned : unpinned).push(game);
+  return [...pinned, ...unpinned];
+}
+
 export function preferredGame(games: Game[], preferredId?: string): Game | undefined {
   return games.find((game) => game.id === preferredId) ?? games[0];
 }

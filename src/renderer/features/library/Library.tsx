@@ -3,12 +3,14 @@ import { RefreshCw, Search, X } from 'lucide-react';
 import type { Game } from '../../../shared/api';
 import { PaneResize } from '../../components/PaneResize';
 import { GameList } from './GameList';
-import { filterGames } from './library-model';
+import { filterGames, pinnedGamesFirst } from './library-model';
+import { usePinnedGames } from './use-pinned-games';
 
 interface Props {
   games: Game[];
   gameId?: string;
   signedIn: boolean;
+  userId?: string;
   loaded: boolean;
   loading?: boolean;
   busy: boolean;
@@ -23,6 +25,7 @@ export function Library({
   games,
   gameId,
   signedIn,
+  userId,
   loaded,
   loading = false,
   busy,
@@ -36,7 +39,11 @@ export function Library({
   const searchInput = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const query = useDeferredValue(search.trim());
-  const filtered = useMemo(() => filterGames(games, query), [games, query]);
+  const { pinnedIds, pinError, togglePin } = usePinnedGames(signedIn ? userId : undefined, demo);
+  const filtered = useMemo(
+    () => pinnedGamesFirst(filterGames(games, query), pinnedIds),
+    [games, query, pinnedIds],
+  );
   useLayoutEffect(() => {
     if (!list.current) return;
     list.current.scrollTop = 0;
@@ -82,6 +89,11 @@ export function Library({
           </button>
         ) : null}
       </div>
+      {pinError ? (
+        <p className="library-pin-error" role="status">
+          {pinError}
+        </p>
+      ) : null}
       <div className="library-list" ref={list}>
         {!signedIn ? null : loading ? (
           <div className="library-skeleton">
@@ -110,6 +122,9 @@ export function Library({
             busy={busy}
             demo={demo}
             onSelect={onSelect}
+            pinnedIds={pinnedIds}
+            onTogglePin={togglePin}
+            canPin={Boolean(userId)}
           />
         ) : (
           <div className="library-placeholder">

@@ -327,18 +327,43 @@ small {
 .game-row {
   display: flex;
   align-items: center;
+  width: 100%;
+  min-height: 40px;
+  border-radius: 6px;
+}
+.game-select {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   justify-content: flex-start;
   gap: 10px;
   border: 0;
-  padding: 6px 10px;
-  width: 100%;
+  padding: 6px 4px 6px 10px;
   min-height: 40px;
   font-size: 14px;
   font-weight: 400;
   border-radius: 6px;
   background: transparent;
   color: var(--text);
+}
+.game-pin {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin-right: 4px;
+  padding: 4px;
+  color: var(--muted);
+}
+.game-pin[aria-pressed='true'] {
+  color: var(--accent);
+}
+.library-pin-error {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .game-row .art {
   width: 48px;
@@ -392,8 +417,9 @@ small {
 .game-row.selected {
   background: var(--accent-soft);
 }
-.game-row:disabled {
+.game-select[aria-disabled='true'] {
   opacity: 1;
+  cursor: default;
 }
 .art {
   display: inline-flex;
@@ -1375,9 +1401,11 @@ small {
     min-width: 155px;
     max-width: 190px;
     min-height: 40px;
-    font-size: 13px;
-    padding: 6px 8px;
     flex: none;
+  }
+  .game-select {
+    font-size: 13px;
+    padding: 6px 4px 6px 8px;
   }
   .game-row .art {
     width: 48px;
