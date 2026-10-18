@@ -23,21 +23,20 @@ const applicationPath = packageDirectory
   : resolve('.');
 
 test('account pins survive an Electron restart in the same profile', async () => {
+  // This test starts Electron twice, including a cold packaged launch on CI.
+  test.setTimeout(60000);
   const userData = await mkdtemp(join(tmpdir(), 'gog-achievements-pins-'));
   let application: Awaited<ReturnType<typeof _electron.launch>> | undefined;
   const title = 'The Witcher 3: Wild Hunt';
   try {
     for (const restarting of [false, true]) {
-      application = await test.step(
-        `Open ${restarting ? 'saved' : 'new'} profile`,
-        () =>
-          _electron.launch({
-            executablePath,
-            args: [...(packageDirectory ? [] : [resolve('.')]), `--user-data-dir=${userData}`],
-            env: { ...process.env, GOG_ACHIEVEMENTS_DEMO: '1' },
-          }),
-        { timeout: 10000 },
-      );
+      application = await test.step(`Open ${restarting ? 'saved' : 'new'} profile`, () =>
+        _electron.launch({
+          timeout: 30000,
+          executablePath,
+          args: [...(packageDirectory ? [] : [resolve('.')]), `--user-data-dir=${userData}`],
+          env: { ...process.env, GOG_ACHIEVEMENTS_DEMO: '1' },
+        }));
       const page = await application.firstWindow({ timeout: 10000 });
       await test.step(
         'Sign in to the fixture account',
