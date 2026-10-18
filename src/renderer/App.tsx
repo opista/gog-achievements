@@ -214,7 +214,11 @@ function WorkspaceApp({ api }: { api: DesktopApi }) {
                   <HistoryView
                     records={w.history}
                     zone={zone}
-                    loading={w.loadingTarget === 'history' && w.loading !== null}
+                    loaded={w.historyLoaded}
+                    loading={w.historyLoading}
+                    error={w.historyError}
+                    onRetry={w.showHistory}
+                    busy={w.busy}
                   />
                 </>
               ) : w.game && !w.achievementsLoaded ? (
@@ -281,6 +285,7 @@ function WorkspaceApp({ api }: { api: DesktopApi }) {
             w.operation.kind === 'recovery' ? 'recovery' : applying ? 'applying' : 'idle'
           }
           achievementFor={w.achievementFor}
+          hasAchievementDetails={w.hasAchievementDetails}
           onRefresh={w.refreshQueues}
           onClear={w.clearQueue}
           onRemove={w.remove}

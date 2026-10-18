@@ -29,6 +29,7 @@ function QueueHarness({
       previewGameId={workspace.previewGameId}
       applyStatus="idle"
       achievementFor={missingDetails ? () => undefined : workspace.achievementFor}
+      hasAchievementDetails={workspace.hasAchievementDetails}
       onRefresh={workspace.refreshQueues}
       onClear={workspace.clearQueue}
       onRemove={workspace.remove}
@@ -81,7 +82,11 @@ it('shows cached game descriptions beside calendar and remove controls without i
     'title',
     'Cyberpunk 2077: description 1.',
   );
-  expect(within(witcher).getByText('The Witcher 3: Wild Hunt: description 201.')).toBeVisible();
+  expect(within(witcher).getByText('Passed the Trial')).toBeVisible();
+  expect(within(witcher).getByText('Description not loaded.')).toBeVisible();
+  expect(
+    within(witcher).getByRole('button', { name: 'Edit date for Passed the Trial' }),
+  ).toBeEnabled();
   const calendar = within(cyber).getByRole('button', { name: 'Edit date for The World' });
   expect(calendar).toHaveAttribute(
     'title',

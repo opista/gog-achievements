@@ -125,11 +125,6 @@ export function useLibrary(
     if (isCurrent(stamp, next.id)) publishAchievements(data);
   }
 
-  async function loadDetails(gameId: string): Promise<void> {
-    const data = await readAchievements(gameId, generation.current);
-    if (data) cacheAchievements(data);
-  }
-
   async function refreshAfterApply(gameId: string): Promise<void> {
     if (selected.current?.id !== gameId) return;
     const stamp = ++generation.current;
@@ -149,7 +144,6 @@ export function useLibrary(
     clearSelection,
     loadGame,
     refreshSelected,
-    loadDetails,
     refreshAfterApply,
     currentGame: () => selected.current,
     metadataFor: (gameId: string) => metadata.current.get(gameId),

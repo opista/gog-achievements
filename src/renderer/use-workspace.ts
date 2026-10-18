@@ -1,8 +1,8 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { AchievementAction, DesktopApi, Game, Queue, ExportInput } from '../shared/api';
+import type { AchievementAction, DesktopApi, Game, ExportInput } from '../shared/api';
 import { useApply } from './features/apply/use-apply';
 import { useOperation } from './application/use-operation';
-import { useHistory } from './features/history/use-history';
+import { requiresHistorySessionRecovery, useHistory } from './features/history/use-history';
 import { useLibrary } from './features/library/use-library';
 import { useQueues } from './features/queue/use-queues';
 import { queueGroups } from './features/queue/queue-model';
@@ -26,7 +26,6 @@ export function useWorkspace(api: DesktopApi) {
   });
   const { games, libraryLoaded, game, achievements, achievementsLoaded } = library;
   const { queues, loaded: queuesLoaded, action: queueAction } = queueState;
-  const [queueDetailsLoading, setQueueDetailsLoading] = useState(false);
   const history = useHistory(api, account.assertOwner);
   const [view, setView] = useState<View>('browse');
   const [loading, setLoading] = useState<string | null>('Checking GOG sign-in…');
@@ -98,29 +97,6 @@ export function useWorkspace(api: DesktopApi) {
       }
     }
   }
-  async function loadQueueDetails(values: Queue[]) {
-    const missing = values.filter(
-      (value) =>
-        value.items.length &&
-        value.game.id !== library.currentGame()?.id &&
-        !library.hasAchievements(value.game.id),
-    );
-    if (!missing.length) return;
-    setLoadingTarget('queue');
-    setQueueDetailsLoading(true);
-    try {
-      for (const value of missing) {
-        try {
-          await library.loadDetails(value.game.id);
-        } catch (failure) {
-          if (isAccountMismatch(failure)) throw failure;
-          // Saved requests stay usable when optional descriptions cannot be read.
-        }
-      }
-    } finally {
-      setQueueDetailsLoading(false);
-    }
-  }
   async function loadGame(next: Game) {
     setLoadingTarget('achievements');
     if (library.currentGame()?.id !== next.id) clearGamePresentation();
@@ -137,7 +113,6 @@ export function useWorkspace(api: DesktopApi) {
       if (!isAccountMismatch(failure) && toNotice(failure).code !== 'AUTH_REQUIRED') {
         try {
           await queueState.load();
-          await history.load();
         } catch (localFailure) {
           if (isAccountMismatch(localFailure)) throw localFailure;
         }
@@ -146,11 +121,9 @@ export function useWorkspace(api: DesktopApi) {
     }
     if (!(await account.reconcileOwner(data.user_id))) return;
     const first = library.acceptGames(data, preferredId);
-    const savedQueues = await queueState.load();
-    await history.load();
+    await queueState.load();
     if (!first) clearGameState();
     else if (library.currentGame()?.id !== first.id || !achievementsLoaded) await loadGame(first);
-    await loadQueueDetails(savedQueues);
   }
   function recoverOperation(gameId?: string) {
     void run('Checking GOG sign-in…', 'session', async () => {
@@ -218,8 +191,7 @@ export function useWorkspace(api: DesktopApi) {
   }
   function refreshQueues() {
     void run('Loading queue…', 'queue', async () => {
-      const values = await queueState.load();
-      await loadQueueDetails(values);
+      await queueState.load();
     });
   }
   function refreshLibrary() {
@@ -302,14 +274,18 @@ export function useWorkspace(api: DesktopApi) {
     // Refresh durable local state first; a network failure must not restore stale rows.
     await queueState.sync(gameId);
     if (!isCurrent()) return;
-    await history.load();
-    if (!isCurrent()) return;
     await library.refreshAfterApply(gameId);
   }
   function showHistory() {
     void run('Loading history…', 'history', async () => {
       setView('history');
-      await history.load();
+      try {
+        await history.load();
+      } catch (failure) {
+        // Ordinary read failures belong to History; account failures still clear
+        // the workspace or offer sign-in through the shared recovery path.
+        if (requiresHistorySessionRecovery(failure)) throw failure;
+      }
     });
   }
   function exportAchievements(filters: Omit<ExportInput, 'gameId'>) {
@@ -348,13 +324,16 @@ export function useWorkspace(api: DesktopApi) {
     game,
     achievements,
     queues,
-    queueDetailsLoading,
+    hasAchievementDetails: library.hasAchievements,
     achievementFor: library.achievementFor,
     queue,
     preview,
     result,
     resultGame,
     history: history.records,
+    historyLoaded: history.loaded,
+    historyLoading: history.loading,
+    historyError: history.error,
     view,
     loading,
     loadingTarget,

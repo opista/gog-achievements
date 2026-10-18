@@ -163,11 +163,14 @@ it('shows durable queue cleanup and keeps the report when the post-apply network
   expect(result.current.error?.message).toBe('Achievement refresh failed.');
   expect(result.current.result?.report?.complete).toBe(true);
   expect(result.current.queue?.items).toEqual([]);
-  expect(result.current.history).toHaveLength(1);
+  expect(result.current.historyLoaded).toBe(false);
   expect(
     result.current.queues.filter((queue) => queue.items.length).map((queue) => queue.game.id),
   ).toEqual(['2']);
   expect(apply).toHaveBeenCalledTimes(1);
+  act(() => result.current.closeApply());
+  act(() => result.current.showHistory());
+  await waitFor(() => expect(result.current.history).toHaveLength(1));
 });
 
 it('clears account-wide drafts before displaying a queue response owned by another account', async () => {
@@ -227,6 +230,8 @@ it('applies one queued game group while preserving the selected game and other d
     result.current.queues.filter((queue) => queue.items.length).map((queue) => queue.game.id),
   ).toEqual(['1']);
   expect(result.current.resultGame?.id).toBe('2');
-  expect(result.current.history[0]?.game_id).toBe('2');
   expect(achievements).not.toHaveBeenCalled();
+  act(() => result.current.closeApply());
+  act(() => result.current.showHistory());
+  await waitFor(() => expect(result.current.history[0]?.game_id).toBe('2'));
 });

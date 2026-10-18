@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, expect, it } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type {
   LockReportItem,
   OperationRecord,
@@ -236,13 +236,51 @@ it('never infers a confirmed unlock from an unknown record or a preview, and sur
   expect(screen.getByText('Unlock date unavailable')).toBeVisible();
 });
 it('shows a bounded loading state and an empty history without stale rows', () => {
-  const view = render(<HistoryView records={[record('old', [row()])]} zone="UTC" loading />);
+  const view = render(<HistoryView records={[]} zone="UTC" loaded={false} loading />);
   expect(screen.getByRole('status', { name: 'Loading achievement history' })).toBeVisible();
   expect(screen.queryByText('The World')).not.toBeInTheDocument();
   expect(screen.queryByText('No achievement history yet.')).not.toBeInTheDocument();
   view.rerender(<HistoryView records={[]} zone="UTC" />);
   expect(screen.getByText('No achievement history yet.')).toBeVisible();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+it('shows an initial read failure and a local retry without claiming history is empty', () => {
+  const onRetry = vi.fn();
+  const props = {
+    records: [],
+    zone: 'UTC',
+    loaded: false,
+    error: { message: 'History could not be loaded.' },
+    onRetry,
+  };
+  const view = render(<HistoryView {...props} />);
+  expect(screen.getByRole('alert')).toHaveTextContent('History could not be loaded.');
+  expect(screen.queryByText('No achievement history yet.')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
+  expect(onRetry).toHaveBeenCalledOnce();
+  view.rerender(<HistoryView {...props} busy />);
+  expect(screen.getByRole('button', { name: 'Retry history' })).toBeDisabled();
+});
+it('keeps cached rows visible during refresh and after a failed refresh', () => {
+  const props = { records: [record('saved', [row()])], zone: 'UTC', loaded: true };
+  const view = render(<HistoryView {...props} loading />);
+  const list = screen.getByRole('list', { name: 'Confirmed changes' });
+  expect(screen.getByText('The World')).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent('Refreshing achievement history…');
+  expect(
+    screen.queryByRole('status', { name: 'Loading achievement history' }),
+  ).not.toBeInTheDocument();
+  view.rerender(
+    <HistoryView
+      {...props}
+      error={{ message: 'History could not be refreshed.' }}
+      onRetry={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole('list', { name: 'Confirmed changes' })).toBe(list);
+  expect(screen.getByText('The World')).toBeVisible();
+  expect(screen.getByRole('alert')).toHaveTextContent('History could not be refreshed.');
+  expect(screen.getByRole('button', { name: 'Retry history' })).toBeEnabled();
 });
 it('shows only the confirmation date for confirmed locks, retaining uncertain results for attention', () => {
   const lock = lockRow();

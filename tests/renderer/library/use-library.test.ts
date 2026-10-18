@@ -203,16 +203,17 @@ it.each([
   },
 );
 
-it('loads cached details for saved queues without changing the selected game', async () => {
+it('retains cached queue details when selecting another game', async () => {
   const { result, syncQueue } = library();
   await act(() => result.current.loadGame(game('1')));
   syncQueue.mockClear();
-  await act(() => result.current.loadDetails('2'));
-  expect(result.current.game).toEqual(game('1'));
-  expect(result.current.achievements).toEqual(data('1').achievements);
+  await act(() => result.current.loadGame(game('2')));
+  expect(result.current.game).toEqual(game('2'));
+  expect(result.current.achievements).toEqual(data('2').achievements);
+  expect(result.current.achievementFor('1', '101')).toEqual(data('1').achievements[0]);
   expect(result.current.achievementFor('2', '201')).toEqual(data('2').achievements[0]);
   expect(result.current.hasAchievements('2')).toBe(true);
-  expect(syncQueue).not.toHaveBeenCalled();
+  expect(syncQueue).toHaveBeenCalledExactlyOnceWith('2', expect.any(Function));
 });
 
 it('refreshes selected current state while preserving rows until the read succeeds', async () => {
@@ -240,8 +241,8 @@ it('refreshes selected current state while preserving rows until the read succee
 
 it('refreshes completion after apply only for the selected game without repeating queue sync', async () => {
   const { result, api, syncQueue } = library();
+  await act(() => result.current.loadGame(game('2')));
   await act(() => result.current.loadGame(game('1')));
-  await act(() => result.current.loadDetails('2'));
   const next = data('1');
   next.achievements[0] = {
     ...next.achievements[0]!,
