@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { createDesktopApplication, type DesktopApplication } from './application';
 import { IPC_OPERATION, type OperationState } from '../shared/api';
 import { installUpdates } from './update-menu';
@@ -15,6 +15,13 @@ let guardDialog = false;
 let desktop: DesktopApplication | undefined;
 let closing = false;
 let updates: ReturnType<typeof installUpdates> | undefined;
+// Keep saved queues and history in the original folder when the display name changes.
+if (!app.commandLine.hasSwitch('user-data-dir')) {
+  const userData = join(app.getPath('appData'), packageMetadata.name);
+  mkdirSync(userData, { recursive: true });
+  app.setPath('userData', userData);
+  app.setPath('sessionData', userData);
+}
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => {
