@@ -64,10 +64,6 @@ export class DesktopModule {
           useValue: {
             getCliUpdateState: async () =>
               disabledCliUpdates(options.cliSelection?.version ?? CLI_VERSION),
-            setAutomaticCliUpdates: async () =>
-              disabledCliUpdates(options.cliSelection?.version ?? CLI_VERSION),
-            useBundledCli: async () =>
-              disabledCliUpdates(options.cliSelection?.version ?? CLI_VERSION),
             ...options.appActions,
           } satisfies AppUpdateActions,
         },

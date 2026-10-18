@@ -233,7 +233,7 @@ small {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: min(340px, calc(100vw - 32px));
+  width: min(280px, calc(100vw - 32px));
   max-height: calc(100vh - 100px);
   overflow-y: auto;
   padding: 16px;
@@ -252,26 +252,15 @@ small {
   font-size: 13px;
   line-height: 1.5;
 }
-.account-update-settings {
+.account-cli-version {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  padding-block: 12px;
-  border-block: 1px solid var(--line);
 }
-.account-update-toggle {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 14px;
-}
-.account-update-toggle input {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  margin-top: 3px;
-  accent-color: var(--accent);
+.account-cli-progress {
+  display: inline-flex;
+  color: var(--muted);
 }
 .history-button {
   border: 0;

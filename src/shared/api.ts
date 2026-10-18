@@ -186,10 +186,7 @@ export interface WorkspaceApi {
 export interface DesktopApi extends WorkspaceApi, CliUpdateActions {
   checkForUpdates(): Promise<void>;
 }
-export type AppUpdateActions = Pick<
-  DesktopApi,
-  'checkForUpdates' | 'getCliUpdateState' | 'setAutomaticCliUpdates' | 'useBundledCli'
->;
+export type AppUpdateActions = Pick<DesktopApi, 'checkForUpdates' | 'getCliUpdateState'>;
 export interface DesktopPlatform extends Pick<WorkspaceApi, 'isDemo' | 'onOperation'> {
   ready(): Promise<void>;
 }

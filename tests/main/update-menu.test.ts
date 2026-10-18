@@ -60,7 +60,7 @@ function fixture({
   existing = null as Menu | null,
   busy = false,
   request = undefined as (() => Promise<UpdateCheck>) | undefined,
-  cliUpdates = undefined as { check(manual?: boolean): Promise<CliUpdateState> } | undefined,
+  cliUpdates = undefined as { check(): Promise<CliUpdateState> } | undefined,
 } = {}) {
   let applicationMenu = existing;
   let active = busy;
@@ -229,7 +229,6 @@ test('a packaged startup checks once and Download uses only the retained service
 test('a manual check reports both app status and the pending CLI without forcing a restart', async () => {
   const cliCheck = vi.fn(async (): Promise<CliUpdateState> => ({
     supported: true,
-    automatic: true,
     currentVersion: '0.5.1',
     bundledVersion: '0.5.1',
     status: 'ready',
@@ -243,7 +242,7 @@ test('a manual check reports both app status and the pending CLI without forcing
   await settle();
   expect(f.showMessageBox).not.toHaveBeenCalled();
   await f.updates.checkForUpdates();
-  expect(cliCheck.mock.calls).toEqual([[false], [true]]);
+  expect(cliCheck.mock.calls).toEqual([[], []]);
   expect(f.notices()[0]).toMatchObject({
     message: 'The app is up to date.',
     detail: expect.stringContaining('next time you open the app'),

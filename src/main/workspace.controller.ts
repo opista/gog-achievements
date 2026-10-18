@@ -61,26 +61,6 @@ export class WorkspaceController {
   }
 
   @IpcHandle()
-  setAutomaticCliUpdates(
-    @RawEvent() event: IpcMainInvokeEvent,
-    input: { enabled: boolean },
-  ): Promise<IpcResult<CliUpdateState>> {
-    return this.boundary.execute(event, 'setAutomaticCliUpdates', input, () =>
-      this.appActions.setAutomaticCliUpdates(input),
-    );
-  }
-
-  @IpcHandle()
-  useBundledCli(
-    @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<CliUpdateState>> {
-    return this.boundary.execute(event, 'useBundledCli', payload, () =>
-      this.appActions.useBundledCli(),
-    );
-  }
-
-  @IpcHandle()
   login(
     @RawEvent() event: IpcMainInvokeEvent,
     payload?: undefined,

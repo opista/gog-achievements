@@ -1,13 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, LoaderCircle, LogOut, UserRound } from 'lucide-react';
 import type { AuthStatus, DesktopApi } from '../../../shared/api';
 import type { CliUpdateState } from '../../../shared/cli-updates';
 
 interface AccountMenuProps {
-  api: Pick<
-    DesktopApi,
-    'checkForUpdates' | 'getCliUpdateState' | 'setAutomaticCliUpdates' | 'useBundledCli'
-  >;
+  api: Pick<DesktopApi, 'checkForUpdates' | 'getCliUpdateState'>;
   auth: AuthStatus;
   versions: { app: string; cli: string };
   busy: boolean;
@@ -18,11 +15,7 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [updates, setUpdates] = useState<CliUpdateState>();
-  const generation = useRef(0);
-  const savingRef = useRef(false);
-  const updateHelp = useId();
   const menuRef = useRef<HTMLDetailsElement>(null);
   const summaryRef = useRef<HTMLElement>(null);
 
@@ -31,15 +24,12 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
-      const stamp = generation.current;
       try {
-        if (!savingRef.current) {
-          const state = await api.getCliUpdateState();
-          if (!cancelled && stamp === generation.current) setUpdates(state);
-        }
+        const state = await api.getCliUpdateState();
+        if (!cancelled) setUpdates(state);
       } catch {
         if (!cancelled)
-          setError('Update settings could not be loaded. Close the menu and try again.');
+          setError('CLI update status could not be loaded. Close the menu and try again.');
       } finally {
         if (!cancelled) timer = setTimeout(() => void refresh(), 2000);
       }
@@ -85,26 +75,7 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
     }
   }
 
-  async function changeUpdates(action: () => Promise<CliUpdateState>) {
-    if (savingRef.current) return;
-    savingRef.current = true;
-    generation.current++;
-    setSaving(true);
-    setError(undefined);
-    try {
-      setUpdates(await action());
-    } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'Update settings could not be saved. Try again.',
-      );
-    } finally {
-      generation.current++;
-      savingRef.current = false;
-      setSaving(false);
-    }
-  }
+  const updating = updates?.status === 'checking' || updates?.status === 'downloading';
 
   return (
     <details
@@ -133,40 +104,6 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
           )}
           {checking ? 'Checking…' : 'Check for updates…'}
         </button>
-        <div className="account-update-settings">
-          <label className="account-update-toggle">
-            <input
-              type="checkbox"
-              checked={updates?.automatic ?? false}
-              disabled={busy || saving || checking || !updates?.supported}
-              aria-describedby={updateHelp}
-              onChange={(event) =>
-                void changeUpdates(() =>
-                  api.setAutomaticCliUpdates({ enabled: event.target.checked }),
-                )
-              }
-            />
-            Automatic component updates
-          </label>
-          <small id={updateHelp}>
-            The app automatically updates the tools it uses to connect to GOG.
-          </small>
-          {updates ? (
-            <p className="account-update-notice" role="status">
-              {updates.message}
-            </p>
-          ) : null}
-          {updates?.supported && updates.currentVersion !== updates.bundledVersion ? (
-            <button
-              disabled={
-                busy || saving || checking || updates.pendingVersion === updates.bundledVersion
-              }
-              onClick={() => void changeUpdates(() => api.useBundledCli())}
-            >
-              Use bundled version next launch
-            </button>
-          ) : null}
-        </div>
         {error ? (
           <p className="account-update-notice" role="alert">
             {error}
@@ -186,7 +123,23 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
         ) : null}
         {versions.app ? <small>App {versions.app}</small> : null}
         {updates?.currentVersion || versions.cli ? (
-          <small>CLI {updates?.currentVersion ?? versions.cli}</small>
+          <div className="account-cli-version">
+            <small>CLI {updates?.currentVersion ?? versions.cli}</small>
+            {updating ? (
+              <span className="account-cli-progress" role="status" title={updates.message}>
+                <LoaderCircle size={14} className="spinner" aria-hidden="true" />
+                <span className="sr-only">{updates.message}</span>
+              </span>
+            ) : null}
+            {updates?.status === 'ready' ? (
+              <small role="status">{updates.pendingVersion} ready · next launch</small>
+            ) : null}
+          </div>
+        ) : null}
+        {updates?.status === 'fallback' || updates?.status === 'unavailable' ? (
+          <p className="account-update-notice" role="status">
+            {updates.message}
+          </p>
         ) : null}
       </div>
     </details>

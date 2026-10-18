@@ -64,20 +64,14 @@ async function fixture(demo = true) {
   const checkForUpdates = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const getCliUpdateState = vi.fn(async () => ({
     supported: true,
-    automatic: true,
     currentVersion: '0.5.1',
     bundledVersion: '0.5.1',
     status: 'idle' as const,
     message: 'Up to date.',
   }));
-  const setAutomaticCliUpdates = vi.fn(async ({ enabled }: { enabled: boolean }) => ({
-    ...(await getCliUpdateState()),
-    automatic: enabled,
-  }));
-  const useBundledCli = vi.fn(async () => ({ ...(await getCliUpdateState()), automatic: false }));
   const application = await createDesktopApplication({
     window,
-    appActions: { checkForUpdates, getCliUpdateState, setAutomaticCliUpdates, useBundledCli },
+    appActions: { checkForUpdates, getCliUpdateState },
     demo,
     version: '0.1.0',
     userDataPath: '/missing-ipc-fixture',
@@ -101,8 +95,6 @@ async function fixture(demo = true) {
     client,
     checkForUpdates,
     getCliUpdateState,
-    setAutomaticCliUpdates,
-    useBundledCli,
     event,
     async invoke(method: string, payload?: unknown, from = event): Promise<IpcResult> {
       electron.event = from;
@@ -223,40 +215,26 @@ test('IPC permits only trusted, no-payload update checks without GOG sign-in', a
   expect(checkForUpdates).toHaveBeenCalledExactlyOnceWith();
 });
 
-test('component settings accept only booleans from the trusted main frame', async () => {
-  const { invoke, client, event, setAutomaticCliUpdates, useBundledCli } = await fixture();
-  for (const payload of [
-    { enabled: 'true' },
-    { enabled: true, path: '/tmp/code' },
-    { enabled: true, url: 'https://evil.example' },
-    true,
-    null,
-  ]) {
-    expect(await invoke('setAutomaticCliUpdates', payload)).toMatchObject({
+test('CLI update status accepts no payload and is limited to the trusted main frame', async () => {
+  const { invoke, client, bridge, event, getCliUpdateState } = await fixture();
+  for (const payload of [{ enabled: false }, { path: '/tmp/code' }, true, null]) {
+    expect(await invoke('getCliUpdateState', payload)).toMatchObject({
       ok: false,
       error: { code: 'INVALID_INPUT' },
     });
   }
   expect(
-    await invoke('setAutomaticCliUpdates', { enabled: false }, {
+    await invoke('getCliUpdateState', undefined, {
       ...event,
       senderFrame: {},
     } as IpcMainInvokeEvent),
   ).toMatchObject({ ok: false, error: { code: 'IPC_DENIED' } });
-  expect(setAutomaticCliUpdates).not.toHaveBeenCalled();
+  expect(getCliUpdateState).not.toHaveBeenCalled();
   electron.event = event;
-  expect(await client.setAutomaticCliUpdates({ enabled: false })).toMatchObject({
-    automatic: false,
-  });
-  expect(setAutomaticCliUpdates).toHaveBeenCalledExactlyOnceWith({ enabled: false });
   expect(await client.getCliUpdateState()).toMatchObject({ currentVersion: '0.5.1' });
-  expect(await invoke('useBundledCli', { version: '1.0.0' })).toMatchObject({
-    ok: false,
-    error: { code: 'INVALID_INPUT' },
-  });
-  expect(useBundledCli).not.toHaveBeenCalled();
-  await client.useBundledCli();
-  expect(useBundledCli).toHaveBeenCalledExactlyOnceWith();
+  expect(getCliUpdateState).toHaveBeenCalledExactlyOnceWith();
+  expect(bridge.workspace).not.toHaveProperty('setAutomaticCliUpdates');
+  expect(bridge.workspace).not.toHaveProperty('useBundledCli');
 });
 
 test('closing the Nest application removes all bridge handlers and permits a clean restart', async () => {

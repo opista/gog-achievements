@@ -38,14 +38,22 @@ const recordSchema = z
 const stateSchema = z
   .object({
     schema_version: z.literal(1),
-    automatic: z.boolean(),
-    preferBundled: z.boolean(),
+    // Accept older state files, but discard their update preferences.
+    automatic: z.boolean().optional(),
+    preferBundled: z.boolean().optional(),
     active: recordSchema.nullable(),
     previous: recordSchema.nullable(),
     staged: recordSchema.nullable(),
     rejected: z.array(version).max(32),
   })
-  .strict();
+  .strict()
+  .transform((state) => ({
+    schema_version: state.schema_version,
+    active: state.active,
+    previous: state.previous,
+    staged: state.staged,
+    rejected: state.rejected,
+  }));
 
 export type CachedCli = z.infer<typeof recordSchema>;
 export type CliCacheState = z.infer<typeof stateSchema>;
@@ -53,8 +61,6 @@ export type CliCacheState = z.infer<typeof stateSchema>;
 export function initialState(): CliCacheState {
   return {
     schema_version: 1,
-    automatic: true,
-    preferBundled: false,
     active: null,
     previous: null,
     staged: null,

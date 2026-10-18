@@ -22,8 +22,6 @@ export function createDesktopApi(bridge: IpcApi, platform: DesktopPlatform): Des
     initialize: () => request(() => workspace.initialize()),
     checkForUpdates: () => request(() => workspace.checkForUpdates()),
     getCliUpdateState: () => request(() => workspace.getCliUpdateState()),
-    setAutomaticCliUpdates: (input) => request(() => workspace.setAutomaticCliUpdates(input)),
-    useBundledCli: () => request(() => workspace.useBundledCli()),
     login: () => request(() => workspace.login()),
     logout: () => request(() => workspace.logout()),
     listGames: () => request(() => workspace.listGames()),

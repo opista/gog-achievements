@@ -90,9 +90,6 @@ else {
         appActions: {
           checkForUpdates: updates.checkForUpdates,
           getCliUpdateState: async () => cliUpdates?.snapshot() ?? disabledCliUpdates(CLI_VERSION),
-          setAutomaticCliUpdates: async (input) =>
-            cliUpdates?.setAutomatic(input) ?? disabledCliUpdates(CLI_VERSION),
-          useBundledCli: async () => cliUpdates?.useBundled() ?? disabledCliUpdates(CLI_VERSION),
         },
         demo,
         version: app.getVersion(),

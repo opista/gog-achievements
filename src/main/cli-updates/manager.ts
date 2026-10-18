@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 import { CLI_VERSION } from '../../shared/cli-release';
 import { disabledCliUpdates, type CliUpdateState } from '../../shared/cli-updates';
-import { DesktopError } from '../errors';
 import { CliCache, initialState, type CachedCli, type CliCacheState } from './cache';
 import { CliReleaseClient, compareVersions, compatibleVersion } from './release-client';
 import { verifyCliContract } from './verify';
@@ -35,9 +34,8 @@ export class CliUpdateManager {
   private fallbackMessage = '';
   private preparing: Promise<CliSelection | undefined> | undefined;
   private checking: Promise<CliUpdateState> | undefined;
-  private changes: Promise<void> = Promise.resolve();
   private controller: AbortController | undefined;
-  private generation = 0;
+  private canUpdate = true;
   private disposed = false;
 
   constructor(private readonly options: Options) {
@@ -62,22 +60,18 @@ export class CliUpdateManager {
       try {
         this.state = await this.cache.load();
       } catch {
-        this.state = { ...initialState(), automatic: false };
+        this.state = initialState();
         this.fallbackMessage =
-          'Update settings could not be read. Automatic component updates are off.';
+          'The CLI update cache could not be read. The app is using its bundled copy.';
       }
-      const candidates = this.state.preferBundled
-        ? []
-        : [
-            ...(this.state.automatic &&
-            this.state.staged &&
-            compareVersions(this.state.staged.version, this.state.active?.version ?? CLI_VERSION) >
-              0
-              ? [this.state.staged]
-              : []),
-            this.state.active,
-            this.state.previous,
-          ];
+      const candidates = [
+        ...(this.state.staged &&
+        compareVersions(this.state.staged.version, this.state.active?.version ?? CLI_VERSION) > 0
+          ? [this.state.staged]
+          : []),
+        this.state.active,
+        this.state.previous,
+      ];
       const attempted = new Set<string>();
       for (const record of candidates) {
         if (
@@ -136,9 +130,10 @@ export class CliUpdateManager {
         await this.cache.save(this.state);
         await this.prune();
       } catch {
-        this.state.automatic = false;
-        this.fallbackMessage =
-          'Update files could not be saved. Automatic component updates are off.';
+        this.canUpdate = false;
+        this.phase = 'unavailable';
+        this.message =
+          'CLI update files could not be saved. The current version will stay in use. Updates will be tried again next launch.';
       }
     }
     return this.selection;
@@ -153,21 +148,12 @@ export class CliUpdateManager {
     if (!this.supported) return disabledCliUpdates(currentVersion);
     const result: CliUpdateState = {
       supported: true,
-      automatic: this.state.automatic,
       currentVersion,
       bundledVersion: CLI_VERSION,
       status: this.phase,
-      message:
-        this.message ||
-        (this.state.automatic
-          ? 'Compatible CLI updates are installed automatically.'
-          : 'Automatic component updates are off.'),
+      message: this.message || 'Compatible CLI updates are installed automatically.',
     };
-    if (this.state.preferBundled && currentVersion !== CLI_VERSION) {
-      result.status = 'ready';
-      result.pendingVersion = CLI_VERSION;
-      result.message = `The bundled CLI ${CLI_VERSION} will be used next time you open the app.`;
-    } else if (this.state.automatic && this.state.staged) {
+    if (this.state.staged && this.phase !== 'checking' && this.phase !== 'downloading') {
       result.status = 'ready';
       result.pendingVersion = this.state.staged.version;
       result.message = `CLI ${this.state.staged.version} is ready. It will be used next time you open the app.`;
@@ -178,88 +164,20 @@ export class CliUpdateManager {
     return result;
   }
 
-  private change<T>(action: () => Promise<T>): Promise<T> {
-    const pending = this.changes.then(action);
-    this.changes = pending.then(
-      () => {},
-      () => {},
-    );
-    return pending;
-  }
-
-  async setAutomatic(input: { enabled: boolean }): Promise<CliUpdateState> {
+  async check(): Promise<CliUpdateState> {
     await this.prepare();
-    if (!this.supported) return this.snapshot();
-    const result = await this.change(async () => {
-      const next: CliCacheState = {
-        ...this.state,
-        automatic: input.enabled,
-        preferBundled: input.enabled ? false : this.state.preferBundled,
-        staged: input.enabled ? this.state.staged : null,
-      };
-      try {
-        await this.cache.save(next);
-      } catch {
-        throw new DesktopError(
-          'CLI_UPDATE_SETTINGS_FAILED',
-          'Update settings could not be saved. Try again.',
-        );
-      }
-      this.state = next;
-      this.generation++;
-      this.controller?.abort();
-      this.phase = 'idle';
-      this.message = '';
-      return this.snapshot();
-    });
-    if (input.enabled) {
-      void (this.checking ?? Promise.resolve()).then(() => {
-        if (!this.disposed && this.state.automatic) void this.check();
-      });
-    }
-    return result;
-  }
-
-  async useBundled(): Promise<CliUpdateState> {
-    await this.prepare();
-    if (!this.supported) return this.snapshot();
-    return this.change(async () => {
-      const next = { ...this.state, automatic: false, preferBundled: true, staged: null };
-      if (this.selection && this.selection.version !== CLI_VERSION)
-        next.rejected = [...new Set([...next.rejected, this.selection.version])].slice(-32);
-      try {
-        await this.cache.save(next);
-      } catch {
-        throw new DesktopError(
-          'CLI_UPDATE_SETTINGS_FAILED',
-          'The fallback could not be selected. Try again.',
-        );
-      }
-      this.state = next;
-      this.generation++;
-      this.controller?.abort();
-      this.phase = 'idle';
-      this.message = '';
-      return this.snapshot();
-    });
-  }
-
-  async check(manual = false): Promise<CliUpdateState> {
-    await this.prepare();
-    if (this.disposed || !this.supported || (!manual && !this.state.automatic))
-      return this.snapshot();
+    if (this.disposed || !this.supported || !this.canUpdate) return this.snapshot();
     if (this.checking) return this.checking;
     const controller = new AbortController();
     this.controller = controller;
-    const generation = this.generation;
-    this.checking = this.performCheck(controller.signal, generation).finally(() => {
+    this.checking = this.performCheck(controller.signal).finally(() => {
       this.checking = undefined;
       if (this.controller === controller) this.controller = undefined;
     });
     return this.checking;
   }
 
-  private async performCheck(signal: AbortSignal, generation: number): Promise<CliUpdateState> {
+  private async performCheck(signal: AbortSignal): Promise<CliUpdateState> {
     this.phase = 'checking';
     this.message = 'Checking for CLI updates…';
     try {
@@ -268,14 +186,7 @@ export class CliUpdateManager {
       const current = this.state.staged?.version ?? this.selection?.version ?? CLI_VERSION;
       if (!release || compareVersions(release.version, current) <= 0) {
         this.phase = 'idle';
-        this.message = this.state.automatic
-          ? 'The CLI is up to date.'
-          : 'Automatic component updates are off.';
-        return this.snapshot();
-      }
-      if (!this.state.automatic) {
-        this.phase = 'available';
-        this.message = `CLI ${release.version} is available. Enable automatic component updates to download it.`;
+        this.message = 'The CLI is up to date.';
         return this.snapshot();
       }
       this.phase = 'downloading';
@@ -290,17 +201,14 @@ export class CliUpdateManager {
       );
       await this.verify(executable, record.version);
       signal.throwIfAborted();
-      await this.change(async () => {
-        if (generation !== this.generation || !this.state.automatic || this.disposed) return;
-        const next = { ...this.state, staged: record };
-        await this.cache.save(next);
-        this.state = next;
-        this.phase = 'idle';
-        this.message = '';
-        await this.prune();
-      });
+      const next = { ...this.state, staged: record };
+      await this.cache.save(next);
+      this.state = next;
+      this.phase = 'idle';
+      this.message = '';
+      await this.prune();
     } catch {
-      if (!signal.aborted && generation === this.generation && !this.disposed) {
+      if (!signal.aborted && !this.disposed) {
         this.phase = 'unavailable';
         this.message =
           'The CLI update could not be checked or verified. The current version will stay in use. Try again later.';

@@ -59,11 +59,11 @@ Open **History** to see confirmed unlocks and locks together, newest first by th
 
 The app tells you when a newer release is available. You can also open the account menu in the top-right corner and choose **Check for updates…**. Choose **Download** to open the new installer in your browser, then install it yourself. Your saved queue and history stay on your computer.
 
-The app also keeps its GOG tools up to date. **Automatic component updates** is on by default in the account menu. It downloads published stable CLI releases from 0.5.1 up to, but not including, 1.0.0. Drafts and prereleases are excluded. A downloaded version is verified and used only on the next launch; the running session keeps its current CLI.
+The app also keeps its GOG tools up to date automatically. It downloads published stable CLI releases from 0.5.1 up to, but not including, 1.0.0. Drafts and prereleases are excluded. A downloaded version is verified and used only on the next launch; the running session keeps its current CLI.
 
-The account menu shows the app version, active CLI version and update status. **Check for updates…** checks both the app and CLI. If automatic component updates are off, a manual check can report a newer CLI but does not download it. Turning the setting off cancels downloads and pending activation. Source runs and the demo do not download CLI updates automatically.
+The account menu shows the app version and active CLI version. A spinner appears beside the CLI version during checks and downloads. When an update is ready, the menu shows its version and that it will start on the next launch. **Check for updates…** checks both the app and CLI. Component updates are always automatic in installed apps. Source runs and the demo do not download CLI updates automatically.
 
-Each launch checks cached files and tests the CLI with offline commands before using it. If a cached version fails, the app tries the previous verified version, then its bundled copy. Queue files, history and saved login stay in place. You can also choose **Use bundled version next launch** in the account menu; this turns automatic component updates off. No update retries an achievement write.
+Each launch checks cached files and tests the CLI with offline commands before using it. If a cached version fails, the app tries the previous verified version, then its bundled copy. It continues to check for newer fixes automatically. Queue files, history and saved login stay in place. No update retries an achievement write.
 
 If sign-in fails on Windows, check that [Microsoft’s WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) is installed. Login details stay on your computer, protected by macOS Keychain or Windows encryption.
 

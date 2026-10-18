@@ -23,7 +23,7 @@ interface UpdateMenuOptions {
   architecture?: string;
   service?: Pick<UpdateService, 'check' | 'openDownload'>;
   enabled?: boolean;
-  cliUpdates?: { check(manual?: boolean): Promise<CliUpdateState> };
+  cliUpdates?: { check(): Promise<CliUpdateState> };
 }
 
 type Notice =
@@ -185,13 +185,8 @@ export function installUpdates(options: UpdateMenuOptions) {
         currentVersion: app.getVersion(),
         message: UPDATE_CHECK_FAILED_MESSAGE,
       }));
-      const cliCheck = options.cliUpdates?.check(manual).catch(() => undefined);
-      const [result, cliResult] = await Promise.all([appCheck, cliCheck]);
-      // A manual request can join an automatic app check while CLI updates are off.
-      const cli =
-        manualRequested && !manual && cliResult?.automatic === false
-          ? await options.cliUpdates?.check(true).catch(() => undefined)
-          : cliResult;
+      const cliCheck = options.cliUpdates?.check().catch(() => undefined);
+      const [result, cli] = await Promise.all([appCheck, cliCheck]);
       if (disposed) return;
       if (result.status === 'available' || manualRequested) {
         pending = { result, manual: manualRequested, ...(cli ? { cli } : {}) };

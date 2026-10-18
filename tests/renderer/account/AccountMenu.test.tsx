@@ -13,38 +13,27 @@ async function menu({
   authenticated = false,
   currentVersion = '0.5.1',
   supported = true,
+  status = 'idle' as CliUpdateState['status'],
+  pendingVersion = undefined as string | undefined,
+  message = 'The CLI is up to date.',
 } = {}) {
   const checkForUpdates = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const onLogout = vi.fn();
-  let state: CliUpdateState = {
+  const state: CliUpdateState = {
     supported,
-    automatic: supported,
     currentVersion,
     bundledVersion: '0.5.1',
-    status: 'idle',
-    message: 'The CLI is up to date.',
+    status,
+    pendingVersion,
+    message,
   };
   const getCliUpdateState = vi.fn(async () => state);
-  const setAutomaticCliUpdates = vi.fn(async ({ enabled }: { enabled: boolean }) => {
-    state = { ...state, automatic: enabled };
-    return state;
-  });
-  const useBundledCli = vi.fn(async () => {
-    state = {
-      ...state,
-      automatic: false,
-      pendingVersion: '0.5.1',
-      status: 'ready',
-      message: 'The bundled CLI 0.5.1 will be used next time you open the app.',
-    };
-    return state;
-  });
   const user = userEvent.setup();
   render(
     <>
       <button>Before account</button>
       <AccountMenu
-        api={{ checkForUpdates, getCliUpdateState, setAutomaticCliUpdates, useBundledCli }}
+        api={{ checkForUpdates, getCliUpdateState }}
         auth={{ authenticated, user_id: authenticated ? '1' : undefined }}
         versions={{ app: '0.1.0', cli: '0.3.0' }}
         busy={busy}
@@ -60,8 +49,7 @@ async function menu({
     checkForUpdates,
     onLogout,
     getCliUpdateState,
-    setAutomaticCliUpdates,
-    useBundledCli,
+    state,
   };
 }
 
@@ -128,44 +116,65 @@ it('closes when keyboard focus moves outside the menu', async () => {
   const { user } = await menu();
   await user.tab();
   await user.tab();
-  await user.tab();
   expect(screen.getByRole('button', { name: 'After account' })).toHaveFocus();
   expect(screen.getByLabelText('Account menu').closest('details')).not.toHaveAttribute('open');
 });
 
-it('explains and persists automatic component updates without requiring sign-in', async () => {
-  const { user, setAutomaticCliUpdates } = await menu();
-  const toggle = screen.getByRole('checkbox', { name: 'Automatic component updates' });
-  expect(toggle).toBeChecked();
-  expect(toggle).toHaveAccessibleDescription(
-    'The app automatically updates the tools it uses to connect to GOG.',
-  );
-  await user.click(toggle);
-  expect(setAutomaticCliUpdates).toHaveBeenCalledExactlyOnceWith({ enabled: false });
-  expect(toggle).not.toBeChecked();
+it('shows the active CLI version without update settings or a progress indicator while idle', async () => {
+  await menu();
+  expect(screen.getByText('CLI 0.5.1')).toBeVisible();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /bundled/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
-it('keeps the saved setting when a preference write fails', async () => {
-  const { user, setAutomaticCliUpdates } = await menu();
-  setAutomaticCliUpdates.mockRejectedValueOnce(new Error('Update settings could not be saved.'));
-  const toggle = screen.getByRole('checkbox', { name: 'Automatic component updates' });
-  await user.click(toggle);
-  expect(toggle).toBeChecked();
-  expect(screen.getByRole('alert')).toHaveTextContent('Update settings could not be saved.');
+it.each(['checking', 'downloading'] as const)(
+  'shows an accessible spinner beside the current version while %s in the background',
+  async (status) => {
+    const message = status === 'checking' ? 'Checking for CLI updates…' : 'Downloading CLI 0.6.0…';
+    await menu({ status, message });
+    const progress = screen.getByRole('status');
+    expect(progress).toHaveTextContent(message);
+    expect(progress.querySelector('.spinner')).not.toBeNull();
+    expect(progress.parentElement).toContainElement(screen.getByText('CLI 0.5.1'));
+    expect(screen.getByRole('button', { name: 'Check for updates…' })).toBeEnabled();
+  },
+);
+
+it('reports pending activation beside the version without changing the running CLI label', async () => {
+  await menu({ status: 'ready', pendingVersion: '0.6.0' });
+  expect(screen.getByText('CLI 0.5.1')).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent('0.6.0 ready · next launch');
+  expect(screen.queryByText('CLI 0.6.0')).not.toBeInTheDocument();
+  expect(screen.queryByRole('status')?.querySelector('.spinner')).toBeNull();
 });
 
-it('offers a fallback for a downloaded CLI and reports that restart is required', async () => {
-  const { user, useBundledCli } = await menu({ currentVersion: '0.6.0' });
-  await user.click(screen.getByRole('button', { name: 'Use bundled version next launch' }));
-  expect(useBundledCli).toHaveBeenCalledExactlyOnceWith();
-  expect(screen.getByRole('status')).toHaveTextContent('will be used next time you open the app');
-  expect(screen.getByText('CLI 0.6.0')).toBeVisible();
-  expect(screen.getByRole('checkbox')).not.toBeChecked();
+it('refreshes background progress only while the menu is open', async () => {
+  const { user, getCliUpdateState, state } = await menu();
+  getCliUpdateState.mockResolvedValue({ ...state, status: 'downloading', message: 'Downloading…' });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Downloading…'), {
+    timeout: 3000,
+  });
+  await user.keyboard('{Escape}');
+  getCliUpdateState.mockClear();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 2100)));
+  expect(getCliUpdateState).not.toHaveBeenCalled();
 });
 
-it('disables the setting in source and demo builds', async () => {
+it.each(['fallback', 'unavailable'] as const)(
+  'shows %s details without blocking the menu',
+  async (status) => {
+    const message = 'The current version will stay in use.';
+    await menu({ status, message });
+    expect(screen.getByRole('status')).toHaveTextContent(message);
+    expect(screen.getByRole('button', { name: 'Check for updates…' })).toBeEnabled();
+  },
+);
+
+it('shows the CLI version in source and demo builds without an update setting', async () => {
   await menu({ supported: false });
-  expect(screen.getByRole('checkbox', { name: 'Automatic component updates' })).toBeDisabled();
+  expect(screen.getByText('CLI 0.5.1')).toBeVisible();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 });
 
 it('closes after sign-out and keeps focus on the account button', async () => {
