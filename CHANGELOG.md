@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.0](https://github.com/opista/gog-achievements/compare/v0.3.1...v0.4.0) (2026-10-18)
+
+
+### Added
+
+* add account-specific pinned games ([#27](https://github.com/opista/gog-achievements/issues/27)) ([7dadc05](https://github.com/opista/gog-achievements/commit/7dadc05c5aa5c129f7e9a39b52f614f2be180f3d))
+* add achievement search and sorting ([#26](https://github.com/opista/gog-achievements/issues/26)) ([9c18f8d](https://github.com/opista/gog-achievements/commit/9c18f8da4e4664956dd2c63bf4b21cb4583fcf64))
+* export filtered achievements through the CLI ([#28](https://github.com/opista/gog-achievements/issues/28)) ([6f80d96](https://github.com/opista/gog-achievements/commit/6f80d9677e2476a7bda5141738ec60accb01eba0))
+* show achievement completion for the selected game ([#20](https://github.com/opista/gog-achievements/issues/20)) ([16ea2c3](https://github.com/opista/gog-achievements/commit/16ea2c35d5b0fcc4fdaff316a108a2efd159bf0b))
+* update compatible CLI releases automatically ([#29](https://github.com/opista/gog-achievements/issues/29)) ([b1e475f](https://github.com/opista/gog-achievements/commit/b1e475f01d7f8c2a38f296d3baf2c3d0b5b113b1))
+
+
+### Fixed
+
+* harden desktop CLI operations and cleanup ([#31](https://github.com/opista/gog-achievements/issues/31)) ([ee3c44e](https://github.com/opista/gog-achievements/commit/ee3c44edbb57371c8fd154c26fc95d3211a70663))
+* load optional workspace data on demand ([#32](https://github.com/opista/gog-achievements/issues/32)) ([0636bea](https://github.com/opista/gog-achievements/commit/0636beafcee7adf7b18b51883c5c2c8ef00e60b5))
+* show the product name in native app menus ([#21](https://github.com/opista/gog-achievements/issues/21)) ([440c940](https://github.com/opista/gog-achievements/commit/440c9403e8eecdbcc210da37819a6764cfa40c39))
+
+
+### Changed
+
+* derive app contracts from validation schemas ([#33](https://github.com/opista/gog-achievements/issues/33)) ([a0b6035](https://github.com/opista/gog-achievements/commit/a0b6035d7eccdde1c9dde18c569cefcf0e0b3ec1))
+* reuse queue date labels between renders ([#35](https://github.com/opista/gog-achievements/issues/35)) ([9b96bca](https://github.com/opista/gog-achievements/commit/9b96bcacccd3c471e35d5cbd882d7878ea4a463f))
+* separate app compilation from CLI provisioning ([#34](https://github.com/opista/gog-achievements/issues/34)) ([333f4e8](https://github.com/opista/gog-achievements/commit/333f4e83531ec979ca34340bb6c87d0df830bc51))
+
 ## [0.3.1](https://github.com/opista/gog-achievements/compare/v0.3.0...v0.3.1) (2026-10-17)
 
 
