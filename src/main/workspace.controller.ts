@@ -16,6 +16,8 @@ import type {
   SelectionInput,
   AdditionInput,
   WorkspaceApi,
+  ExportInput,
+  ExportResult,
 } from '../shared/api';
 import { IpcBoundary } from './ipc';
 import { APP_ACTIONS, WORKSPACE_API } from './ipc.tokens';
@@ -78,6 +80,16 @@ export class WorkspaceController {
   ): Promise<IpcResult<AchievementsData>> {
     return this.boundary.execute(event, 'listAchievements', gameId, () =>
       this.api.listAchievements(gameId),
+    );
+  }
+
+  @IpcHandle()
+  exportAchievements(
+    @RawEvent() event: IpcMainInvokeEvent,
+    input: ExportInput,
+  ): Promise<IpcResult<ExportResult>> {
+    return this.boundary.execute(event, 'exportAchievements', input, () =>
+      this.api.exportAchievements(input),
     );
   }
 

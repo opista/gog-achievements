@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { AchievementAction, DesktopApi, Game, Queue } from '../shared/api';
+import type { AchievementAction, DesktopApi, Game, Queue, ExportInput } from '../shared/api';
 import { useApply } from './features/apply/use-apply';
 import { useOperation } from './application/use-operation';
 import { useHistory } from './features/history/use-history';
@@ -12,7 +12,7 @@ import { toNotice, type Notice } from './presentation/error-notice';
 
 export type View = 'browse' | 'applying' | 'results' | 'history';
 export type LoadingTarget =
-  'session' | 'library' | 'achievements' | 'queue' | 'history' | 'preview' | 'apply';
+  'session' | 'library' | 'achievements' | 'queue' | 'history' | 'preview' | 'apply' | 'export';
 export function useWorkspace(api: DesktopApi) {
   const working = useRef(false);
   const lifecycle = useRef(0);
@@ -31,6 +31,7 @@ export function useWorkspace(api: DesktopApi) {
   const [loading, setLoading] = useState<string | null>('Checking GOG sign-in…');
   const [loadingTarget, setLoadingTarget] = useState<LoadingTarget>('session');
   const [error, setError] = useState<Notice | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const applyState = useApply(api, {
     assertOwner: account.assertOwner,
     run,
@@ -48,6 +49,7 @@ export function useWorkspace(api: DesktopApi) {
   const busy = loading !== null || operation.kind !== 'idle';
   const queue = queues.find((item) => item.game.id === game?.id) ?? null;
   function clearGamePresentation() {
+    setExportNotice(null);
     applyState.clear();
     setView('browse');
   }
@@ -300,6 +302,18 @@ export function useWorkspace(api: DesktopApi) {
       await history.load();
     });
   }
+  function exportAchievements(filters: Omit<ExportInput, 'gameId'>) {
+    if (!game) return;
+    const gameId = game.id;
+    void run('Exporting achievements…', 'export', async () => {
+      setExportNotice(null);
+      const result = await api.exportAchievements({ gameId, ...filters });
+      if (!result.cancelled)
+        setExportNotice(
+          `Exported ${result.count} achievement${result.count === 1 ? '' : 's'} to ${result.path}.`,
+        );
+    });
+  }
   function closeApply() {
     if (working.current || operations.current().kind !== 'idle') return;
     applyState.invalidate();
@@ -312,6 +326,9 @@ export function useWorkspace(api: DesktopApi) {
   }
   return {
     supportsLocking: account.supportsLocking,
+    supportsExporting: account.supportsExporting,
+    exportNotice,
+    exportAchievements,
     auth,
     games,
     completion: library.completion,

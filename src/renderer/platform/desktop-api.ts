@@ -25,6 +25,7 @@ export function createDesktopApi(bridge: IpcApi, platform: DesktopPlatform): Des
     logout: () => request(() => workspace.logout()),
     listGames: () => request(() => workspace.listGames()),
     listAchievements: (id) => request(() => workspace.listAchievements(id)),
+    exportAchievements: (input) => request(() => workspace.exportAchievements(input)),
     getQueue: (id) => request(() => workspace.getQueue(id)),
     listQueues: () => request(() => workspace.listQueues()),
     addAchievements: (input) => request(() => workspace.addAchievements(input)),

@@ -119,6 +119,11 @@ export function App({ api }: { api: DesktopApi }) {
           </button>
         </div>
       ) : null}
+      {w.exportNotice ? (
+        <div className="export-notice" role="status">
+          {w.exportNotice}
+        </div>
+      ) : null}
       <main
         inert={modalOpen}
         className={`workspace ${!w.auth.authenticated ? 'signed-out' : ''}`}
@@ -228,6 +233,8 @@ export function App({ api }: { api: DesktopApi }) {
                   demo={api.isDemo}
                   zone={zone}
                   supportsLocking={w.supportsLocking}
+                  supportsExporting={w.supportsExporting}
+                  onExport={w.exportAchievements}
                   onAdd={w.add}
                   onQueueAll={w.queueAll}
                   onRemove={(ids) => {

@@ -70,6 +70,7 @@ test('the Nest graph shares one operation lock across all workspace routes durin
       api.logout(),
       api.listGames(),
       api.listAchievements(gameId),
+      api.exportAchievements({ gameId }),
       api.getQueue(gameId),
       api.listQueues(),
       api.addAchievements({ gameId, achievementIds: ['102'] }),
@@ -80,7 +81,7 @@ test('the Nest graph shares one operation lock across all workspace routes durin
       api.history({}),
       api.checkCurrentState({ gameId }),
     ]);
-    expect(blocked).toHaveLength(14);
+    expect(blocked).toHaveLength(15);
     for (const outcome of blocked)
       expect(outcome).toMatchObject({ status: 'rejected', reason: { code: 'BUSY' } });
     expect(cli.calls).toHaveLength(before);

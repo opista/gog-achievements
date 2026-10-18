@@ -261,6 +261,12 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
         gameId,
       );
     },
+    async exportAchievements() {
+      throw problem(
+        'DESKTOP_REQUIRED',
+        'CSV export is available in the desktop app with a supported CLI. No file was saved.',
+      );
+    },
     async getQueue(gameId) {
       requireAuth();
       return run('read', () => structuredClone(queue(gameId)), gameId);

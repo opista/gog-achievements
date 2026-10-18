@@ -37,6 +37,35 @@ async function confirm(
   return apply;
 }
 describe('desktop restoration flow', () => {
+  it('reports CLI export confirmation and preserves queued selections', async () => {
+    const { api, user } = await connected();
+    const exportCSV = vi
+      .spyOn(api, 'exportAchievements')
+      .mockResolvedValue({ cancelled: false, path: '/fixture/achievements.csv', count: 2 });
+    const before = await api.listQueues();
+    await user.click(screen.getByRole('button', { name: 'Unlocked' }));
+    await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+    expect(
+      await screen.findByText('Exported 2 achievements to /fixture/achievements.csv.'),
+    ).toBeVisible();
+    expect(exportCSV).toHaveBeenCalledExactlyOnceWith({
+      gameId: '1',
+      search: '',
+      status: 'unlocked',
+    });
+    expect(await api.listQueues()).toEqual(before);
+    exportCSV.mockResolvedValue({ cancelled: true });
+    await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+    await waitFor(() => expect(exportCSV).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Exported 2 achievements/)).not.toBeInTheDocument();
+  });
+  it('explains desktop-only export in the browser demo', async () => {
+    const { user } = await connected();
+    await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'CSV export is available in the desktop app',
+    );
+  });
   it('shows an icon account menu with the ID inside', async () => {
     const { user } = await connected();
     await user.click(screen.getByLabelText('Account menu'));

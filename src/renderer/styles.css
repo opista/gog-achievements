@@ -2189,3 +2189,8 @@ button.achievement-action-button:hover:not(:disabled) {
     gap: 8px;
   }
 }
+.export-notice {
+  padding: 12px 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line);
+}

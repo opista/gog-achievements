@@ -1,5 +1,9 @@
 # GOG Achievements
 
+CSV export uses the CLI. In the desktop app, **Export CSV** opens the native save dialog and exports the selected game with the current search and status filters. CSV includes hidden achievement details and uses the CLI's source order. The CLI writes a new UTF-8 file and refuses to replace an existing file. Success shows the saved path and row count; cancellation saves nothing.
+
+Export requires `achievements export` in the bundled CLI's JSON help. The current CLI release pin stays unchanged, so export remains disabled for bundles without this command. The browser demo explains the desktop requirement and saves no file.
+
 Restore missing GOG achievements you have already earned, on Mac and Windows. Choose an achievement, set its unlock date and review the changes before sending them to GOG.
 
 [Get the app](#download-and-install) · [How to use it](#restore-an-achievement)

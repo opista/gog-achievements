@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { CalendarDays, Check, Eye, RefreshCw, Search, X } from 'lucide-react';
-import type { Achievement, AchievementAction } from '../../../shared/api';
+import { CalendarDays, Check, Download, Eye, RefreshCw, Search, X } from 'lucide-react';
+import type { Achievement, AchievementAction, ExportInput } from '../../../shared/api';
 import { Art } from '../../components/Art';
 import { achievementActionName, AchievementActionIcon } from '../../components/AchievementAction';
 import { formatDate, formatTimestamp } from '../../date-time';
@@ -22,6 +22,8 @@ interface Props {
   demo: boolean;
   zone: string;
   supportsLocking?: boolean;
+  supportsExporting?: boolean;
+  onExport?(filters: Omit<ExportInput, 'gameId'>): void;
   onAdd(ids: string[], action?: AchievementAction): void;
   onQueueAll(ids: string[], action: AchievementAction): void;
   onRemove(ids: string[]): void;
@@ -35,6 +37,8 @@ export function Achievements({
   demo,
   zone,
   supportsLocking = false,
+  supportsExporting = false,
+  onExport,
   onAdd,
   onQueueAll,
   onRemove,
@@ -135,6 +139,23 @@ export function Achievements({
             </button>
           ) : null}
         </div>
+        <button
+          className="achievement-action-button"
+          disabled={controlsBlocked || (!demo && !supportsExporting)}
+          title={
+            demo
+              ? 'CSV export is available in the desktop app.'
+              : supportsExporting
+                ? 'Export the current filters. Includes hidden achievement details.'
+                : 'CSV export needs an app with a newer bundled CLI.'
+          }
+          onClick={() =>
+            onExport?.({ search, status: filter.toLowerCase() as ExportInput['status'] })
+          }
+        >
+          <Download size={16} aria-hidden="true" />
+          Export CSV
+        </button>
         <button
           className="icon-button mobile-refresh"
           disabled={controlsBlocked}
