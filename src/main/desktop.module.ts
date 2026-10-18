@@ -8,6 +8,7 @@ import { IpcBoundary } from './ipc';
 import { APP_ACTIONS, DESKTOP_WINDOW, WORKSPACE_API } from './ipc.tokens';
 import { WorkspaceModule } from './workspace.module';
 import { WorkspaceController } from './workspace.controller';
+import type { ExportDestination } from './workspace.tokens';
 
 export interface DesktopOptions {
   window: BrowserWindow;
@@ -15,6 +16,7 @@ export interface DesktopOptions {
   demo: boolean;
   version: string;
   userDataPath: string;
+  chooseExportFile?: ExportDestination;
   cli: Parameters<typeof resolveCli>[0];
 }
 
@@ -29,6 +31,7 @@ export class DesktopModule {
             WorkspaceModule.register({
               version: options.version,
               userDataPath: options.userDataPath,
+              chooseExportFile: options.chooseExportFile,
               createCli: async (): Promise<CliRunner> => {
                 try {
                   // Use only the verified bundled path. Never fall back to PATH.

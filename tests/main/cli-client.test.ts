@@ -16,6 +16,29 @@ import { publicError } from '../../src/main/errors';
 import { CLI_VERSION } from '../../src/shared/cli-release';
 
 describe('CLI command contract', () => {
+  test('CSV export keeps paths, IDs and filters as separate arguments', () => {
+    expect(
+      commandArgs({
+        kind: 'achievements-export',
+        gameId: '90071992547409931',
+        file: '/selected folder/export.csv',
+        search: 'A, "name"',
+        status: 'locked',
+      }),
+    ).toEqual([
+      'achievements',
+      'export',
+      '--game',
+      '90071992547409931',
+      '--file',
+      '/selected folder/export.csv',
+      '--search',
+      'A, "name"',
+      '--status',
+      'locked',
+      '--json',
+    ]);
+  });
   test('only explicit apply adds --yes and all commands request JSON', () => {
     const commands: CliCommand[] = [
       { kind: 'help' },

@@ -63,16 +63,22 @@ export class FakeCli implements CliRunner {
   pause: Promise<void> | null = null;
   failure: ((command: CliCommand) => void) | null = null;
   supportsLocking = true;
+  supportsExporting = false;
   async run(command: CliCommand, onSpawn?: (pid: number) => Promise<void>): Promise<CliOutcome> {
     this.calls.push(command);
     this.failure?.(command);
     if (command.kind === 'help')
       return ok({
         version: '0.3.0',
-        commands: ['queue create', 'queue add'].map((command) => ({
-          command,
-          flags: this.supportsLocking ? ['action'] : [],
-        })),
+        commands: [
+          ...['queue create', 'queue add'].map((command) => ({
+            command,
+            flags: this.supportsLocking ? ['action'] : [],
+          })),
+          ...(this.supportsExporting
+            ? [{ command: 'achievements export', flags: ['game', 'file', 'search', 'status'] }]
+            : []),
+        ],
       });
     if (command.kind === 'doctor') return ok({ supported: true, credentials_available: true });
     if (command.kind === 'auth-status' || command.kind === 'auth-login')
@@ -89,6 +95,7 @@ export class FakeCli implements CliRunner {
         achievements: this.achievements,
       });
     if (!('file' in command)) throw new Error('Unsupported fixture command');
+    if (command.kind === 'achievements-export') return ok({ path: command.file, count: 2 });
     let queue: Queue;
     if (command.kind === 'queue-create') {
       queue = {

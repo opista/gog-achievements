@@ -12,6 +12,13 @@ import { CLI_VERSION, CLI_TARGETS } from '../shared/cli-release';
 export type CliCommand =
   | { kind: 'help' | 'doctor' | 'auth-status' | 'auth-login' | 'auth-logout' | 'games' }
   | { kind: 'achievements'; gameId: string }
+  | {
+      kind: 'achievements-export';
+      gameId: string;
+      file: string;
+      search?: string;
+      status?: 'all' | 'locked' | 'unlocked';
+    }
   | { kind: 'queue-show' | 'queue-preview' | 'queue-apply'; file: string }
   | {
       kind: 'queue-create';
@@ -43,18 +50,27 @@ export function commandArgs(command: CliCommand): string[] {
   };
   const args = plain[command.kind]
     ? [...plain[command.kind]!]
-    : command.kind === 'achievements'
-      ? ['achievements', 'list', '--game', command.gameId]
-      : [
-          'queue',
-          command.kind
-            .replace('queue-', '')
-            .replace('preview', 'apply')
-            .replace('date', 'set-date'),
-          '--file',
-          'file' in command ? command.file : '',
-        ];
-  if ('gameId' in command && command.kind !== 'achievements') args.push('--game', command.gameId);
+    : command.kind === 'achievements-export'
+      ? ['achievements', 'export', '--game', command.gameId, '--file', command.file]
+      : command.kind === 'achievements'
+        ? ['achievements', 'list', '--game', command.gameId]
+        : [
+            'queue',
+            command.kind
+              .replace('queue-', '')
+              .replace('preview', 'apply')
+              .replace('date', 'set-date'),
+            '--file',
+            'file' in command ? command.file : '',
+          ];
+  if (
+    'gameId' in command &&
+    command.kind !== 'achievements' &&
+    command.kind !== 'achievements-export'
+  )
+    args.push('--game', command.gameId);
+  if ('search' in command && command.search !== undefined) args.push('--search', command.search);
+  if ('status' in command && command.status !== undefined) args.push('--status', command.status);
   if ('achievementIds' in command)
     for (const id of command.achievementIds) args.push('--achievement', id);
   if ('timestamp' in command) args.push('--unlocked-at', command.timestamp);

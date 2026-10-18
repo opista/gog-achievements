@@ -3,7 +3,13 @@ import { join } from 'node:path';
 import type { CliRunner } from './cli-client';
 import { CLI_VERSION } from '../shared/cli-release';
 import { WORKSPACE_API } from './ipc.tokens';
-import { CLI_RUNNER, PROCESS_PROBE, WORKSPACE_VERSIONS } from './workspace.tokens';
+import {
+  CLI_RUNNER,
+  PROCESS_PROBE,
+  WORKSPACE_VERSIONS,
+  EXPORT_DESTINATION,
+  type ExportDestination,
+} from './workspace.tokens';
 import { QueueStore } from './queue-store';
 import { NativeProcessProbe, type ProcessProbe } from './process-identity';
 import { OperationCoordinator } from './application/operation-coordinator';
@@ -23,6 +29,7 @@ interface WorkspaceOptions {
   version: string;
   cliVersion?: string;
   probe?: ProcessProbe;
+  chooseExportFile?: ExportDestination;
 }
 
 @Module({
@@ -47,6 +54,7 @@ export class WorkspaceModule {
       module: WorkspaceModule,
       providers: [
         { provide: CLI_RUNNER, useFactory: options.createCli },
+        { provide: EXPORT_DESTINATION, useValue: options.chooseExportFile ?? (async () => null) },
         {
           provide: QueueStore,
           useFactory: () => new QueueStore(join(options.userDataPath, 'queues')),

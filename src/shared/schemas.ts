@@ -209,6 +209,19 @@ export const datesSchema = z
     (value) => Object.keys(value.dates).length > 0 && Object.keys(value.dates).length <= 1000,
   );
 export const gameInputSchema = z.object({ gameId: idSchema }).strict();
+export const exportInputSchema = z
+  .object({
+    gameId: idSchema,
+    search: z.string().max(1000).optional(),
+    status: z.enum(['all', 'locked', 'unlocked']).optional(),
+  })
+  .strict();
+export const exportResultSchema = z
+  .object({
+    path: z.string().min(1),
+    count: z.number().int().nonnegative(),
+  })
+  .strict();
 export const historyInputSchema = z.object({ gameId: idSchema.optional() }).strict();
 export const applyInputSchema = z.object({ previewToken: tokenSchema }).strict();
 export const ipcSchemas = {
@@ -218,6 +231,7 @@ export const ipcSchemas = {
   logout: z.undefined(),
   listGames: z.undefined(),
   listAchievements: idSchema,
+  exportAchievements: exportInputSchema,
   getQueue: idSchema,
   listQueues: z.undefined(),
   addAchievements: additionSchema,

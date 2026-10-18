@@ -41,6 +41,12 @@ export interface AchievementsData {
   count: number;
   achievements: Achievement[];
 }
+export interface ExportInput {
+  gameId: string;
+  search?: string;
+  status?: 'all' | 'locked' | 'unlocked';
+}
+export type ExportResult = { cancelled: true } | { cancelled: false; path: string; count: number };
 export interface UnlockQueueItem {
   achievement_id: string;
   key: string;
@@ -131,6 +137,7 @@ export interface InitializeResult {
   version: string;
   cliVersion: string;
   supportsLocking?: boolean;
+  supportsExporting?: boolean;
   auth: AuthStatus;
   operation: OperationState;
 }
@@ -162,6 +169,7 @@ export interface WorkspaceApi {
   logout(): Promise<AuthStatus>;
   listGames(): Promise<GamesData>;
   listAchievements(gameId: string): Promise<AchievementsData>;
+  exportAchievements(input: ExportInput): Promise<ExportResult>;
   getQueue(gameId: string): Promise<Queue | null>;
   listQueues(): Promise<Queue[]>;
   addAchievements(input: AdditionInput): Promise<Queue>;

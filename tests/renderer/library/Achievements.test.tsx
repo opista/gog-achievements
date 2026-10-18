@@ -54,6 +54,19 @@ function show(
 function rowNames() {
   return screen.getAllByRole('article').map((row) => within(row).getByRole('heading').textContent);
 }
+it('exports the selected status filter and blocks export while busy or unsupported', async () => {
+  const onExport = vi.fn();
+  const user = userEvent.setup();
+  const { props, rerender } = show(new Map(), { supportsExporting: true, onExport });
+  await user.type(screen.getByRole('searchbox', { name: 'Search achievements' }), 'Locked A');
+  await user.click(screen.getByRole('button', { name: 'Locked' }));
+  await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+  expect(onExport).toHaveBeenCalledWith({ search: 'Locked A', status: 'locked' });
+  rerender(<Achievements {...props} busy />);
+  expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+  rerender(<Achievements {...props} demo={false} supportsExporting={false} />);
+  expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+});
 it('shows descriptions and keeps locked, hidden, newest unlocked order without mutating input', () => {
   const original = input.map((item) => item.id);
   show();

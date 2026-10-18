@@ -6,6 +6,7 @@ import type {
   SelectionInput,
   AdditionInput,
   DatesInput,
+  ExportInput,
 } from '../shared/api';
 import { OperationCoordinator } from './application/operation-coordinator';
 import { SessionService } from './features/account/session.service';
@@ -68,6 +69,9 @@ export class WorkspaceService implements WorkspaceApi {
   }
   listAchievements(gameId: string) {
     return this.run('read', () => this.library.achievements(gameId), gameId);
+  }
+  exportAchievements(input: ExportInput) {
+    return this.run('read', () => this.library.exportAchievements(input), input.gameId);
   }
   getQueue(gameId: string) {
     return this.run('read', () => this.queues.get(gameId), gameId);

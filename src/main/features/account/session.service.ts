@@ -9,6 +9,7 @@ import { PreviewStore } from '../../application/preview-store';
 export class SessionService {
   private auth: AuthStatus = { authenticated: false };
   private supportsLocking: boolean | undefined;
+  private supportsExporting: boolean | undefined;
   constructor(
     @Inject(CLI_RUNNER) private readonly cli: CliRunner,
     @Inject(PreviewStore) private readonly previews: PreviewStore,
@@ -43,6 +44,24 @@ export class SessionService {
             entry.flags.includes('action'),
         ),
     );
+    this.supportsExporting =
+      Array.isArray(help.commands) &&
+      help.commands.some(
+        (entry) =>
+          entry?.command === 'achievements export' &&
+          Array.isArray(entry.flags) &&
+          ['game', 'file', 'search', 'status'].every((flag) =>
+            (entry.flags as unknown[]).includes(flag),
+          ),
+      );
+  }
+  async requireExportSupport(): Promise<void> {
+    if (this.supportsExporting === undefined) await this.inspectHelp();
+    if (!this.supportsExporting)
+      throw new DesktopError(
+        'CSV_EXPORT_UNSUPPORTED',
+        'CSV export needs an app with a newer bundled CLI.',
+      );
   }
   async requireLockSupport(): Promise<void> {
     if (this.supportsLocking === undefined) await this.inspectHelp();
@@ -68,6 +87,7 @@ export class SessionService {
       version: this.versions.app,
       cliVersion: this.versions.cli,
       supportsLocking: this.supportsLocking,
+      supportsExporting: this.supportsExporting,
       auth: this.auth,
       operation: { kind: 'idle' as const },
     };

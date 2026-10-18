@@ -69,6 +69,16 @@ else {
         demo,
         version: app.getVersion(),
         userDataPath: app.getPath('userData'),
+        chooseExportFile: async (gameId) => {
+          const result = await dialog.showSaveDialog(currentWindow, {
+            title: 'Export achievements as CSV',
+            defaultPath: join(app.getPath('downloads'), `achievements-${gameId}.csv`),
+            filters: [{ name: 'CSV', extensions: ['csv'] }],
+            message:
+              'The CSV includes hidden achievement names and descriptions. Choose a new file name.',
+          });
+          return result.canceled ? null : (result.filePath ?? null);
+        },
         cli: {
           packaged: app.isPackaged,
           resourcesPath: process.resourcesPath,
