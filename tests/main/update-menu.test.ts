@@ -12,6 +12,7 @@ import type {
 } from 'electron';
 import { installUpdates } from '../../src/main/update-menu';
 import type { UpdateCheck } from '../../src/main/update-service';
+import type { CliUpdateState } from '../../src/shared/cli-updates';
 
 const available: UpdateCheck = {
   status: 'available',
@@ -59,6 +60,7 @@ function fixture({
   existing = null as Menu | null,
   busy = false,
   request = undefined as (() => Promise<UpdateCheck>) | undefined,
+  cliUpdates = undefined as { check(manual?: boolean): Promise<CliUpdateState> } | undefined,
 } = {}) {
   let applicationMenu = existing;
   let active = busy;
@@ -85,6 +87,7 @@ function fixture({
     platform,
     architecture: 'arm64',
     service: { check, openDownload },
+    cliUpdates,
   });
   const notices = () => showMessageBox.mock.calls.map((args) => args.at(-1) as MessageBoxOptions);
   const updateItem = () => {
@@ -220,6 +223,40 @@ test('a packaged startup checks once and Download uses only the retained service
   f.updates.onIdle();
   await settle();
   expect(f.showMessageBox).toHaveBeenCalledOnce();
+  f.updates.cleanup();
+});
+
+test('a manual check reports both app status and the pending CLI without forcing a restart', async () => {
+  const cliCheck = vi.fn(async (): Promise<CliUpdateState> => ({
+    supported: true,
+    automatic: true,
+    currentVersion: '0.5.1',
+    bundledVersion: '0.5.1',
+    status: 'ready',
+    pendingVersion: '0.6.0',
+    message: 'CLI 0.6.0 is ready. It will be used next time you open the app.',
+  }));
+  const f = fixture({
+    result: { status: 'up-to-date', currentVersion: '0.1.0', message: 'The app is up to date.' },
+    cliUpdates: { check: cliCheck },
+  });
+  await settle();
+  expect(f.showMessageBox).not.toHaveBeenCalled();
+  await f.updates.checkForUpdates();
+  expect(cliCheck.mock.calls).toEqual([[false], [true]]);
+  expect(f.notices()[0]).toMatchObject({
+    message: 'The app is up to date.',
+    detail: expect.stringContaining('next time you open the app'),
+    buttons: ['OK'],
+  });
+  expect(f.openDownload).not.toHaveBeenCalled();
+  f.updates.cleanup();
+});
+
+test('a component check failure does not suppress an app update notice', async () => {
+  const f = fixture({ cliUpdates: { check: vi.fn().mockRejectedValue(new Error('offline')) } });
+  await settle();
+  expect(f.notices()[0]?.message).toBe('GOG Achievements 0.2.0 is available.');
   f.updates.cleanup();
 });
 

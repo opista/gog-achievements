@@ -6,7 +6,6 @@ import type {
   ApplyResult,
   AuthStatus,
   DatesInput,
-  DesktopApi,
   GamesData,
   InitializeResult,
   IpcResult,
@@ -18,7 +17,9 @@ import type {
   WorkspaceApi,
   ExportInput,
   ExportResult,
+  AppUpdateActions,
 } from '../shared/api';
+import type { CliUpdateState } from '../shared/cli-updates';
 import { IpcBoundary } from './ipc';
 import { APP_ACTIONS, WORKSPACE_API } from './ipc.tokens';
 
@@ -27,7 +28,7 @@ import { APP_ACTIONS, WORKSPACE_API } from './ipc.tokens';
 export class WorkspaceController {
   constructor(
     @Inject(WORKSPACE_API) private readonly api: WorkspaceApi,
-    @Inject(APP_ACTIONS) private readonly appActions: Pick<DesktopApi, 'checkForUpdates'>,
+    @Inject(APP_ACTIONS) private readonly appActions: AppUpdateActions,
     @Inject(IpcBoundary) private readonly boundary: IpcBoundary,
   ) {}
 
@@ -46,6 +47,36 @@ export class WorkspaceController {
   ): Promise<IpcResult<void>> {
     return this.boundary.execute(event, 'checkForUpdates', payload, () =>
       this.appActions.checkForUpdates(),
+    );
+  }
+
+  @IpcHandle()
+  getCliUpdateState(
+    @RawEvent() event: IpcMainInvokeEvent,
+    payload?: undefined,
+  ): Promise<IpcResult<CliUpdateState>> {
+    return this.boundary.execute(event, 'getCliUpdateState', payload, () =>
+      this.appActions.getCliUpdateState(),
+    );
+  }
+
+  @IpcHandle()
+  setAutomaticCliUpdates(
+    @RawEvent() event: IpcMainInvokeEvent,
+    input: { enabled: boolean },
+  ): Promise<IpcResult<CliUpdateState>> {
+    return this.boundary.execute(event, 'setAutomaticCliUpdates', input, () =>
+      this.appActions.setAutomaticCliUpdates(input),
+    );
+  }
+
+  @IpcHandle()
+  useBundledCli(
+    @RawEvent() event: IpcMainInvokeEvent,
+    payload?: undefined,
+  ): Promise<IpcResult<CliUpdateState>> {
+    return this.boundary.execute(event, 'useBundledCli', payload, () =>
+      this.appActions.useBundledCli(),
     );
   }
 

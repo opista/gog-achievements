@@ -60,7 +60,7 @@ export class SessionService {
     if (!this.supportsExporting)
       throw new DesktopError(
         'CSV_EXPORT_UNSUPPORTED',
-        'CSV export needs an app with a newer bundled CLI.',
+        'CSV export needs a newer CLI. Check for updates in the account menu.',
       );
   }
   async requireLockSupport(): Promise<void> {

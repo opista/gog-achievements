@@ -37,7 +37,7 @@ const messages: Record<string, string> = {
   UNLOCK_DATE_CHANGED: 'The unlock date changed. Remove the queued lock and add it again.',
   INVALID_DATE_EDIT: 'Only queued unlocks can have their dates edited.',
   CLI_UPDATE_REQUIRED: 'Locking achievements needs a newer CLI. Update the app to continue.',
-  CSV_EXPORT_UNSUPPORTED: 'CSV export needs an app with a newer bundled CLI.',
+  CSV_EXPORT_UNSUPPORTED: 'CSV export needs a newer CLI. Check for updates in the account menu.',
   EXPORT_EXISTS: 'The export file already exists. Choose another file name.',
   EXPORT_WRITE_FAILED: 'Could not save the CSV. Check the folder and file permissions.',
   DUPLICATE_ACHIEVEMENT: 'This achievement is already queued.',

@@ -227,6 +227,9 @@ export const applyInputSchema = z.object({ previewToken: tokenSchema }).strict()
 export const ipcSchemas = {
   initialize: z.undefined(),
   checkForUpdates: z.undefined(),
+  getCliUpdateState: z.undefined(),
+  setAutomaticCliUpdates: z.object({ enabled: z.boolean() }).strict(),
+  useBundledCli: z.undefined(),
   login: z.undefined(),
   logout: z.undefined(),
   listGames: z.undefined(),

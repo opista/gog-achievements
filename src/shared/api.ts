@@ -1,3 +1,5 @@
+import type { CliUpdateActions } from './cli-updates';
+
 export interface AuthStatus {
   authenticated: boolean;
   user_id?: string;
@@ -181,9 +183,13 @@ export interface WorkspaceApi {
   checkCurrentState(input: { gameId: string }): Promise<AchievementsData>;
   onOperation(listener: (state: OperationState) => void): () => void;
 }
-export interface DesktopApi extends WorkspaceApi {
+export interface DesktopApi extends WorkspaceApi, CliUpdateActions {
   checkForUpdates(): Promise<void>;
 }
+export type AppUpdateActions = Pick<
+  DesktopApi,
+  'checkForUpdates' | 'getCliUpdateState' | 'setAutomaticCliUpdates' | 'useBundledCli'
+>;
 export interface DesktopPlatform extends Pick<WorkspaceApi, 'isDemo' | 'onOperation'> {
   ready(): Promise<void>;
 }

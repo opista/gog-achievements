@@ -9,6 +9,7 @@ import type {
   Shell,
 } from 'electron';
 import { UpdateService, UPDATE_CHECK_FAILED_MESSAGE, type UpdateCheck } from './update-service';
+import type { CliUpdateState } from '../shared/cli-updates';
 
 interface UpdateMenuOptions {
   app: Pick<App, 'isPackaged' | 'getVersion'>;
@@ -21,9 +22,12 @@ interface UpdateMenuOptions {
   platform?: NodeJS.Platform;
   architecture?: string;
   service?: Pick<UpdateService, 'check' | 'openDownload'>;
+  enabled?: boolean;
+  cliUpdates?: { check(manual?: boolean): Promise<CliUpdateState> };
 }
 
-type Notice = { result: UpdateCheck; manual: boolean } | { development: true };
+type Notice =
+  { result: UpdateCheck; manual: boolean; cli?: CliUpdateState } | { development: true };
 const updateItemId = 'check-for-updates';
 
 function standardMenu(mac: boolean, packaged: boolean): MenuItemConstructorOptions[] {
@@ -111,11 +115,15 @@ export function installUpdates(options: UpdateMenuOptions) {
         return;
       }
       const result = notice.result;
+      const cliDetail = notice.cli
+        ? `CLI ${notice.cli.currentVersion}: ${notice.cli.message}`
+        : undefined;
       if (result.status !== 'available') {
         await showMessage({
           type: ['unavailable', 'no-release'].includes(result.status) ? 'warning' : 'info',
           title: 'Check for Updates',
           message: result.message,
+          ...(cliDetail ? { detail: cliDetail } : {}),
           buttons: ['OK'],
         });
         return;
@@ -129,7 +137,9 @@ export function installUpdates(options: UpdateMenuOptions) {
         message: result.latestVersion
           ? `GOG Achievements ${result.latestVersion} is available.`
           : 'A new version of GOG Achievements is available.',
-        detail: 'Download the new version in your browser, then open it to install.',
+        detail: ['Download the new version in your browser, then open it to install.', cliDetail]
+          .filter(Boolean)
+          .join('\n\n'),
         buttons: ['Download', 'Later'],
         defaultId: 0,
         cancelId: 1,
@@ -160,7 +170,7 @@ export function installUpdates(options: UpdateMenuOptions) {
       manualRequested ||= manual;
       return checking;
     }
-    if (!app.isPackaged) {
+    if (!app.isPackaged || options.enabled === false) {
       if (manual) pending = { development: true };
       return presentPending();
     }
@@ -170,14 +180,21 @@ export function installUpdates(options: UpdateMenuOptions) {
     }
     manualRequested = manual;
     checking = (async () => {
-      const result = await service.check().catch((): UpdateCheck => ({
+      const appCheck = service.check().catch((): UpdateCheck => ({
         status: 'unavailable',
         currentVersion: app.getVersion(),
         message: UPDATE_CHECK_FAILED_MESSAGE,
       }));
+      const cliCheck = options.cliUpdates?.check(manual).catch(() => undefined);
+      const [result, cliResult] = await Promise.all([appCheck, cliCheck]);
+      // A manual request can join an automatic app check while CLI updates are off.
+      const cli =
+        manualRequested && !manual && cliResult?.automatic === false
+          ? await options.cliUpdates?.check(true).catch(() => undefined)
+          : cliResult;
       if (disposed) return;
       if (result.status === 'available' || manualRequested) {
-        pending = { result, manual: manualRequested };
+        pending = { result, manual: manualRequested, ...(cli ? { cli } : {}) };
         await presentPending();
       }
     })().finally(() => {
@@ -237,7 +254,7 @@ export function installUpdates(options: UpdateMenuOptions) {
   };
   const installedMenu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(installedMenu);
-  if (app.isPackaged) void check(false);
+  if (app.isPackaged && options.enabled !== false) void check(false);
 
   return {
     checkForUpdates: () => check(true),

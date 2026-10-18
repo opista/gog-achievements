@@ -2,7 +2,7 @@
 
 ## Repository setup
 
-The app releases from `opista/gog-achievements`. Its pinned CLI comes from `opista/gog-achievements-cli`.
+The app releases from `opista/gog-achievements`. Its pinned fallback CLI and automatic CLI updates come from `opista/gog-achievements-cli`.
 
 Both repositories should be public for anonymous builds and installed-app update checks. While the CLI is private, set the app repository secret `CLI_RELEASE_TOKEN` to a token with read-only Contents access to that CLI repository. Do not put a token in the app. A private app repository cannot serve anonymous update checks.
 
@@ -69,6 +69,16 @@ The installed app makes one anonymous GitHub API check at startup. The top-right
 Only a newer stable version with the exact installer for the running platform and architecture is offered. Drafts and prereleases are excluded. Release metadata, size, version and GitHub URLs are checked before a download link is retained. Download opens that retained link in the browser. There is no background download, automatic install or forced restart.
 
 The queue and history remain in the app's user-data folder when a new version replaces the app. Keep `appId` and product name stable across releases. Update notices wait until CLI work is idle.
+
+### CLI component updates
+
+Installed apps check the public CLI release list, including pagination, and select the highest compatible stable version. The current policy accepts `>=0.5.1 <1.0.0`; `CLI_SUPPORTED_MAJOR` and the bundled lock version define the policy. A future app release must explicitly change the supported major before using 1.x. Drafts, prereleases, incomplete assets and locally rejected versions are excluded.
+
+CLI archives and their named SHA-256 files are downloaded without credentials, with size limits, timeouts and restricted HTTPS redirects. The build downloader and runtime updater share the ZIP path, entry and layout validation. The runtime updater also checks the JSON help contract and reads an offline mixed-action fixture queue. It never signs in or applies achievements to test a package.
+
+The complete CLI package, including the private Intel Mac runtime, is kept under `userData/cli-updates/TARGET/packages/`. An atomic version-1 state file records preferences, the active package, previous package, pending package and rejected versions. File manifests cover every extracted file. Cached files, metadata and offline commands are verified again before startup activation. Startup selects one CLI and passes its actual version into the workspace; a session never switches CLI versions.
+
+Disabling automatic component updates cancels downloads and pending activation. Manual checks while disabled only report availability. The account menu can select the bundled fallback for the next launch and reports pending activation or fallback use. App installer updates retain their existing manual browser-download flow. Demo and source runs do not use automatic CLI downloads.
 
 ## Move to another GitHub organisation
 

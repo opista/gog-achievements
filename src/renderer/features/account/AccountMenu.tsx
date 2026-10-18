@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Download, LoaderCircle, LogOut, UserRound } from 'lucide-react';
 import type { AuthStatus, DesktopApi } from '../../../shared/api';
+import type { CliUpdateState } from '../../../shared/cli-updates';
 
 interface AccountMenuProps {
-  api: Pick<DesktopApi, 'checkForUpdates'>;
+  api: Pick<
+    DesktopApi,
+    'checkForUpdates' | 'getCliUpdateState' | 'setAutomaticCliUpdates' | 'useBundledCli'
+  >;
   auth: AuthStatus;
   versions: { app: string; cli: string };
   busy: boolean;
@@ -13,8 +17,39 @@ interface AccountMenuProps {
 export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenuProps) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string>();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [updates, setUpdates] = useState<CliUpdateState>();
+  const generation = useRef(0);
+  const savingRef = useRef(false);
+  const updateHelp = useId();
   const menuRef = useRef<HTMLDetailsElement>(null);
   const summaryRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      const stamp = generation.current;
+      try {
+        if (!savingRef.current) {
+          const state = await api.getCliUpdateState();
+          if (!cancelled && stamp === generation.current) setUpdates(state);
+        }
+      } catch {
+        if (!cancelled)
+          setError('Update settings could not be loaded. Close the menu and try again.');
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void refresh(), 2000);
+      }
+    }
+    void refresh();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [api, open]);
 
   useEffect(() => {
     function dismissOutside(event: PointerEvent | FocusEvent) {
@@ -50,10 +85,32 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
     }
   }
 
+  async function changeUpdates(action: () => Promise<CliUpdateState>) {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    generation.current++;
+    setSaving(true);
+    setError(undefined);
+    try {
+      setUpdates(await action());
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : 'Update settings could not be saved. Try again.',
+      );
+    } finally {
+      generation.current++;
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
   return (
     <details
       ref={menuRef}
       className="account-menu"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && menuRef.current?.open) {
           event.preventDefault();
@@ -76,6 +133,40 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
           )}
           {checking ? 'Checking…' : 'Check for updates…'}
         </button>
+        <div className="account-update-settings">
+          <label className="account-update-toggle">
+            <input
+              type="checkbox"
+              checked={updates?.automatic ?? false}
+              disabled={busy || saving || checking || !updates?.supported}
+              aria-describedby={updateHelp}
+              onChange={(event) =>
+                void changeUpdates(() =>
+                  api.setAutomaticCliUpdates({ enabled: event.target.checked }),
+                )
+              }
+            />
+            Automatic component updates
+          </label>
+          <small id={updateHelp}>
+            The app automatically updates the tools it uses to connect to GOG.
+          </small>
+          {updates ? (
+            <p className="account-update-notice" role="status">
+              {updates.message}
+            </p>
+          ) : null}
+          {updates?.supported && updates.currentVersion !== updates.bundledVersion ? (
+            <button
+              disabled={
+                busy || saving || checking || updates.pendingVersion === updates.bundledVersion
+              }
+              onClick={() => void changeUpdates(() => api.useBundledCli())}
+            >
+              Use bundled version next launch
+            </button>
+          ) : null}
+        </div>
         {error ? (
           <p className="account-update-notice" role="alert">
             {error}
@@ -93,7 +184,10 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
             Sign out
           </button>
         ) : null}
-        {versions.app ? <small>Version {versions.app}</small> : null}
+        {versions.app ? <small>App {versions.app}</small> : null}
+        {updates?.currentVersion || versions.cli ? (
+          <small>CLI {updates?.currentVersion ?? versions.cli}</small>
+        ) : null}
       </div>
     </details>
   );

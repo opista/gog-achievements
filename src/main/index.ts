@@ -7,6 +7,10 @@ import { createDesktopApplication, type DesktopApplication } from './application
 import { IPC_OPERATION, type OperationState } from '../shared/api';
 import { installUpdates } from './update-menu';
 import packageMetadata from '../../package.json';
+import { resolveCli } from './cli-client';
+import { CliUpdateManager } from './cli-updates/manager';
+import { CLI_VERSION } from '../shared/cli-release';
+import { disabledCliUpdates } from '../shared/cli-updates';
 const mainDirectory = dirname(fileURLToPath(import.meta.url));
 const demo = process.env.GOG_ACHIEVEMENTS_DEMO === '1';
 let window: BrowserWindow | null = null;
@@ -15,6 +19,7 @@ let guardDialog = false;
 let desktop: DesktopApplication | undefined;
 let closing = false;
 let updates: ReturnType<typeof installUpdates> | undefined;
+let cliUpdates: CliUpdateManager | undefined;
 // Keep saved queues and history in the original folder when the display name changes.
 if (!app.commandLine.hasSwitch('user-data-dir')) {
   const userData = join(app.getPath('appData'), packageMetadata.name);
@@ -54,6 +59,21 @@ else {
         },
       });
       const currentWindow = window;
+      const cli = {
+        packaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        projectPath: app.getAppPath(),
+        developmentDirectory: app.isPackaged
+          ? undefined
+          : process.env.GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY,
+      };
+      if (!demo)
+        cliUpdates = new CliUpdateManager({
+          supported: app.isPackaged,
+          userDataPath: app.getPath('userData'),
+          resolveBundled: () => resolveCli(cli),
+        });
+      const cliSelection = await cliUpdates?.prepare();
       updates = installUpdates({
         app,
         dialog,
@@ -62,10 +82,18 @@ else {
         getWindow: () => window,
         isBusy: () => operation.kind !== 'idle',
         repository: new URL(packageMetadata.repository.url).pathname.replace(/^\/|\.git$/g, ''),
+        enabled: !demo,
+        cliUpdates,
       });
       desktop = await createDesktopApplication({
         window: currentWindow,
-        appActions: updates,
+        appActions: {
+          checkForUpdates: updates.checkForUpdates,
+          getCliUpdateState: async () => cliUpdates?.snapshot() ?? disabledCliUpdates(CLI_VERSION),
+          setAutomaticCliUpdates: async (input) =>
+            cliUpdates?.setAutomatic(input) ?? disabledCliUpdates(CLI_VERSION),
+          useBundledCli: async () => cliUpdates?.useBundled() ?? disabledCliUpdates(CLI_VERSION),
+        },
         demo,
         version: app.getVersion(),
         userDataPath: app.getPath('userData'),
@@ -79,14 +107,8 @@ else {
           });
           return result.canceled ? null : (result.filePath ?? null);
         },
-        cli: {
-          packaged: app.isPackaged,
-          resourcesPath: process.resourcesPath,
-          projectPath: app.getAppPath(),
-          developmentDirectory: app.isPackaged
-            ? undefined
-            : process.env.GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY,
-        },
+        cli,
+        cliSelection,
       });
       const { api } = desktop;
       const unsubscribe = api.onOperation((state) => {
@@ -150,6 +172,7 @@ else {
     }
   });
   app.on('will-quit', () => {
+    cliUpdates?.close();
     updates?.cleanup();
   });
   app.on('window-all-closed', () => {

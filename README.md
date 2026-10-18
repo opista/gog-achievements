@@ -2,15 +2,15 @@
 
 CSV export uses the CLI. In the desktop app, **Export CSV** opens the native save dialog and exports the selected game with the current search and status filters. CSV includes hidden achievement details and uses the CLI's source order. The CLI writes a new UTF-8 file and refuses to replace an existing file. Success shows the saved path and row count; cancellation saves nothing.
 
-Export requires `achievements export` in the bundled CLI's JSON help. The current CLI release pin stays unchanged, so export remains disabled for bundles without this command. The browser demo explains the desktop requirement and saves no file.
+Export requires `achievements export` in the active CLI's JSON help. The bundled fallback is CLI 0.5.1, which does not include this command. If a compatible CLI update adds export, the control becomes available on the next launch. The browser demo explains the desktop requirement and saves no file.
 
 Restore missing GOG achievements you have already earned, on Mac and Windows. Choose an achievement, set its unlock date and review the changes before sending them to GOG.
 
 [Get the app](#download-and-install) · [How to use it](#restore-an-achievement)
 
-![GOG Achievements showing Cyberpunk 2077 achievements and separate Unlock and Lock queue sections.](docs/images/app-queue.jpg)
+![The GOG Achievements Electron app on macOS showing Cyberpunk 2077, game pins, completion totals, achievement search, sorting and CSV export controls.](docs/images/app-queue.jpg)
 
-_The Mac app with an unlock and a lock queued._
+_The Mac app showing Cyberpunk 2077 achievements from GOG._
 
 ## Download and install
 
@@ -59,13 +59,19 @@ Open **History** to see confirmed unlocks and locks together, newest first by th
 
 The app tells you when a newer release is available. You can also open the account menu in the top-right corner and choose **Check for updates…**. Choose **Download** to open the new installer in your browser, then install it yourself. Your saved queue and history stay on your computer.
 
+The app also keeps its GOG tools up to date. **Automatic component updates** is on by default in the account menu. It downloads published stable CLI releases from 0.5.1 up to, but not including, 1.0.0. Drafts and prereleases are excluded. A downloaded version is verified and used only on the next launch; the running session keeps its current CLI.
+
+The account menu shows the app version, active CLI version and update status. **Check for updates…** checks both the app and CLI. If automatic component updates are off, a manual check can report a newer CLI but does not download it. Turning the setting off cancels downloads and pending activation. Source runs and the demo do not download CLI updates automatically.
+
+Each launch checks cached files and tests the CLI with offline commands before using it. If a cached version fails, the app tries the previous verified version, then its bundled copy. Queue files, history and saved login stay in place. You can also choose **Use bundled version next launch** in the account menu; this turns automatic component updates off. No update retries an achievement write.
+
 If sign-in fails on Windows, check that [Microsoft’s WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) is installed. Login details stay on your computer, protected by macOS Keychain or Windows encryption.
 
 ---
 
 ## Developer information
 
-The app uses Electron, React, NestJS and a typed IPC bridge. It bundles [CLI v0.5.1](https://github.com/opista/gog-achievements-cli/releases/tag/v0.5.1), which handles GOG login and achievement requests. Installed packages include the CLI; they do not download it at startup.
+The app uses Electron, React, NestJS and a typed IPC bridge. It bundles [CLI v0.5.1](https://github.com/opista/gog-achievements-cli/releases/tag/v0.5.1) as its offline fallback. The CLI handles GOG login and achievement requests. Installed apps can download compatible stable 0.x releases into their user-data folder, outside the sealed app bundle. The exact bundled release remains pinned for reproducible builds.
 
 Startup checks the CLI's JSON help for `--action` on both queue creation and addition. Older builds keep unlocks available and hide lock controls. Main also rejects lock requests with an older CLI. The local CLI override below must match the pinned version and include mixed actions. Packaged builds ignore this override.
 
@@ -79,9 +85,9 @@ npm run cli:download
 npm run dev
 ```
 
-Source builds download the pinned public CLI release and verify its checksum. If the CLI repository is private, use `GH_TOKEN`, `GITHUB_TOKEN`, or an existing `gh` login with read access. Installed app packages already contain the verified CLI and do not download it at startup.
+Source builds download the pinned public CLI release and verify its checksum. If the CLI repository is private, use `GH_TOKEN`, `GITHUB_TOKEN`, or an existing `gh` login with read access. Installed packages already contain a verified fallback. Runtime update checks use only public releases and send no GOG or GitHub credentials.
 
-To test an unreleased CLI fix locally, set `GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY` to the absolute build directory that contains `build.json` and the executable, then run `npm run dev`. The build must match the pinned CLI version, platform and architecture. Installed apps ignore this development setting and use their bundled release. This does not change the release lock or downloaded CLI files.
+To test an unreleased CLI fix locally, set `GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY` to the absolute build directory that contains `build.json` and the executable, then run `npm run dev`. The build must match the pinned CLI version, platform and architecture. Installed apps ignore this development setting. This does not change the release lock or downloaded CLI files.
 
 If a new Mac helper cannot read the saved login, choose **Sign in with GOG** and allow Keychain access locally when asked. Windows uses DPAPI for credential storage. Native prerequisites are reported by the CLI.
 
