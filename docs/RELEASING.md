@@ -18,6 +18,23 @@ The Mac package step sets `CSC_FOR_PULL_REQUEST=true` because electron-builder o
 
 The `v0.2.0` Mac assets have an incomplete bundle signature. Their download checksums can be correct while macOS reports the app as damaged. A source fix must ship in a new release; do not replace published assets or move the existing tag.
 
+## CI build selection
+
+Every PR runs formatting, lint, types, unit tests, app compilation and the offline browser flow. Native packages run only when the PR needs them:
+
+| Change                                                                                                      | Native builds                                        |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Renderer UI, renderer/browser tests, documentation, web-only configuration or formatting/lint configuration | Skip                                                 |
+| Renderer Electron entry point or platform adapter                                                           | All four targets                                     |
+| Main/preload/shared code, dependencies, CLI pin, resources, build scripts, workflows or an unknown path     | All four targets                                     |
+| Push to `main`, release tag or manual CI run                                                                | Full matrix, or the target selected for a manual run |
+
+The policy lives in `scripts/select-native-builds.mjs`. It compares the PR's complete Git diff, including both paths of a rename. A failed comparison selects native builds. Fork PRs retain offline-only checks and cannot access the private CLI token.
+
+Native jobs run unit/script tests on each platform, build installers, verify the package and CLI, and run the packaged desktop IPC test. Formatting, lint and type checks run once in the Linux checks job. Release publication still requires every expected package and checksum from the exact release tag.
+
+To force a native check for a UI PR, run **CI → Run workflow**, select its branch and choose `all` or a single target. Workflow dispatch always enables native packaging.
+
 ## Normal release
 
 1. Merge conventional commits into `main`, for example `fix: correct achievement sorting` or `feat: add update notices`.
