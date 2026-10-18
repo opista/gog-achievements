@@ -264,7 +264,7 @@ describe('desktop restoration flow', () => {
     expect(screen.getByRole('button', { name: 'Edit date for Card Collector' })).toBeEnabled();
     expect(
       within(screen.getByLabelText('Queue for The Witcher 3: Wild Hunt')).getByText(
-        'Sample achievement description. This is demo data, not a real game requirement.',
+        'Description not loaded.',
       ),
     ).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Back to achievements' })).not.toBeInTheDocument();

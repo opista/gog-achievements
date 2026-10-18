@@ -15,6 +15,7 @@ interface Props {
   previewGameId: string | null;
   applyStatus: 'idle' | 'applying' | 'recovery';
   achievementFor(gameId: string, achievementId: string): Achievement | undefined;
+  hasAchievementDetails?(gameId: string): boolean;
   onRefresh(): void;
   onClear(gameId?: string): Promise<boolean>;
   onRemove(gameId: string, ids: string[]): void;
@@ -37,6 +38,7 @@ function SignedInQueuePane({
   previewGameId,
   applyStatus,
   achievementFor,
+  hasAchievementDetails = () => true,
   onRefresh,
   onClear,
   onRemove,
@@ -167,7 +169,11 @@ function SignedInQueuePane({
                       </h4>
                       {actionGroup.items.map((item) => {
                         const achievement = achievementFor(group.game.id, item.achievement_id);
-                        const description = achievement?.description || 'No description available.';
+                        const description =
+                          achievement?.description ||
+                          (hasAchievementDetails(group.game.id)
+                            ? 'No description available.'
+                            : 'Description not loaded.');
                         const locking = item.action === 'lock';
                         const date = locking ? item.previous_unlocked_at : item.unlocked_at;
                         const savedDate = [
