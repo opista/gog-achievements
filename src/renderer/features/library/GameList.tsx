@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
+import { Pin } from 'lucide-react';
 import type { Game } from '../../../shared/api';
 import { Art } from '../../components/Art';
 
@@ -22,15 +23,19 @@ interface Props {
   gameId?: string;
   busy: boolean;
   demo: boolean;
+  pinnedIds: ReadonlySet<string>;
+  canPin: boolean;
+  onTogglePin(gameId: string): void;
   onSelect(game: Game): void;
 }
 
-interface RowProps extends Pick<Props, 'gameId' | 'busy' | 'demo' | 'onSelect'> {
+type Control = 'select' | 'pin';
+
+interface RowProps extends Omit<Props, 'games'> {
   game: Game;
   index?: number;
-  keepFocusable?: boolean;
   onFocus?(): void;
-  onKeyDown?(event: KeyboardEvent<HTMLButtonElement>): void;
+  onKeyDown?(event: KeyboardEvent<HTMLButtonElement>, control: Control): void;
 }
 
 function GameRow({
@@ -39,28 +44,61 @@ function GameRow({
   busy,
   demo,
   onSelect,
+  pinnedIds,
+  canPin,
+  onTogglePin,
   index,
-  keepFocusable = false,
   onFocus,
   onKeyDown,
 }: RowProps) {
+  const pinButton = useRef<HTMLButtonElement>(null);
+  const restorePinFocus = useRef(false);
+  const pinned = pinnedIds.has(game.id);
+  const pinLabel = `${pinned ? 'Unpin' : 'Pin'} ${game.title}`;
+  useLayoutEffect(() => {
+    // DOM moves can drop focus even though the row keeps its stable game key.
+    if (!restorePinFocus.current) return;
+    restorePinFocus.current = false;
+    pinButton.current?.focus({ preventScroll: true });
+    pinButton.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  });
   return (
-    <button
-      className={`game-row ${game.id === gameId ? 'selected' : ''}`}
-      data-game-index={index}
-      title={game.title}
-      disabled={busy && !keepFocusable}
-      aria-disabled={keepFocusable ? busy : undefined}
-      aria-pressed={game.id === gameId}
-      onClick={() => {
-        if (!busy) onSelect(game);
-      }}
-      onFocus={onFocus}
-      onKeyDown={onKeyDown}
-    >
-      <Art image={game.image} name={game.title} demo={demo} />
-      <span className="game-title">{game.title}</span>
-    </button>
+    <div className={`game-list-row ${game.id === gameId ? 'selected' : ''}`}>
+      <button
+        className={`game-row ${game.id === gameId ? 'selected' : ''}`}
+        data-game-index={index}
+        data-game-control="select"
+        title={game.title}
+        aria-disabled={busy}
+        aria-pressed={game.id === gameId}
+        onClick={() => {
+          if (!busy) onSelect(game);
+        }}
+        onFocus={onFocus}
+        onKeyDown={(event) => onKeyDown?.(event, 'select')}
+      >
+        <Art image={game.image} name={game.title} demo={demo} />
+        <span className="game-title">{game.title}</span>
+      </button>
+      <button
+        ref={pinButton}
+        className="game-pin icon-button"
+        data-game-index={index}
+        data-game-control="pin"
+        aria-label={pinLabel}
+        title={pinLabel}
+        aria-pressed={pinned}
+        disabled={!canPin}
+        onClick={(event) => {
+          restorePinFocus.current = document.activeElement === event.currentTarget;
+          onTogglePin(game.id);
+        }}
+        onFocus={onFocus}
+        onKeyDown={(event) => onKeyDown?.(event, 'pin')}
+      >
+        <Pin size={15} aria-hidden="true" fill={pinned ? 'currentColor' : 'none'} />
+      </button>
+    </div>
   );
 }
 
@@ -78,8 +116,9 @@ function VirtualGameList({ games, ...rowProps }: Props) {
   const canvas = useRef<HTMLDivElement>(null);
   const horizontal = useSyncExternalStore(subscribeToLayout, isHorizontal);
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  const pendingFocus = useRef<number | null>(null);
+  const pendingFocus = useRef<{ index: number; control: Control } | null>(null);
   const previousLayout = useRef(horizontal);
+  const previousGames = useRef(games);
   const focusedIndex = useMemo(
     () => games.findIndex((game) => game.id === focusedId),
     [games, focusedId],
@@ -114,9 +153,15 @@ function VirtualGameList({ games, ...rowProps }: Props) {
   }, [horizontal, virtualizer, games, rowProps.gameId, focusedIndex]);
 
   useLayoutEffect(() => {
+    if (previousGames.current === games) return;
+    previousGames.current = games;
+    if (focusedIndex >= 0) virtualizer.scrollToIndex(focusedIndex, { align: 'auto' });
+  }, [games, focusedIndex, virtualizer]);
+
+  useLayoutEffect(() => {
     if (pendingFocus.current === null) return;
     const button = canvas.current?.querySelector<HTMLButtonElement>(
-      `[data-game-index="${pendingFocus.current}"]`,
+      `[data-game-index="${pendingFocus.current.index}"][data-game-control="${pendingFocus.current.control}"]`,
     );
     if (button) {
       button.focus({ preventScroll: true });
@@ -124,18 +169,28 @@ function VirtualGameList({ games, ...rowProps }: Props) {
     }
   });
 
-  function moveFocus(event: KeyboardEvent<HTMLButtonElement>, index: number): void {
+  function moveFocus(
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+    control: Control,
+  ): void {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     let target: number;
-    if (event.key === 'Tab') target = index + (event.shiftKey ? -1 : 1);
-    else if (event.key === 'Home') target = 0;
+    let targetControl = control;
+    if (event.key === 'Tab') {
+      // Use native Tab within each row; bridge only the virtual row boundaries.
+      if ((!event.shiftKey && control === 'select') || (event.shiftKey && control === 'pin'))
+        return;
+      target = index + (event.shiftKey ? -1 : 1);
+      targetControl = event.shiftKey ? 'pin' : 'select';
+    } else if (event.key === 'Home') target = 0;
     else if (event.key === 'End') target = games.length - 1;
     else if (event.key === (horizontal ? 'ArrowRight' : 'ArrowDown')) target = index + 1;
     else if (event.key === (horizontal ? 'ArrowLeft' : 'ArrowUp')) target = index - 1;
     else return;
     if (target < 0 || target >= games.length) return;
     event.preventDefault();
-    pendingFocus.current = target;
+    pendingFocus.current = { index: target, control: targetControl };
     setFocusedId(games[target]!.id);
     virtualizer.scrollToIndex(target, { align: 'auto' });
   }
@@ -172,9 +227,8 @@ function VirtualGameList({ games, ...rowProps }: Props) {
             {...rowProps}
             game={games[item.index]!}
             index={item.index}
-            keepFocusable
             onFocus={() => setFocusedId(games[item.index]!.id)}
-            onKeyDown={(event) => moveFocus(event, item.index)}
+            onKeyDown={(event, control) => moveFocus(event, item.index, control)}
           />
         </div>
       ))}
@@ -184,5 +238,7 @@ function VirtualGameList({ games, ...rowProps }: Props) {
 
 export function GameList(props: Props) {
   if (props.games.length > VIRTUAL_THRESHOLD) return <VirtualGameList {...props} />;
-  return props.games.map((game) => <GameRow {...props} key={game.id} game={game} />);
+  return props.games.map((game, index) => (
+    <GameRow {...props} key={game.id} game={game} index={index} />
+  ));
 }

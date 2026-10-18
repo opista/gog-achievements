@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const port = 5174;
+const port = Number(process.env.GOG_E2E_PORT ?? 5174);
 
 export default defineConfig({
   testDir: './tests/e2e',

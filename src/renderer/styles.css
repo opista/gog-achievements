@@ -324,6 +324,12 @@ small {
   margin: 16px -8px 0;
   padding: 0 0 4px;
 }
+.game-list-row {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  border-radius: 6px;
+}
 .game-row {
   display: flex;
   align-items: center;
@@ -333,6 +339,8 @@ small {
   border: 0;
   padding: 6px 10px;
   width: 100%;
+  min-width: 0;
+  flex: 1;
   min-height: 40px;
   font-size: 14px;
   font-weight: 400;
@@ -343,6 +351,18 @@ small {
 .game-row .art {
   width: 48px;
   height: 27px;
+}
+.game-pin {
+  flex: none;
+  margin-right: 2px;
+  color: var(--muted);
+}
+.game-pin[aria-pressed='true'] {
+  color: var(--accent);
+}
+.pin-error {
+  margin: 8px 4px 0;
+  font-size: 12px;
 }
 .virtual-game-list {
   position: relative;
@@ -389,7 +409,7 @@ small {
   right: 4px;
   top: 4px;
 }
-.game-row.selected {
+.game-list-row.selected {
   background: var(--accent-soft);
 }
 .game-row:disabled {
@@ -1351,14 +1371,15 @@ small {
     flex: none;
     gap: 6px;
   }
+  .game-list-row {
+    width: 190px;
+    flex: none;
+  }
   .game-row {
-    width: auto;
-    min-width: 155px;
-    max-width: 190px;
+    min-width: 0;
     min-height: 40px;
     font-size: 13px;
     padding: 6px 8px;
-    flex: none;
   }
   .game-row .art {
     width: 48px;

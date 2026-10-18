@@ -133,6 +133,7 @@ export function App({ api }: { api: DesktopApi }) {
           games={w.games}
           gameId={w.game?.id}
           signedIn={w.auth.authenticated}
+          userId={w.auth.user_id}
           loaded={w.libraryLoaded}
           busy={w.busy}
           loading={w.loading !== null && w.loadingTarget === 'library'}

@@ -1,35 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openLibrary, title } from './library-fixtures';
 
 const errors = new WeakMap<Page, string[]>();
-
-function title(index: number): string {
-  return index === 1 ? 'Cyberpunk 2077' : `Library game ${String(index).padStart(5, '0')}`;
-}
-
-async function openLibrary(page: Page, size: number): Promise<void> {
-  const games = Array.from({ length: size }, (_, index) => ({
-    id: String(index + 1),
-    title: title(index + 1),
-    image: null,
-  }));
-  // Replace only the offline backend's fixture. Production data paths stay intact.
-  await page.route('**/demo-api.ts*', async (route) => {
-    const response = await route.fetch();
-    const source = await response.text();
-    const body = source.replace(
-      /const GAMES = \[[\s\S]*?\nconst NAMES =/,
-      `const GAMES = ${JSON.stringify(games)};\nconst NAMES =`,
-    );
-    expect(body).not.toBe(source);
-    await route.fulfill({ response, body });
-  });
-  await page.goto('/?demo=1&theme=light');
-  await expect(page).toHaveTitle('GOG Achievements');
-  await expect(page.getByText('DEMO DATA', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign in with GOG', exact: true }).click();
-  await expect(page.locator('.game-heading h2')).toHaveText(title(1));
-  await expect(page.getByRole('button', { name: 'Refresh library', exact: true })).toBeEnabled();
-}
 
 test.beforeEach(async ({ page, baseURL }) => {
   const messages: string[] = [];
@@ -114,8 +86,14 @@ test('keyboard traversal crosses virtual windows and retains focus during pointe
   await first.focus();
   for (let index = 2; index <= 35; index++) {
     await page.keyboard.press('Tab');
+    await expect(
+      page.getByRole('button', { name: `Pin ${title(index - 1)}`, exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: title(index), exact: true })).toBeFocused();
   }
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: `Pin ${title(34)}`, exact: true })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(page.getByRole('button', { name: title(34), exact: true })).toBeFocused();
   await page.keyboard.press('End');

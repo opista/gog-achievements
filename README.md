@@ -39,6 +39,8 @@ Use **Unlock all** or **Lock all** beside the achievement filters to queue all e
 
 Only unlock achievements you have already earned. Existing unlock dates cannot be edited. Queue changes stay on your computer until you confirm the reviewed actions.
 
+Use the pin button beside a game to keep it at the top of your library. Select it again to unpin the game. Each group keeps the library's original order, and search includes pinned and unpinned games. Pins are saved locally for each GOG account across restarts and library refreshes. They are separate from login details, queues and achievement data.
+
 ### Lock achievements
 
 When the CLI supports locking, unlocked achievements have a red **Lock** button. Select it to queue a lock request. Its previous unlock date stays in the saved history data. Lock requests have no date editor.
@@ -105,6 +107,8 @@ node scripts/verify-package.mjs --target=macos-arm64 --directory 'dist/mac-arm64
 ```
 
 Tests use fake CLI responses and sample accounts. Browser tests run the demo flow on a separate temporary server. Offline smoke checks read help and a fixture queue. Neither makes achievement writes.
+
+Set `GOG_E2E_PORT` to use a different browser test server port when another checkout is being tested. The default is `5174`.
 
 The desktop test launches the compiled app in demo mode and checks the real renderer → sandboxed preload → IPC bridge → Nest service flow. After packaging, set `GOG_DESKTOP_PACKAGE_DIRECTORY` to the unpacked app directory to run the same check against that package. The test uses sample data and makes no GOG writes.
 
