@@ -39,7 +39,7 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [api, open]);
+  }, [api, open, versions.cli]);
 
   useEffect(() => {
     function dismissOutside(event: PointerEvent | FocusEvent) {
@@ -75,7 +75,10 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
     }
   }
 
-  const updating = updates?.status === 'checking' || updates?.status === 'downloading';
+  const updating =
+    updates?.status === 'checking' ||
+    updates?.status === 'downloading' ||
+    updates?.status === 'activating';
 
   return (
     <details
@@ -132,7 +135,7 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
               </span>
             ) : null}
             {updates?.status === 'ready' ? (
-              <small role="status">{updates.pendingVersion} ready · next launch</small>
+              <small role="status">{updates.pendingVersion} ready · waiting for current work</small>
             ) : null}
           </div>
         ) : null}

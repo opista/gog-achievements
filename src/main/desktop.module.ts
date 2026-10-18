@@ -4,6 +4,7 @@ import type { DesktopApi, AppUpdateActions } from '../shared/api';
 import { disabledCliUpdates } from '../shared/cli-updates';
 import { CLI_VERSION } from '../shared/cli-release';
 import type { CliSelection } from './cli-updates/manager';
+import type { CliRuntime } from './application/cli-runtime';
 import { createDemoApi } from '../shared/demo-api';
 import { CliClient, resolveCli, type CliRunner } from './cli-client';
 import { DesktopError } from './errors';
@@ -23,6 +24,8 @@ export interface DesktopOptions {
   chooseExportFile?: ExportDestination;
   cli: Parameters<typeof resolveCli>[0];
   cliSelection?: CliSelection;
+  createCli?: () => CliRunner | Promise<CliRunner>;
+  createReplacementCli?: CliRuntime['create'];
 }
 
 @Module({ providers: [WorkspaceController, IpcBoundary] })
@@ -38,23 +41,26 @@ export class DesktopModule {
               cliVersion: options.cliSelection?.version,
               userDataPath: options.userDataPath,
               chooseExportFile: options.chooseExportFile,
-              createCli: async (): Promise<CliRunner> => {
-                try {
-                  // Selection is fixed before the renderer starts. Never fall back to PATH.
-                  return new CliClient(
-                    options.cliSelection?.executable ?? (await resolveCli(options.cli)),
-                  );
-                } catch {
-                  return {
-                    run: async () => {
-                      throw new DesktopError(
-                        'CLI_PACKAGE_INVALID',
-                        'The bundled CLI is missing or does not match this app. Reinstall the app.',
-                      );
-                    },
-                  };
-                }
-              },
+              createReplacementCli: options.createReplacementCli,
+              createCli:
+                options.createCli ??
+                (async (): Promise<CliRunner> => {
+                  try {
+                    // The initial selection is verified before the renderer starts. Never use PATH.
+                    return new CliClient(
+                      options.cliSelection?.executable ?? (await resolveCli(options.cli)),
+                    );
+                  } catch {
+                    return {
+                      run: async () => {
+                        throw new DesktopError(
+                          'CLI_PACKAGE_INVALID',
+                          'The bundled CLI is missing or does not match this app. Reinstall the app.',
+                        );
+                      },
+                    };
+                  }
+                }),
             }),
           ],
       providers: [
@@ -64,6 +70,7 @@ export class DesktopModule {
           useValue: {
             getCliUpdateState: async () =>
               disabledCliUpdates(options.cliSelection?.version ?? CLI_VERSION),
+            setCliActivationBlocked: async () => {},
             ...options.appActions,
           } satisfies AppUpdateActions,
         },

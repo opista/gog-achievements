@@ -13,6 +13,7 @@ import {
 import { QueueStore } from './queue-store';
 import { NativeProcessProbe, type ProcessProbe } from './process-identity';
 import { OperationCoordinator } from './application/operation-coordinator';
+import { CliRuntime } from './application/cli-runtime';
 import { SessionService } from './features/account/session.service';
 import { ApplyService } from './features/apply/apply.service';
 import { PreviewStore } from './application/preview-store';
@@ -30,6 +31,7 @@ interface WorkspaceOptions {
   cliVersion?: string;
   probe?: ProcessProbe;
   chooseExportFile?: ExportDestination;
+  createReplacementCli?: CliRuntime['create'];
 }
 
 @Module({
@@ -53,7 +55,12 @@ export class WorkspaceModule {
     return {
       module: WorkspaceModule,
       providers: [
-        { provide: CLI_RUNNER, useFactory: options.createCli },
+        {
+          provide: CliRuntime,
+          useFactory: async () =>
+            new CliRuntime(await options.createCli(), options.createReplacementCli),
+        },
+        { provide: CLI_RUNNER, useExisting: CliRuntime },
         { provide: EXPORT_DESTINATION, useValue: options.chooseExportFile ?? (async () => null) },
         {
           provide: QueueStore,

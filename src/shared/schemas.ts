@@ -228,6 +228,7 @@ export const ipcSchemas = {
   initialize: z.undefined(),
   checkForUpdates: z.undefined(),
   getCliUpdateState: z.undefined(),
+  setCliActivationBlocked: z.object({ blocked: z.boolean() }).strict(),
   login: z.undefined(),
   logout: z.undefined(),
   listGames: z.undefined(),
@@ -240,6 +241,7 @@ export const ipcSchemas = {
   setDates: datesSchema,
   preview: gameInputSchema,
   apply: applyInputSchema,
+  cancelPreview: applyInputSchema,
   history: historyInputSchema,
   checkCurrentState: gameInputSchema,
 } as const;

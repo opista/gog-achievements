@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { useCliDialogGuard } from '../application/cli-activation-guard';
 
 interface Props {
   title: string;
@@ -23,6 +24,7 @@ export function Dialog({
   compact = false,
   focusKey,
 }: Props) {
+  useCliDialogGuard();
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);

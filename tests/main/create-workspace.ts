@@ -10,6 +10,7 @@ import { PreviewStore } from '../../src/main/application/preview-store';
 import { HistoryService } from '../../src/main/features/history/history.service';
 import { RecoveryService } from '../../src/main/features/recovery/recovery.service';
 import { WorkspaceService } from '../../src/main/workspace.service';
+import { CliRuntime } from '../../src/main/application/cli-runtime';
 
 export function createWorkspace(
   cli: CliRunner,
@@ -21,10 +22,11 @@ export function createWorkspace(
   const operations = new OperationCoordinator();
   const previews = new PreviewStore();
   const versions = { app: version, cli: cliVersion };
-  const session = new SessionService(cli, previews, versions);
-  const library = new LibraryService(cli, session, previews);
-  const queues = new QueueService(cli, store, session, previews);
-  const changes = new ApplyService(cli, store, probe, operations, session, queues, previews);
+  const runtime = new CliRuntime(cli);
+  const session = new SessionService(runtime, previews, versions);
+  const library = new LibraryService(runtime, session, previews);
+  const queues = new QueueService(runtime, store, session, previews);
+  const changes = new ApplyService(runtime, store, probe, operations, session, queues, previews);
   const records = new HistoryService(store, session);
   const recovery = new RecoveryService(store, probe, operations);
   return new WorkspaceService(
@@ -36,5 +38,7 @@ export function createWorkspace(
     changes,
     records,
     versions,
+    runtime,
+    previews,
   );
 }

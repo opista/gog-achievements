@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AuthStatus, DesktopApi, InitializeResult } from '../../../shared/api';
+import type { AuthStatus, DesktopApi, InitializeResult, CliRuntimeInfo } from '../../../shared/api';
 import { AccountChangedError, isAccountMismatch } from './account-errors';
 
 type AccountApi = Pick<DesktopApi, 'initialize' | 'login' | 'logout'>;
@@ -14,6 +14,23 @@ export function useAccount(api: AccountApi, clearAccountData: () => void) {
     null,
   );
   const generation = useRef(0);
+  const cliRevision = useRef(0);
+  const lastCli = useRef<CliRuntimeInfo | null>(null);
+  function acceptCli(info: CliRuntimeInfo): void {
+    const previous = lastCli.current;
+    if (
+      previous?.version === info.version &&
+      previous.supportsLocking === info.supportsLocking &&
+      previous.supportsExporting === info.supportsExporting
+    )
+      return;
+    lastCli.current = { ...info };
+    cliRevision.current++;
+    initialization.current = null;
+    setVersions((previous) => ({ ...previous, cli: info.version }));
+    setSupportsLocking(info.supportsLocking);
+    setSupportsExporting(info.supportsExporting);
+  }
 
   useEffect(
     () => () => {
@@ -45,25 +62,38 @@ export function useAccount(api: AccountApi, clearAccountData: () => void) {
 
   async function bootstrap(): Promise<InitializeResult | null> {
     const stamp = generation.current;
+    const cliStamp = cliRevision.current;
     if (initialization.current?.api !== api)
       initialization.current = { api, promise: api.initialize() };
     const initial = await initialization.current.promise;
     if (stamp !== generation.current) return null;
     accept(initial.auth);
-    setVersions({ app: initial.version, cli: initial.cliVersion });
-    setSupportsLocking(initial.supportsLocking === true);
-    setSupportsExporting(initial.supportsExporting === true);
+    setVersions((previous) => ({
+      app: initial.version,
+      cli: cliStamp === cliRevision.current ? initial.cliVersion : previous.cli,
+    }));
+    if (cliStamp === cliRevision.current) {
+      setSupportsLocking(initial.supportsLocking === true);
+      setSupportsExporting(initial.supportsExporting === true);
+    }
     return initial;
   }
 
   async function refresh(): Promise<InitializeResult | null> {
     const stamp = ++generation.current;
+    const cliStamp = cliRevision.current;
     initialization.current = { api, promise: api.initialize() };
     const initial = await initialization.current.promise;
     if (stamp !== generation.current) return null;
     accept(initial.auth);
-    setSupportsLocking(initial.supportsLocking === true);
-    setSupportsExporting(initial.supportsExporting === true);
+    setVersions((previous) => ({
+      app: initial.version,
+      cli: cliStamp === cliRevision.current ? initial.cliVersion : previous.cli,
+    }));
+    if (cliStamp === cliRevision.current) {
+      setSupportsLocking(initial.supportsLocking === true);
+      setSupportsExporting(initial.supportsExporting === true);
+    }
     return initial;
   }
 
@@ -98,6 +128,7 @@ export function useAccount(api: AccountApi, clearAccountData: () => void) {
   return {
     auth,
     versions,
+    acceptCli,
     supportsLocking,
     supportsExporting,
     bootstrap,

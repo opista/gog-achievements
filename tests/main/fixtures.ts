@@ -56,6 +56,7 @@ export const makeReport = (queue: Queue, dryRun: boolean): Report => ({
 });
 const ok = (data: unknown): CliOutcome => ({ exitCode: 0, result: { ok: true, data } });
 export class FakeCli implements CliRunner {
+  version = '0.3.0';
   calls: CliCommand[] = [];
   account = userId;
   achievements: Achievement[] = [achievement(), achievement('102'), achievement('103')];
@@ -69,7 +70,7 @@ export class FakeCli implements CliRunner {
     this.failure?.(command);
     if (command.kind === 'help')
       return ok({
-        version: '0.3.0',
+        version: this.version,
         commands: [
           ...['queue create', 'queue add'].map((command) => ({
             command,

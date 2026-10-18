@@ -61,6 +61,16 @@ export class WorkspaceController {
   }
 
   @IpcHandle()
+  setCliActivationBlocked(
+    @RawEvent() event: IpcMainInvokeEvent,
+    input: { blocked: boolean },
+  ): Promise<IpcResult<void>> {
+    return this.boundary.execute(event, 'setCliActivationBlocked', input, () =>
+      this.appActions.setCliActivationBlocked(input),
+    );
+  }
+
+  @IpcHandle()
   login(
     @RawEvent() event: IpcMainInvokeEvent,
     payload?: undefined,
@@ -151,6 +161,16 @@ export class WorkspaceController {
     input: { gameId: string },
   ): Promise<IpcResult<PreviewResult>> {
     return this.boundary.execute(event, 'preview', input, () => this.api.preview(input));
+  }
+
+  @IpcHandle()
+  cancelPreview(
+    @RawEvent() event: IpcMainInvokeEvent,
+    input: { previewToken: string },
+  ): Promise<IpcResult<void>> {
+    return this.boundary.execute(event, 'cancelPreview', input, () =>
+      this.api.cancelPreview(input),
+    );
   }
 
   @IpcHandle()

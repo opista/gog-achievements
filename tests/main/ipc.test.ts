@@ -69,9 +69,10 @@ async function fixture(demo = true) {
     status: 'idle' as const,
     message: 'Up to date.',
   }));
+  const setCliActivationBlocked = vi.fn(async (_input: { blocked: boolean }) => {});
   const application = await createDesktopApplication({
     window,
-    appActions: { checkForUpdates, getCliUpdateState },
+    appActions: { checkForUpdates, getCliUpdateState, setCliActivationBlocked },
     demo,
     version: '0.1.0',
     userDataPath: '/missing-ipc-fixture',
@@ -95,6 +96,7 @@ async function fixture(demo = true) {
     client,
     checkForUpdates,
     getCliUpdateState,
+    setCliActivationBlocked,
     event,
     async invoke(method: string, payload?: unknown, from = event): Promise<IpcResult> {
       electron.event = from;
@@ -235,6 +237,38 @@ test('CLI update status accepts no payload and is limited to the trusted main fr
   expect(getCliUpdateState).toHaveBeenCalledExactlyOnceWith();
   expect(bridge.workspace).not.toHaveProperty('setAutomaticCliUpdates');
   expect(bridge.workspace).not.toHaveProperty('useBundledCli');
+});
+
+test('activation guards accept only booleans from the trusted renderer', async () => {
+  const { invoke, client, event, setCliActivationBlocked } = await fixture();
+  for (const input of [{ blocked: 'true' }, { blocked: true, path: '/tmp/executable' }, null]) {
+    expect(await invoke('setCliActivationBlocked', input)).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    });
+  }
+  expect(
+    await invoke('setCliActivationBlocked', { blocked: true }, {
+      ...event,
+      senderFrame: {},
+    } as IpcMainInvokeEvent),
+  ).toMatchObject({ ok: false, error: { code: 'IPC_DENIED' } });
+  expect(setCliActivationBlocked).not.toHaveBeenCalled();
+  electron.event = event;
+  await client.setCliActivationBlocked({ blocked: true });
+  expect(setCliActivationBlocked).toHaveBeenCalledExactlyOnceWith({ blocked: true });
+});
+
+test('cancelling a reviewed token through IPC prevents it from being applied', async () => {
+  const { client } = await fixture();
+  await client.login();
+  const original = await client.getQueue('1');
+  const preview = await client.preview({ gameId: '1' });
+  await client.cancelPreview({ previewToken: preview.token });
+  await expect(client.apply({ previewToken: preview.token })).rejects.toMatchObject({
+    code: 'LOCAL_ERROR',
+  });
+  expect(await client.getQueue('1')).toEqual(original);
 });
 
 test('closing the Nest application removes all bridge handlers and permits a clean restart', async () => {

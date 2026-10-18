@@ -5,9 +5,13 @@ import type { WorkspaceApi } from '../shared/api';
 import { DesktopModule, type DesktopOptions } from './desktop.module';
 import { WORKSPACE_API } from './ipc.tokens';
 import { WorkspaceController } from './workspace.controller';
+import { WorkspaceService } from './workspace.service';
+import type { CliActivation } from './cli-updates/manager';
 
 export interface DesktopApplication {
   readonly api: WorkspaceApi;
+  activateCli(activation: CliActivation): Promise<boolean>;
+  setCliActivationBlocked(input: { blocked: boolean }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -26,8 +30,13 @@ export async function createDesktopApplication(
       resolver: { resolve: (token) => context.get(token) },
     });
     let closing: Promise<void> | undefined;
+    const api = context.get<WorkspaceApi>(WORKSPACE_API);
     return {
-      api: context.get<WorkspaceApi>(WORKSPACE_API),
+      api,
+      activateCli: (activation) =>
+        api instanceof WorkspaceService ? api.activateCli(activation) : Promise.resolve(false),
+      setCliActivationBlocked: (input) =>
+        api instanceof WorkspaceService ? api.setCliActivationBlocked(input) : Promise.resolve(),
       close() {
         closing ??= (async () => {
           ipc.dispose();

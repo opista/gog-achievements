@@ -3,7 +3,7 @@ import type { ApplyResult, DesktopApi, PreviewResult, QueueGame } from '../../..
 import { isAccountMismatch } from '../account/account-errors';
 import { unknownApplyResult } from './apply-model';
 
-type ApplyApi = Pick<DesktopApi, 'preview' | 'apply'>;
+type ApplyApi = Pick<DesktopApi, 'preview' | 'apply' | 'cancelPreview'>;
 interface ApplyDependencies {
   assertOwner(userId: string): void;
   run(label: string, target: 'preview' | 'apply', task: () => Promise<void>): Promise<void>;
@@ -36,6 +36,7 @@ export function useApply(
   useEffect(
     () => () => {
       generation.current += 1;
+      if (currentPreview.current) discard(currentPreview.current);
       currentPreview.current = null;
     },
     [api],
@@ -58,6 +59,7 @@ export function useApply(
 
   function invalidate(): void {
     previewRevision.current += 1;
+    if (currentPreview.current) discard(currentPreview.current);
     currentPreview.current = null;
     update({ preview: null, previewGameId: null });
   }
@@ -65,8 +67,12 @@ export function useApply(
   function clear(): void {
     generation.current += 1;
     previewRevision.current += 1;
+    if (currentPreview.current) discard(currentPreview.current);
     currentPreview.current = null;
     update(EMPTY);
+  }
+  function discard(preview: { api: ApplyApi; value: PreviewResult }): void {
+    void preview.api.cancelPreview({ previewToken: preview.value.token }).catch(() => {});
   }
 
   async function prepare(gameId: string): Promise<void> {
@@ -76,6 +82,7 @@ export function useApply(
       const task = { stamp: generation.current };
       pending.current = task;
       const revision = ++previewRevision.current;
+      if (currentPreview.current) discard(currentPreview.current);
       currentPreview.current = null;
       update({ preview: null, previewGameId: gameId });
       try {
@@ -86,8 +93,16 @@ export function useApply(
           if (!isCurrent(task.stamp) || revision !== previewRevision.current) return;
           throw failure;
         }
-        if (!isCurrent(task.stamp) || revision !== previewRevision.current) return;
-        assertOwner(value.report.user_id);
+        if (!isCurrent(task.stamp) || revision !== previewRevision.current) {
+          discard({ api, value });
+          return;
+        }
+        try {
+          assertOwner(value.report.user_id);
+        } catch (error) {
+          discard({ api, value });
+          throw error;
+        }
         currentPreview.current = { api, value };
         update({ preview: value });
       } finally {
@@ -126,6 +141,7 @@ export function useApply(
         onView('results');
         await refreshAfterApply(report.game.id, () => isCurrent(task.stamp));
       } finally {
+        discard(confirmation);
         if (pending.current === task) pending.current = null;
       }
     });

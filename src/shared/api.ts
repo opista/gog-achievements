@@ -123,6 +123,12 @@ export interface OperationState {
   gameId?: string;
   startedAt?: string;
   message?: string;
+  cli?: CliRuntimeInfo;
+}
+export interface CliRuntimeInfo {
+  version: string;
+  supportsLocking: boolean;
+  supportsExporting: boolean;
 }
 export interface OperationRecord {
   id: string;
@@ -178,6 +184,7 @@ export interface WorkspaceApi {
   removeAchievements(input: SelectionInput): Promise<Queue>;
   setDates(input: DatesInput): Promise<Queue>;
   preview(input: { gameId: string }): Promise<PreviewResult>;
+  cancelPreview(input: { previewToken: string }): Promise<void>;
   apply(input: { previewToken: string }): Promise<ApplyResult>;
   history(input: { gameId?: string }): Promise<OperationRecord[]>;
   checkCurrentState(input: { gameId: string }): Promise<AchievementsData>;
@@ -186,7 +193,10 @@ export interface WorkspaceApi {
 export interface DesktopApi extends WorkspaceApi, CliUpdateActions {
   checkForUpdates(): Promise<void>;
 }
-export type AppUpdateActions = Pick<DesktopApi, 'checkForUpdates' | 'getCliUpdateState'>;
+export type AppUpdateActions = Pick<
+  DesktopApi,
+  'checkForUpdates' | 'getCliUpdateState' | 'setCliActivationBlocked'
+>;
 export interface DesktopPlatform extends Pick<WorkspaceApi, 'isDemo' | 'onOperation'> {
   ready(): Promise<void>;
 }

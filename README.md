@@ -2,7 +2,7 @@
 
 CSV export uses the CLI. In the desktop app, **Export CSV** opens the native save dialog and exports the selected game with the current search and status filters. CSV includes hidden achievement details and uses the CLI's source order. The CLI writes a new UTF-8 file and refuses to replace an existing file. Success shows the saved path and row count; cancellation saves nothing.
 
-Export requires `achievements export` in the active CLI's JSON help. The bundled fallback is CLI 0.5.1, which does not include this command. If a compatible CLI update adds export, the control becomes available on the next launch. The browser demo explains the desktop requirement and saves no file.
+Export requires `achievements export` in the active CLI's JSON help. The bundled fallback is CLI 0.5.1, which does not include this command. If a compatible CLI update adds export, the control becomes available as soon as that update activates. The browser demo explains the desktop requirement and saves no file.
 
 Restore missing GOG achievements you have already earned, on Mac and Windows. Choose an achievement, set its unlock date and review the changes before sending them to GOG.
 
@@ -59,9 +59,9 @@ Open **History** to see confirmed unlocks and locks together, newest first by th
 
 The app tells you when a newer release is available. You can also open the account menu in the top-right corner and choose **Check for updates**. Choose **Download** to open the new installer in your browser, then install it yourself. Your saved queue and history stay on your computer.
 
-The app also keeps its GOG tools up to date automatically. It downloads published stable CLI releases from 0.5.1 up to, but not including, 1.0.0. Drafts and prereleases are excluded. A downloaded version is verified and used only on the next launch; the running session keeps its current CLI.
+The app also keeps its GOG tools up to date automatically. It downloads published stable CLI releases from 0.5.1 up to, but not including, 1.0.0. Drafts and prereleases are excluded. A downloaded version is verified and activates automatically when current work and open dialogs finish. The app stays open; running commands and reviewed achievement changes keep their original CLI.
 
-The account menu shows the app version and active CLI version. A spinner appears beside the CLI version during checks and downloads. When an update is ready, the menu shows its version and that it will start on the next launch. **Check for updates** checks the app and starts a background CLI check. Its result dialog reports the app status; CLI details stay in the account menu. Component updates are always automatic in installed apps. Source runs and the demo do not download CLI updates automatically.
+The account menu shows the app version and active CLI version. A spinner appears beside the CLI version during checks, downloads and activation. If current work delays activation, the menu shows the pending version. After activation it shows the new active version, and supported features refresh automatically. **Check for updates** checks the app and starts a background CLI check. Its result dialog reports the app status; CLI details stay in the account menu. Component updates are always automatic in installed apps. Source runs and the demo do not download CLI updates automatically.
 
 Each launch checks cached files and tests the CLI with offline commands before using it. If a cached version fails, the app tries the previous verified version, then its bundled copy. It continues to check for newer fixes automatically. Queue files, history and saved login stay in place. No update retries an achievement write.
 

@@ -1,10 +1,11 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { DesktopApi, OperationState } from '../../shared/api';
+import type { DesktopApi, OperationState, CliRuntimeInfo } from '../../shared/api';
 
 type OperationApi = Pick<DesktopApi, 'onOperation'>;
 interface OperationDependencies {
   canRecover(): boolean;
   onRecovered(gameId?: string): void;
+  onCli?(info: CliRuntimeInfo): void;
 }
 const IDLE: OperationState = { kind: 'idle' };
 
@@ -50,6 +51,7 @@ export function useOperation(api: OperationApi, dependencies: OperationDependenc
   }
 
   const observe = useEffectEvent((state: OperationState) => {
+    if (state.cli) callbacks.current.onCli?.(state.cli);
     const previous = current();
     revision.current += 1;
     publish(state);

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AuthStatus, InitializeResult } from '../../../shared/api';
+import type { AuthStatus, InitializeResult, CliRuntimeInfo } from '../../../shared/api';
 import { authSchema } from '../../../shared/schemas';
 import { requireSuccess, type CliRunner, type CliCommand } from '../../cli-client';
 import { DesktopError } from '../../errors';
@@ -24,17 +24,17 @@ export class SessionService {
     this.auth = auth;
     return auth;
   }
-  private async inspectHelp(): Promise<void> {
-    const help = (await this.read({ kind: 'help' })) as {
+  async inspectCli(cli: CliRunner, version: string): Promise<CliRuntimeInfo> {
+    const help = requireSuccess(await cli.run({ kind: 'help' })) as {
       version?: unknown;
       commands?: { command?: unknown; flags?: unknown }[];
     };
-    if (help.version !== this.versions.cli)
+    if (help.version !== version)
       throw new DesktopError(
         'CLI_VERSION_MISMATCH',
         'Some app files do not match. Reinstall the app.',
       );
-    this.supportsLocking = ['queue create', 'queue add'].every(
+    const supportsLocking = ['queue create', 'queue add'].every(
       (command) =>
         Array.isArray(help.commands) &&
         help.commands.some(
@@ -44,7 +44,7 @@ export class SessionService {
             entry.flags.includes('action'),
         ),
     );
-    this.supportsExporting =
+    const supportsExporting =
       Array.isArray(help.commands) &&
       help.commands.some(
         (entry) =>
@@ -54,6 +54,18 @@ export class SessionService {
             (entry.flags as unknown[]).includes(flag),
           ),
       );
+    return { version, supportsLocking, supportsExporting };
+  }
+  acceptCli(info: CliRuntimeInfo): void {
+    this.versions.cli = info.version;
+    this.supportsLocking = info.supportsLocking;
+    this.supportsExporting = info.supportsExporting;
+    this.previews.clear();
+  }
+  private async inspectHelp(): Promise<void> {
+    const info = await this.inspectCli(this.cli, this.versions.cli);
+    this.supportsLocking = info.supportsLocking;
+    this.supportsExporting = info.supportsExporting;
   }
   async requireExportSupport(): Promise<void> {
     if (this.supportsExporting === undefined) await this.inspectHelp();

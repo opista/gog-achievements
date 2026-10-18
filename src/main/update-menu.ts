@@ -22,7 +22,7 @@ interface UpdateMenuOptions {
   architecture?: string;
   service?: Pick<UpdateService, 'check' | 'openDownload'>;
   enabled?: boolean;
-  cliUpdates?: { check(): Promise<unknown> };
+  cliUpdates?: { check(): Promise<unknown>; activatePending?(): Promise<unknown> };
 }
 
 type Notice = { result: UpdateCheck; manual: boolean } | { development: true };
@@ -151,6 +151,7 @@ export function installUpdates(options: UpdateMenuOptions) {
       .catch(() => {})
       .finally(() => {
         presenting = undefined;
+        void options.cliUpdates?.activatePending?.().catch(() => {});
       });
     return presenting;
   }
@@ -245,6 +246,7 @@ export function installUpdates(options: UpdateMenuOptions) {
 
   return {
     checkForUpdates: () => check(true),
+    isPresenting: () => presenting !== undefined,
     onIdle: () => void presentPending(),
     cleanup() {
       if (disposed) return;

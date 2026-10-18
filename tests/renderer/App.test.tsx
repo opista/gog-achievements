@@ -37,6 +37,53 @@ async function confirm(
   return apply;
 }
 describe('desktop restoration flow', () => {
+  it('refreshes CLI versions and feature controls in place without reloading the library', async () => {
+    const base = createDemoApi({ delayMs: 0 });
+    await base.login();
+    const listeners = new Set<(state: OperationState) => void>();
+    let version = '0.3.0';
+    const api = {
+      ...base,
+      isDemo: false,
+      getCliUpdateState: async () => ({
+        supported: true,
+        currentVersion: version,
+        bundledVersion: '0.3.0',
+        status: 'idle' as const,
+        message: 'Up to date.',
+      }),
+      onOperation: (listener: (state: OperationState) => void) => {
+        listeners.add(listener);
+        const unsubscribe = base.onOperation(listener);
+        return () => {
+          listeners.delete(listener);
+          unsubscribe();
+        };
+      },
+    };
+    const games = vi.spyOn(api, 'listGames');
+    const user = userEvent.setup();
+    render(<App api={api} />);
+    await ready();
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+    const search = screen.getByPlaceholderText('Search achievements…');
+    await user.type(search, 'World');
+    await user.click(screen.getByLabelText('Account menu'));
+    version = '0.6.0';
+    act(() =>
+      listeners.forEach((listener) =>
+        listener({
+          kind: 'idle',
+          cli: { version, supportsLocking: true, supportsExporting: true },
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByText('CLI 0.6.0')).toBeVisible());
+    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeEnabled();
+    expect(search).toHaveValue('World');
+    expect(games).toHaveBeenCalledOnce();
+    expect(screen.getByText('Account ID: 123456789')).toBeVisible();
+  });
   it('reports CLI export confirmation and preserves queued selections', async () => {
     const { api, user } = await connected();
     const exportCSV = vi

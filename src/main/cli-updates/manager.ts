@@ -9,6 +9,11 @@ export interface CliSelection {
   executable: string;
   version: string;
 }
+export interface CliActivation {
+  selection: CliSelection;
+  verify(): Promise<void>;
+  commit(): Promise<void>;
+}
 interface Options {
   supported: boolean;
   userDataPath: string;
@@ -17,9 +22,10 @@ interface Options {
   architecture?: string;
   client?: Pick<CliReleaseClient, 'latest' | 'download'>;
   verify?: typeof verifyCliContract;
+  activate?(activation: CliActivation): Promise<boolean>;
 }
 
-/** A session receives one immutable selection. Downloads can only stage a later session. */
+/** Verified packages activate through the workspace's exclusive operation guard. */
 export class CliUpdateManager {
   private readonly supported: boolean;
   private readonly target: string;
@@ -34,6 +40,8 @@ export class CliUpdateManager {
   private fallbackMessage = '';
   private preparing: Promise<CliSelection | undefined> | undefined;
   private checking: Promise<CliUpdateState> | undefined;
+  private activating: Promise<CliUpdateState> | undefined;
+  private activationRequested = false;
   private controller: AbortController | undefined;
   private canUpdate = true;
   private disposed = false;
@@ -52,7 +60,8 @@ export class CliUpdateManager {
   }
 
   prepare(): Promise<CliSelection | undefined> {
-    return (this.preparing ??= this.prepareSession());
+    this.preparing ??= this.prepareSession();
+    return this.preparing.then(() => this.selection);
   }
 
   private async prepareSession(): Promise<CliSelection | undefined> {
@@ -153,10 +162,13 @@ export class CliUpdateManager {
       status: this.phase,
       message: this.message || 'Compatible CLI updates are installed automatically.',
     };
-    if (this.state.staged && this.phase !== 'checking' && this.phase !== 'downloading') {
+    if (
+      this.state.staged &&
+      !['checking', 'downloading', 'activating', 'unavailable'].includes(this.phase)
+    ) {
       result.status = 'ready';
       result.pendingVersion = this.state.staged.version;
-      result.message = `CLI ${this.state.staged.version} is ready. It will be used next time you open the app.`;
+      result.message = `CLI ${this.state.staged.version} is ready. It will activate when current work and confirmations finish.`;
     } else if (this.phase === 'idle' && this.fallbackMessage) {
       result.status = 'fallback';
       result.message = this.fallbackMessage;
@@ -166,15 +178,102 @@ export class CliUpdateManager {
 
   async check(): Promise<CliUpdateState> {
     await this.prepare();
+    if (this.activating) await this.activating;
     if (this.disposed || !this.supported || !this.canUpdate) return this.snapshot();
-    if (this.checking) return this.checking;
+    if (this.checking) return this.checking.then(() => this.activatePending());
     const controller = new AbortController();
     this.controller = controller;
     this.checking = this.performCheck(controller.signal).finally(() => {
       this.checking = undefined;
       if (this.controller === controller) this.controller = undefined;
     });
-    return this.checking;
+    return this.checking.then(() => this.activatePending());
+  }
+
+  async activatePending(): Promise<CliUpdateState> {
+    await this.prepare();
+    if (this.activating) {
+      this.activationRequested = true;
+      return this.activating;
+    }
+    if (
+      this.disposed ||
+      !this.supported ||
+      !this.canUpdate ||
+      this.checking ||
+      !this.state.staged ||
+      !this.options.activate
+    )
+      return this.snapshot();
+    this.activationRequested = false;
+    this.activating = this.performActivation(this.state.staged).finally(() => {
+      this.activating = undefined;
+      if (this.activationRequested && this.state.staged && !this.disposed)
+        void this.activatePending();
+    });
+    return this.activating;
+  }
+
+  private async performActivation(record: CachedCli): Promise<CliUpdateState> {
+    this.phase = 'activating';
+    this.message = `Activating CLI ${record.version}…`;
+    const selection: CliSelection = {
+      executable: join(
+        this.cache.directory(record),
+        this.target.startsWith('windows') ? 'gog-achievements.exe' : 'gog-achievements',
+      ),
+      version: record.version,
+    };
+    try {
+      const activated = await this.options.activate!({
+        selection,
+        verify: async () => {
+          await this.cache.verify(record);
+          await this.verify(selection.executable, record.version);
+          if (this.disposed) throw new Error('The updater is closed.');
+        },
+        commit: async () => {
+          if (this.disposed) throw new Error('The updater is closed.');
+          const next = {
+            ...this.state,
+            active: record,
+            previous: this.selectedRecord ?? null,
+            staged: null,
+          };
+          try {
+            await this.cache.save(next);
+          } catch (error) {
+            this.canUpdate = false;
+            throw error;
+          }
+          this.state = next;
+          this.selectedRecord = record;
+          this.selection = selection;
+        },
+      });
+      this.phase = 'idle';
+      this.message = activated ? 'The CLI is up to date.' : '';
+      if (activated) {
+        this.fallbackMessage = '';
+        await this.prune().catch(() => {});
+      }
+    } catch {
+      if (this.disposed) return this.snapshot();
+      if (this.canUpdate) {
+        this.reject(record.version);
+        this.state.staged = null;
+        try {
+          await this.cache.save(this.state);
+        } catch {
+          this.canUpdate = false;
+        }
+      }
+      this.phase = this.canUpdate ? 'fallback' : 'unavailable';
+      this.message = this.canUpdate
+        ? 'A CLI update could not start. The current verified version will stay in use.'
+        : 'CLI update files could not be saved. The current version will stay in use. Updates will be tried again next launch.';
+    }
+    return this.snapshot();
   }
 
   private async performCheck(signal: AbortSignal): Promise<CliUpdateState> {

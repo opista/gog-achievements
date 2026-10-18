@@ -44,6 +44,32 @@ function account() {
   return { ...hook, api, clearAccountData };
 }
 
+it('accepts new CLI features without clearing account data or accepting stale initialization flags', async () => {
+  const { api, result, clearAccountData } = account();
+  const pending = deferred<InitializeResult>();
+  api.initialize.mockReturnValueOnce(pending.promise);
+  let starting!: Promise<InitializeResult | null>;
+  act(() => {
+    starting = result.current.bootstrap();
+  });
+  act(() =>
+    result.current.acceptCli({ version: '0.6.0', supportsLocking: true, supportsExporting: true }),
+  );
+  await act(async () => {
+    pending.resolve(initial());
+    await starting;
+  });
+  expect(result.current.versions).toEqual({ app: '0.1.0', cli: '0.6.0' });
+  expect(result.current.supportsExporting).toBe(true);
+  expect(result.current.auth).toEqual(signedIn());
+  clearAccountData.mockClear();
+  act(() =>
+    result.current.acceptCli({ version: '0.7.0', supportsLocking: true, supportsExporting: true }),
+  );
+  expect(clearAccountData).not.toHaveBeenCalled();
+  expect(result.current.versions.cli).toBe('0.7.0');
+});
+
 it('checks one saved session across StrictMode effect replay and exposes app versions', async () => {
   const { api, clearAccountData } = dependencies();
   const { result } = renderHook(

@@ -215,6 +215,10 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
     async getCliUpdateState() {
       return disabledCliUpdates('0.3.0');
     },
+    async setCliActivationBlocked() {},
+    async cancelPreview(input) {
+      if (preview?.token === input.previewToken) preview = null;
+    },
     async checkForUpdates() {
       throw problem('DESKTOP_REQUIRED', 'Update checks are available in the installed app.');
     },

@@ -9,6 +9,7 @@ import { queueGroups } from './features/queue/queue-model';
 import { useAccount } from './features/account/use-account';
 import { isAccountMismatch } from './features/account/account-errors';
 import { toNotice, type Notice } from './presentation/error-notice';
+import { holdCliActivation } from './application/cli-activation-guard';
 
 export type View = 'browse' | 'applying' | 'results' | 'history';
 export type LoadingTarget =
@@ -42,6 +43,7 @@ export function useWorkspace(api: DesktopApi) {
   const operations = useOperation(api, {
     canRecover: () => !working.current,
     onRecovered: recoverOperation,
+    onCli: account.acceptCli,
   });
   const { operation } = operations;
   const active =
@@ -80,11 +82,15 @@ export function useWorkspace(api: DesktopApi) {
     setLoading(label);
     setLoadingTarget(target);
     setError(null);
+    let release: (() => void) | undefined;
     try {
+      release = await holdCliActivation(api);
+      if (stamp !== lifecycle.current) return;
       await task();
     } catch (failure) {
       await handleFailure(failure, () => stamp === lifecycle.current);
     } finally {
+      release?.();
       if (stamp === lifecycle.current) {
         working.current = false;
         setLoading(null);
@@ -159,7 +165,10 @@ export function useWorkspace(api: DesktopApi) {
     setLoading('Checking GOG sign-in…');
     setLoadingTarget('session');
     const checkpoint = operations.checkpoint();
+    let release: (() => void) | undefined;
     try {
+      release = await holdCliActivation(api);
+      if (!isMounted()) return;
       const initial = await account.bootstrap();
       if (!isMounted() || !initial) return;
       const restored = operations.restore(initial.operation, checkpoint);
@@ -169,6 +178,7 @@ export function useWorkspace(api: DesktopApi) {
     } catch (failure) {
       if (isMounted()) await handleFailure(failure, isMounted);
     } finally {
+      release?.();
       if (isMounted()) {
         working.current = false;
         setLoading(null);

@@ -128,7 +128,7 @@ it('shows the active CLI version without update settings or a progress indicator
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
-it.each(['checking', 'downloading'] as const)(
+it.each(['checking', 'downloading', 'activating'] as const)(
   'shows an accessible spinner beside the current version while %s in the background',
   async (status) => {
     const message = status === 'checking' ? 'Checking for CLI updates…' : 'Downloading CLI 0.6.0…';
@@ -144,7 +144,7 @@ it.each(['checking', 'downloading'] as const)(
 it('reports pending activation beside the version without changing the running CLI label', async () => {
   await menu({ status: 'ready', pendingVersion: '0.6.0' });
   expect(screen.getByText('CLI 0.5.1')).toBeVisible();
-  expect(screen.getByRole('status')).toHaveTextContent('0.6.0 ready · next launch');
+  expect(screen.getByRole('status')).toHaveTextContent('0.6.0 ready · waiting for current work');
   expect(screen.queryByText('CLI 0.6.0')).not.toBeInTheDocument();
   expect(screen.queryByRole('status')?.querySelector('.spinner')).toBeNull();
 });

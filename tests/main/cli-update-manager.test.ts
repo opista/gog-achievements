@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CLI_VERSION } from '../../src/shared/cli-release';
-import { CliUpdateManager } from '../../src/main/cli-updates/manager';
+import { CliUpdateManager, type CliActivation } from '../../src/main/cli-updates/manager';
 import { CliCache } from '../../src/main/cli-updates/cache';
 import { cliPackage, helpFixture } from './cli-update-fixtures';
 import { verifyHelpContract } from '../../src/main/cli-updates/verify';
@@ -26,7 +26,7 @@ async function fixture() {
   const verify = vi.fn(async (_executable: string, _version: string) => {});
   const bundled = join(root, 'bundled', 'gog-achievements');
   const resolveBundled = vi.fn(async () => bundled);
-  function create(supported = true) {
+  function create(supported = true, activate?: (activation: CliActivation) => Promise<boolean>) {
     const manager = new CliUpdateManager({
       supported,
       userDataPath: root,
@@ -35,6 +35,7 @@ async function fixture() {
       resolveBundled,
       client: { latest, download },
       verify,
+      activate,
     });
     managers.push(manager);
     return manager;
@@ -54,7 +55,7 @@ async function fixture() {
   };
 }
 
-test('a download is staged without changing the running CLI and activates only on the next launch', async () => {
+test('a pending download is retained for startup when live activation is not available', async () => {
   const f = await fixture();
   const first = f.create();
   const selected = await first.prepare();
@@ -73,6 +74,98 @@ test('a download is staged without changing the running CLI and activates only o
   expect(second.snapshot()).toMatchObject({ currentVersion: '0.6.0', status: 'idle' });
   expect((await f.cache.load()).staged).toBeNull();
   expect((await f.cache.load()).active?.version).toBe('0.6.0');
+});
+
+test('a verified download activates in place and retains the previous cached package', async () => {
+  const f = await fixture();
+  const activate = vi.fn(async (update: CliActivation) => {
+    await update.verify();
+    await update.commit();
+    return true;
+  });
+  const manager = f.create(true, activate);
+  expect(await manager.check()).toMatchObject({ currentVersion: '0.6.0', status: 'idle' });
+  expect((await manager.prepare())?.version).toBe('0.6.0');
+  f.changeRelease('0.7.0');
+  expect(await manager.check()).toMatchObject({ currentVersion: '0.7.0', status: 'idle' });
+  const state = await f.cache.load();
+  expect(state.active?.version).toBe('0.7.0');
+  expect(state.previous?.version).toBe('0.6.0');
+  expect(state.staged).toBeNull();
+  expect(await f.cache.verify(state.previous!)).toBe(f.cache.directory(state.previous!));
+});
+
+test('a busy workspace defers activation and later activates without another download', async () => {
+  const f = await fixture();
+  let busy = true;
+  const activate = vi.fn(async (update: CliActivation) => {
+    if (busy) return false;
+    await update.verify();
+    await update.commit();
+    return true;
+  });
+  const manager = f.create(true, activate);
+  expect(await manager.check()).toMatchObject({
+    currentVersion: CLI_VERSION,
+    status: 'ready',
+    pendingVersion: '0.6.0',
+  });
+  busy = false;
+  expect(await manager.activatePending()).toMatchObject({
+    currentVersion: '0.6.0',
+    status: 'idle',
+  });
+  expect(f.download).toHaveBeenCalledOnce();
+});
+
+test('an idle notification during a deferred activation attempt is not lost', async () => {
+  const f = await fixture();
+  let release!: () => void;
+  let calls = 0;
+  const manager = f.create(true, async (update) => {
+    if (++calls === 1) {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return false;
+    }
+    await update.verify();
+    await update.commit();
+    return true;
+  });
+  const check = manager.check();
+  await vi.waitFor(() => expect(calls).toBe(1));
+  const retry = manager.activatePending();
+  await Promise.resolve();
+  await Promise.resolve();
+  release();
+  await Promise.all([check, retry]);
+  await vi.waitFor(() => expect(manager.snapshot().currentVersion).toBe('0.6.0'));
+  expect(f.download).toHaveBeenCalledOnce();
+});
+
+test('pending files are checked again before live activation and damaged code is rejected', async () => {
+  const f = await fixture();
+  let busy = true;
+  const manager = f.create(true, async (update) => {
+    if (busy) return false;
+    await update.verify();
+    await update.commit();
+    return true;
+  });
+  await manager.check();
+  await writeFile(
+    join(f.cache.directory((await f.cache.load()).staged!), 'gog-achievements'),
+    'modified',
+  );
+  f.verify.mockClear();
+  busy = false;
+  expect(await manager.activatePending()).toMatchObject({
+    currentVersion: CLI_VERSION,
+    status: 'fallback',
+  });
+  expect(f.verify).not.toHaveBeenCalled();
+  expect((await f.cache.load()).rejected).toContain('0.6.0');
 });
 
 test('legacy opt-out preferences cannot prevent activation or automatic downloads', async () => {

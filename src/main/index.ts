@@ -18,6 +18,7 @@ let operation: OperationState = { kind: 'idle' };
 let guardDialog = false;
 let desktop: DesktopApplication | undefined;
 let closing = false;
+let uiBlocked = false;
 let updates: ReturnType<typeof installUpdates> | undefined;
 let cliUpdates: CliUpdateManager | undefined;
 // Keep saved queues and history in the original folder when the display name changes.
@@ -72,6 +73,10 @@ else {
           supported: app.isPackaged,
           userDataPath: app.getPath('userData'),
           resolveBundled: () => resolveCli(cli),
+          activate: (activation) =>
+            desktop && !closing && !updates?.isPresenting()
+              ? desktop.activateCli(activation)
+              : Promise.resolve(false),
         });
       const cliSelection = await cliUpdates?.prepare();
       updates = installUpdates({
@@ -80,7 +85,7 @@ else {
         Menu,
         shell,
         getWindow: () => window,
-        isBusy: () => operation.kind !== 'idle',
+        isBusy: () => operation.kind !== 'idle' || uiBlocked,
         repository: new URL(packageMetadata.repository.url).pathname.replace(/^\/|\.git$/g, ''),
         enabled: !demo,
         cliUpdates,
@@ -90,6 +95,11 @@ else {
         appActions: {
           checkForUpdates: updates.checkForUpdates,
           getCliUpdateState: async () => cliUpdates?.snapshot() ?? disabledCliUpdates(CLI_VERSION),
+          setCliActivationBlocked: async (input) => {
+            uiBlocked = input.blocked;
+            await desktop?.setCliActivationBlocked(input);
+            if (!uiBlocked) updates?.onIdle();
+          },
         },
         demo,
         version: app.getVersion(),
@@ -110,9 +120,13 @@ else {
       const { api } = desktop;
       const unsubscribe = api.onOperation((state) => {
         operation = state;
-        if (state.kind === 'idle') updates?.onIdle();
+        if (state.kind === 'idle') {
+          updates?.onIdle();
+          void cliUpdates?.activatePending();
+        }
         if (!currentWindow.isDestroyed()) currentWindow.webContents.send(IPC_OPERATION, state);
       });
+      void cliUpdates?.activatePending();
       currentWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       currentWindow.webContents.on('will-navigate', (event) => {
         event.preventDefault();
