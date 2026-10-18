@@ -226,29 +226,59 @@ test('a packaged startup checks once and Download uses only the retained service
   f.updates.cleanup();
 });
 
-test('a manual check reports both app status and the pending CLI without forcing a restart', async () => {
-  const cliCheck = vi.fn(async (): Promise<CliUpdateState> => ({
+test.each(['idle', 'ready'] as const)(
+  'a manual result keeps %s CLI details in the account menu',
+  async (status) => {
+    const cliCheck = vi.fn(async (): Promise<CliUpdateState> => ({
+      supported: true,
+      currentVersion: '0.5.1',
+      bundledVersion: '0.5.1',
+      status,
+      ...(status === 'ready' ? { pendingVersion: '0.6.0' } : {}),
+      message:
+        status === 'ready'
+          ? 'CLI 0.6.0 is ready. It will be used next time you open the app.'
+          : 'The CLI is up to date.',
+    }));
+    const f = fixture({
+      result: { status: 'up-to-date', currentVersion: '0.1.0', message: 'The app is up to date.' },
+      cliUpdates: { check: cliCheck },
+    });
+    await settle();
+    expect(f.showMessageBox).not.toHaveBeenCalled();
+    await f.updates.checkForUpdates();
+    expect(cliCheck.mock.calls).toEqual([[], []]);
+    expect(f.notices()[0]).toMatchObject({
+      message: 'The app is up to date.',
+      buttons: ['OK'],
+    });
+    expect(f.notices()[0]).not.toHaveProperty('detail');
+    expect(f.openDownload).not.toHaveBeenCalled();
+    f.updates.cleanup();
+  },
+);
+
+test('a background CLI download does not delay the app update result or open another notice', async () => {
+  const component = deferred<CliUpdateState>();
+  const cliCheck = vi.fn(() => component.promise);
+  const f = fixture({ cliUpdates: { check: cliCheck } });
+  await settle();
+  expect(cliCheck).toHaveBeenCalledOnce();
+  expect(f.notices()).toHaveLength(1);
+  expect(f.notices()[0]).toMatchObject({
+    message: 'GOG Achievements 0.2.0 is available.',
+    detail: 'Download the new version in your browser, then open it to install.',
+  });
+  component.resolve({
     supported: true,
     currentVersion: '0.5.1',
     bundledVersion: '0.5.1',
     status: 'ready',
     pendingVersion: '0.6.0',
-    message: 'CLI 0.6.0 is ready. It will be used next time you open the app.',
-  }));
-  const f = fixture({
-    result: { status: 'up-to-date', currentVersion: '0.1.0', message: 'The app is up to date.' },
-    cliUpdates: { check: cliCheck },
+    message: 'CLI 0.6.0 is ready.',
   });
   await settle();
-  expect(f.showMessageBox).not.toHaveBeenCalled();
-  await f.updates.checkForUpdates();
-  expect(cliCheck.mock.calls).toEqual([[], []]);
-  expect(f.notices()[0]).toMatchObject({
-    message: 'The app is up to date.',
-    detail: expect.stringContaining('next time you open the app'),
-    buttons: ['OK'],
-  });
-  expect(f.openDownload).not.toHaveBeenCalled();
+  expect(f.notices()).toHaveLength(1);
   f.updates.cleanup();
 });
 

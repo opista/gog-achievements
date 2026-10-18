@@ -61,7 +61,7 @@ The app tells you when a newer release is available. You can also open the accou
 
 The app also keeps its GOG tools up to date automatically. It downloads published stable CLI releases from 0.5.1 up to, but not including, 1.0.0. Drafts and prereleases are excluded. A downloaded version is verified and used only on the next launch; the running session keeps its current CLI.
 
-The account menu shows the app version and active CLI version. A spinner appears beside the CLI version during checks and downloads. When an update is ready, the menu shows its version and that it will start on the next launch. **Check for updates…** checks both the app and CLI. Component updates are always automatic in installed apps. Source runs and the demo do not download CLI updates automatically.
+The account menu shows the app version and active CLI version. A spinner appears beside the CLI version during checks and downloads. When an update is ready, the menu shows its version and that it will start on the next launch. **Check for updates…** checks the app and starts a background CLI check. Its result dialog reports the app status; CLI details stay in the account menu. Component updates are always automatic in installed apps. Source runs and the demo do not download CLI updates automatically.
 
 Each launch checks cached files and tests the CLI with offline commands before using it. If a cached version fails, the app tries the previous verified version, then its bundled copy. It continues to check for newer fixes automatically. Queue files, history and saved login stay in place. No update retries an achievement write.
 
