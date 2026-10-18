@@ -84,10 +84,11 @@ Use Node 24.19.0, recorded in [.node-version](.node-version).
 ```sh
 npm ci
 npm run cli:download
+npm run cli:smoke
 npm run dev
 ```
 
-Source builds download the pinned public CLI release and verify its checksum. If the CLI repository is private, use `GH_TOKEN`, `GITHUB_TOKEN`, or an existing `gh` login with read access. Installed packages already contain a verified fallback. Runtime update checks use only public releases and send no GOG or GitHub credentials.
+`cli:download` downloads the pinned public CLI release and verifies its checksum. `cli:smoke` checks that it runs on the current host, using JSON help and an offline fixture queue. Run these setup commands before using the real source app. If the CLI repository is private, use `GH_TOKEN`, `GITHUB_TOKEN`, or an existing `gh` login with read access. Installed packages already contain a verified fallback. Runtime update checks use only public releases and send no GOG or GitHub credentials.
 
 To test an unreleased CLI fix locally, set `GOG_ACHIEVEMENTS_DEV_CLI_DIRECTORY` to the absolute build directory that contains `build.json` and the executable, then run `npm run dev`. The build must match the pinned CLI version, platform and architecture. Installed apps ignore this development setting. This does not change the release lock or downloaded CLI files.
 
@@ -108,12 +109,14 @@ A browser without `?demo=1` shows that the desktop bridge is unavailable.
 ```sh
 npm run check
 npm run test:e2e
-npm run build -- --target=macos-arm64
+npm run build
 npm run test:desktop
 npm run package -- --target=macos-arm64
 ```
 
-Targets: `macos-arm64`, `macos-x64`, `windows-arm64`, `windows-x64`. Run each target on a matching native host. Build compiles the app; package also produces Mac DMG/ZIP files or a Windows installer and SHA-256 files.
+`npm run build` compiles the app without downloading or running a CLI. It works on Linux as well as supported Mac and Windows hosts after `npm ci`. The tracked `cli-release.lock.json` metadata remains part of the compiled app. Compilation does not require a CLI in `resources/cli` or the download cache.
+
+`npm run package` downloads and verifies the pinned CLI, runs its offline smoke checks, then compiles and packages the app. It produces Mac DMG/ZIP files or a Windows installer and SHA-256 files. Targets: `macos-arm64`, `macos-x64`, `windows-arm64`, `windows-x64`. Packaging requires a matching native host. The optional `npm run build -- --target=TARGET` form also checks the host, but still only compiles. The legacy `node scripts/package.mjs --compile-only` form uses the same compilation path.
 
 ```sh
 npm run cli:smoke -- --target=macos-arm64
@@ -122,7 +125,7 @@ node scripts/verify-package.mjs --target=macos-arm64 --directory 'dist/mac-arm64
 
 Tests use fake CLI responses and sample accounts. Browser tests run the demo flow on a separate temporary server. Offline smoke checks read help and a fixture queue. Neither makes achievement writes.
 
-The desktop test launches the compiled app in demo mode and checks the real renderer → sandboxed preload → IPC bridge → Nest service flow. After packaging, set `GOG_DESKTOP_PACKAGE_DIRECTORY` to the unpacked app directory to run the same check against that package. The test uses sample data and makes no GOG writes.
+Desktop tests use demo mode or an injected fake CLI to check the real renderer → sandboxed preload → IPC bridge → Nest service flow and CLI activation. They need compiled app files and Electron, but no downloaded CLI. After packaging, set `GOG_DESKTOP_PACKAGE_DIRECTORY` to the unpacked app directory to check that package too. The tests use sample data and make no GOG writes.
 
 Mac packages use ad hoc signing to seal the app and its nested code. They are not Developer ID signed or notarized, so Gatekeeper may still block downloaded apps. Windows packages remain unsigned. Native login and installation still need checks on each supported platform.
 

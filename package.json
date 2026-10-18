@@ -13,7 +13,7 @@
     "dev": "electron-vite dev",
     "dev:web": "vite --config vite.web.config.ts --host 0.0.0.0",
     "build:web": "vite build --config vite.web.config.ts",
-    "build": "node scripts/package.mjs --compile-only",
+    "build": "node scripts/build.mjs",
     "package": "node scripts/package.mjs",
     "cli:download": "node scripts/download-cli.mjs",
     "cli:smoke": "node scripts/smoke-cli.mjs",

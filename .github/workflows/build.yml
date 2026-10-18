@@ -51,7 +51,7 @@ jobs:
         run: node scripts/select-native-builds.mjs
       - run: npm ci --no-audit --no-fund
       - run: npm run check
-      - run: npx --no-install electron-vite build
+      - run: npm run build
       - name: Check the release version before packaging
         if: inputs.release-tag != ''
         env:

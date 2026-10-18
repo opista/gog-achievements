@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
-import { PROJECT_ROOT } from '../../scripts/cli-artifacts.mjs';
-import { packageCommands, runPackageCommand } from '../../scripts/package.mjs';
+import { PROJECT_ROOT, TARGETS } from '../../scripts/cli-artifacts.mjs';
+import { main, packageCommands, runPackageCommand } from '../../scripts/package.mjs';
 
 function output() {
   const stdout = [];
@@ -18,6 +19,118 @@ function output() {
     },
   };
 }
+
+function packageFixture({ host = { platform: 'darwin', arch: 'arm64' }, failAt } = {}) {
+  const calls = [];
+  const failure = new Error(`${failAt} failed`);
+  const directory = join(PROJECT_ROOT, 'fixture-cli');
+  const lock = { fixture: 'verified release lock' };
+  const captured = output();
+  const step = (name, ...args) => {
+    calls.push([name, ...args]);
+    if (name === failAt) throw failure;
+  };
+  return {
+    calls,
+    failure,
+    directory,
+    lock,
+    captured,
+    dependencies: {
+      host,
+      download: async (target) => {
+        step('download', target);
+        return directory;
+      },
+      readLock: async () => {
+        step('readLock');
+        return lock;
+      },
+      smoke: async (...args) => step('smoke', ...args),
+      runCommand: async (target, command) =>
+        step(command[0] === 'electron-builder/cli.js' ? 'package' : 'compile', target, command),
+      checksums: async (...args) => {
+        step('checksums', ...args);
+        return ['fixture.zip'];
+      },
+      stdout: captured.streams.stdout,
+    },
+  };
+}
+
+test('packaging verifies its CLI before compilation and writes checksums after the builder', async () => {
+  const { version } = JSON.parse(await readFile(join(PROJECT_ROOT, 'package.json'), 'utf8'));
+  for (const [target, { platform, architecture }] of Object.entries(TARGETS)) {
+    const fixture = packageFixture({ host: { platform, arch: architecture } });
+    await main([`--target=${target}`], fixture.dependencies);
+    const [compile, builder] = packageCommands(target);
+    assert.deepEqual(fixture.calls, [
+      ['download', target],
+      ['readLock'],
+      ['smoke', fixture.directory, fixture.lock, target],
+      ['compile', target, compile],
+      ['package', target, builder],
+      ['checksums', join(PROJECT_ROOT, 'dist'), version, target],
+    ]);
+    assert.deepEqual(fixture.captured.stdout, ['SHA-256 checksums written for fixture.zip.\n']);
+  }
+});
+
+test('packaging rejects an unsupported or mismatched native host before any external work', async () => {
+  for (const [args, host] of [
+    [[], { platform: 'linux', arch: 'x64' }],
+    [['--target=windows-arm64'], { platform: 'darwin', arch: 'arm64' }],
+    [['--target=macos-x64'], { platform: 'darwin', arch: 'arm64' }],
+  ]) {
+    const fixture = packageFixture({ host });
+    await assert.rejects(
+      main(args, fixture.dependencies),
+      /supported target|matching Node architecture/,
+    );
+    assert.deepEqual(fixture.calls, []);
+    assert.deepEqual(fixture.captured.stdout, []);
+  }
+});
+
+const packagingSteps = ['download', 'readLock', 'smoke', 'compile', 'package', 'checksums'];
+for (const [index, failAt] of packagingSteps.entries()) {
+  test(`a ${failAt} failure stops packaging before later steps`, async () => {
+    const fixture = packageFixture({ failAt });
+    await assert.rejects(main([], fixture.dependencies), (error) => error === fixture.failure);
+    assert.deepEqual(
+      fixture.calls.map(([step]) => step),
+      packagingSteps.slice(0, index + 1),
+    );
+    assert.deepEqual(fixture.captured.stdout, []);
+  });
+}
+
+test('legacy compile-only builds run without CLI setup on Linux or a matching native target', async () => {
+  for (const [args, host, target] of [
+    [['--compile-only'], { platform: 'linux', arch: 'x64' }, undefined],
+    [
+      ['--compile-only', '--target=macos-arm64'],
+      { platform: 'darwin', arch: 'arm64' },
+      'macos-arm64',
+    ],
+  ]) {
+    const fixture = packageFixture({ host });
+    await main(args, fixture.dependencies);
+    assert.deepEqual(fixture.calls, [
+      ['compile', target, ['electron-vite/bin/electron-vite.js', ['build']]],
+    ]);
+    assert.deepEqual(fixture.captured.stdout, []);
+  }
+});
+
+test('legacy compile-only builds retain explicit native target validation', async () => {
+  const fixture = packageFixture();
+  await assert.rejects(
+    main(['--compile-only', '--target=windows-arm64'], fixture.dependencies),
+    /matching Node architecture/,
+  );
+  assert.deepEqual(fixture.calls, []);
+});
 
 test('packaging gets a bounded ten-minute deadline while compilation retains three minutes', async () => {
   const calls = [];
