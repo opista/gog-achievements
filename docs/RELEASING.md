@@ -64,7 +64,7 @@ If source code must change, make a new release commit and tag through Release Pl
 
 ## Update checks
 
-The installed app makes one anonymous GitHub API check at startup. The top-right account menu offers **Check for updates…**, even when signed out. The native macOS app menu and Windows Help menu offer the same check. Network errors stay quiet at startup and produce a message when checked manually. A missing or private release is reported as unavailable, not as proof that the app is current.
+The installed app makes one anonymous GitHub API check at startup. The top-right account menu offers **Check for updates**, even when signed out. The native macOS app menu and Windows Help menu offer the same check. Network errors stay quiet at startup and produce a message when checked manually. A missing or private release is reported as unavailable, not as proof that the app is current.
 
 Only a newer stable version with the exact installer for the running platform and architecture is offered. Drafts and prereleases are excluded. Release metadata, size, version and GitHub URLs are checked before a download link is retained. Download opens that retained link in the browser. There is no background download, automatic install or forced restart.
 

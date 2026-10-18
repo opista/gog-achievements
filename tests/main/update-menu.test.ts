@@ -140,7 +140,7 @@ test('the macOS app menu keeps standard roles and adds Check for Updates after A
     'separator',
     'quit',
   ]);
-  expect(f.updateItem()?.label).toBe('Check for Updates…');
+  expect(f.updateItem()?.label).toBe('Check for Updates');
   expect(f.check).not.toHaveBeenCalled();
   f.updates.cleanup();
 });
@@ -504,7 +504,7 @@ test.each(['win32', 'darwin'] as const)(
       'separator',
       'togglefullscreen',
     ]);
-    expect(f.updateItem()?.label).toBe('Check for Updates…');
+    expect(f.updateItem()?.label).toBe('Check for Updates');
     f.updates.cleanup();
     expect(f.menu()).toBe(original);
   },

@@ -57,11 +57,11 @@ Unlock and lock requests can share one game queue. **Review changes** checks the
 
 Open **History** to see confirmed unlocks and locks together, newest first by the date shown. Unlocks show the saved unlock date; locks show when the change was confirmed. Any results the app could not confirm are shown separately. Keep the app open while changes are being applied and check the result before trying again.
 
-The app tells you when a newer release is available. You can also open the account menu in the top-right corner and choose **Check for updates…**. Choose **Download** to open the new installer in your browser, then install it yourself. Your saved queue and history stay on your computer.
+The app tells you when a newer release is available. You can also open the account menu in the top-right corner and choose **Check for updates**. Choose **Download** to open the new installer in your browser, then install it yourself. Your saved queue and history stay on your computer.
 
 The app also keeps its GOG tools up to date automatically. It downloads published stable CLI releases from 0.5.1 up to, but not including, 1.0.0. Drafts and prereleases are excluded. A downloaded version is verified and used only on the next launch; the running session keeps its current CLI.
 
-The account menu shows the app version and active CLI version. A spinner appears beside the CLI version during checks and downloads. When an update is ready, the menu shows its version and that it will start on the next launch. **Check for updates…** checks the app and starts a background CLI check. Its result dialog reports the app status; CLI details stay in the account menu. Component updates are always automatic in installed apps. Source runs and the demo do not download CLI updates automatically.
+The account menu shows the app version and active CLI version. A spinner appears beside the CLI version during checks and downloads. When an update is ready, the menu shows its version and that it will start on the next launch. **Check for updates** checks the app and starts a background CLI check. Its result dialog reports the app status; CLI details stay in the account menu. Component updates are always automatic in installed apps. Source runs and the demo do not download CLI updates automatically.
 
 Each launch checks cached files and tests the CLI with offline commands before using it. If a cached version fails, the app tries the previous verified version, then its bundled copy. It continues to check for newer fixes automatically. Queue files, history and saved login stay in place. No update retries an achievement write.
 
@@ -136,7 +136,7 @@ The supported OS versions combine the [bundled CLI runtime](https://github.com/o
 
 Release Please maintains a version pull request from conventional commits on `main`. Merging that pull request creates a draft release, runs the checks and native builds, verifies all packages and checksums, then publishes the release. Read the [release guide](docs/RELEASING.md) for setup and retries.
 
-Installed apps check for a newer public stable release once at startup. The native menu also offers **GOG Achievements → Check for Updates…** on macOS, or **Help → Check for Updates…** on Windows. Press **Alt** to show the Windows menu bar. Release menus include display controls and omit reload and developer tools. Notices wait until active CLI work finishes. Update checks need no GOG or GitHub login.
+Installed apps check for a newer public stable release once at startup. The native menu also offers **GOG Achievements → Check for Updates** on macOS, or **Help → Check for Updates** on Windows. Press **Alt** to show the Windows menu bar. Release menus include display controls and omit reload and developer tools. Notices wait until active CLI work finishes. Update checks need no GOG or GitHub login.
 
 | Area            | Responsibility                                                           |
 | --------------- | ------------------------------------------------------------------------ |

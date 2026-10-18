@@ -59,7 +59,7 @@ it('offers an app update check without GOG sign-in', async () => {
   expect(screen.queryByText(/Account ID/)).not.toBeInTheDocument();
   expect(screen.getByText('App 0.1.0')).toBeVisible();
   expect(screen.getByText('CLI 0.5.1')).toBeVisible();
-  await user.click(screen.getByRole('button', { name: 'Check for updates…' }));
+  await user.click(screen.getByRole('button', { name: 'Check for updates' }));
   expect(checkForUpdates).toHaveBeenCalledExactlyOnceWith();
 });
 
@@ -67,30 +67,30 @@ it('shows progress in the menu and blocks repeated clicks until the check finish
   const { user, checkForUpdates } = await menu();
   let finish!: () => void;
   checkForUpdates.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
-  await user.click(screen.getByRole('button', { name: 'Check for updates…' }));
+  await user.click(screen.getByRole('button', { name: 'Check for updates' }));
   const checking = screen.getByRole('button', { name: 'Checking…' });
   expect(checking).toBeDisabled();
   expect(checking).toHaveAttribute('aria-busy', 'true');
   await user.click(checking);
   expect(checkForUpdates).toHaveBeenCalledOnce();
   await act(async () => finish());
-  expect(screen.getByRole('button', { name: 'Check for updates…' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
 });
 
 it('keeps an update failure inside the menu and permits a clean retry', async () => {
   const { user, checkForUpdates } = await menu();
   checkForUpdates.mockRejectedValueOnce(new Error('Updates could not be checked. Try again.'));
-  await user.click(screen.getByRole('button', { name: 'Check for updates…' }));
+  await user.click(screen.getByRole('button', { name: 'Check for updates' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Updates could not be checked. Try again.');
   expect(screen.getByRole('alert').closest('.account-popover')).not.toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Check for updates…' }));
+  await user.click(screen.getByRole('button', { name: 'Check for updates' }));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(checkForUpdates).toHaveBeenCalledTimes(2);
 });
 
 it('waits for active workspace operations before offering a check', async () => {
   const { user, checkForUpdates } = await menu({ busy: true });
-  await user.click(screen.getByRole('button', { name: 'Check for updates…' }));
+  await user.click(screen.getByRole('button', { name: 'Check for updates' }));
   expect(checkForUpdates).not.toHaveBeenCalled();
 });
 
@@ -98,7 +98,7 @@ it('closes on Escape and returns focus to the account button', async () => {
   const { user } = await menu();
   const summary = screen.getByLabelText('Account menu');
   await user.tab();
-  expect(screen.getByRole('button', { name: 'Check for updates…' })).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Check for updates' })).toHaveFocus();
   await user.keyboard('{Escape}');
   expect(summary.closest('details')).not.toHaveAttribute('open');
   expect(summary).toHaveFocus();
@@ -137,7 +137,7 @@ it.each(['checking', 'downloading'] as const)(
     expect(progress).toHaveTextContent(message);
     expect(progress.querySelector('.spinner')).not.toBeNull();
     expect(progress.parentElement).toContainElement(screen.getByText('CLI 0.5.1'));
-    expect(screen.getByRole('button', { name: 'Check for updates…' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
   },
 );
 
@@ -167,7 +167,7 @@ it.each(['fallback', 'unavailable'] as const)(
     const message = 'The current version will stay in use.';
     await menu({ status, message });
     expect(screen.getByRole('status')).toHaveTextContent(message);
-    expect(screen.getByRole('button', { name: 'Check for updates…' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
   },
 );
 

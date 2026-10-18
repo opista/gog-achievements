@@ -213,7 +213,7 @@ export function installUpdates(options: UpdateMenuOptions) {
   const items = originalItems.filter((item) => item.id !== updateItemId);
   const entry: MenuItemConstructorOptions = {
     id: updateItemId,
-    label: 'Check for Updates…',
+    label: 'Check for Updates',
     click: () => void check(true),
   };
   if (mac) {

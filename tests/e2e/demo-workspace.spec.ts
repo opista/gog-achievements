@@ -845,7 +845,7 @@ for (const display of [
 
 test('account menu offers update checks before and after GOG sign-in', async ({ page }) => {
   await page.getByLabel('Account menu').click();
-  const check = page.getByRole('button', { name: 'Check for updates…', exact: true });
+  const check = page.getByRole('button', { name: 'Check for updates', exact: true });
   await expect(check).toBeEnabled();
   await check.click();
   await expect(page.locator('.account-popover').getByRole('alert')).toHaveText(
@@ -873,7 +873,7 @@ test('account menu dismisses with Escape, outside clicks and keyboard focus chan
   await page.getByRole('heading', { name: 'GOG Achievements', exact: true }).click();
   await expect(popover).toBeHidden();
   await menu.click();
-  await page.getByRole('button', { name: 'Check for updates…', exact: true }).focus();
+  await page.getByRole('button', { name: 'Check for updates', exact: true }).focus();
   await page.keyboard.press('Tab');
   await expect(popover).toBeHidden();
 });

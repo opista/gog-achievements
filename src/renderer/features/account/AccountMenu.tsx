@@ -102,7 +102,7 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
           ) : (
             <Download size={17} aria-hidden="true" />
           )}
-          {checking ? 'Checking…' : 'Check for updates…'}
+          {checking ? 'Checking…' : 'Check for updates'}
         </button>
         {error ? (
           <p className="account-update-notice" role="alert">
