@@ -118,7 +118,7 @@ The supported OS versions combine the [bundled CLI runtime](https://github.com/o
 
 ### CI and source layout
 
-[CI](.github/workflows/ci.yml) checks formatting, lint, types, unit tests and the offline demo, then packages all four native targets. Fork pull requests run offline checks without repository secrets. Manual CI runs can select one target.
+[CI](.github/workflows/ci.yml) checks formatting, lint, types, unit tests, app compilation and the offline demo on every PR. Renderer, browser-test and documentation-only PRs skip native packages. Electron entry points, main/preload/shared code, dependencies, build tooling, resources and other unknown paths trigger all four native targets. Merges to `main` and releases always run the full build matrix. Fork pull requests run offline checks without repository secrets. Manual CI runs can select one target. See the [native build rules](docs/RELEASING.md#ci-build-selection).
 
 Release Please maintains a version pull request from conventional commits on `main`. Merging that pull request creates a draft release, runs the checks and native builds, verifies all packages and checksums, then publishes the release. Read the [release guide](docs/RELEASING.md) for setup and retries.
 
