@@ -83,6 +83,82 @@ test.afterEach(async ({ page }) => {
   );
 });
 
+for (const viewport of [
+  { width: 1586, height: 992 },
+  { width: 390, height: 844 },
+]) {
+  test(`achievement search and sorting preserve queues and totals at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await signIn(page);
+    await page
+      .getByRole('button', { name: 'Queue lock for Full Body Conversion', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Undo queued lock for Full Body Conversion', exact: true }),
+    ).toBeEnabled();
+    const saved = await savedDemo(page);
+    const completion = page.locator('.game-heading .game-completion');
+    const totals = await completion.textContent();
+    const rows = page.locator('.achievement-row');
+    const names = rows.getByRole('heading');
+    const search = page.getByRole('searchbox', { name: 'Search achievements' });
+    const sort = page.getByRole('combobox', { name: 'Sort', exact: true });
+    const defaults = await names.allTextContents();
+    await search.fill('THE WORLD');
+    await expect(names).toHaveText(['The World']);
+    await search.fill('SAMPLE ACHIEVEMENT DESCRIPTION');
+    await expect(rows).toHaveCount(6);
+    await page.getByRole('button', { name: 'Locked', exact: true }).click();
+    await expect(rows).toHaveCount(4);
+    await page.getByRole('button', { name: 'Unlocked', exact: true }).click();
+    await expect(rows).toHaveCount(2);
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    for (const query of ['sample hidden', 'concealed sample']) {
+      await search.fill(query);
+      await expect(rows).toHaveCount(0);
+    }
+    await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+    await expect(search).toBeFocused();
+    await sort.selectOption('A–Z');
+    await expect(names).toHaveText([
+      'Daemon In The Shell',
+      'Frequent Flyer',
+      'Full Body Conversion',
+      'Hidden achievement',
+      'Legend of The Afterlife',
+      'The Wandering Fool',
+      'The World',
+    ]);
+    await sort.selectOption('Newest unlocked');
+    await expect(names.first()).toHaveText('Full Body Conversion');
+    await expect(names.nth(1)).toHaveText('Daemon In The Shell');
+    await sort.selectOption('Queued first');
+    await expect(names).toHaveText([
+      'The World',
+      'Frequent Flyer',
+      'The Wandering Fool',
+      'Full Body Conversion',
+      'Legend of The Afterlife',
+      'Hidden achievement',
+      'Daemon In The Shell',
+    ]);
+    await sort.selectOption('Default');
+    await expect(names).toHaveText(defaults);
+    await expect(completion).toHaveText(totals!);
+    expect(await savedDemo(page)).toEqual(saved);
+    await page.getByRole('button', { name: 'Reveal', exact: true }).click();
+    await search.fill('CONCEALED SAMPLE');
+    await expect(names).toHaveText(['A sample hidden achievement']);
+    await expect(completion).toHaveText(totals!);
+    expect(await savedDemo(page)).toEqual(saved);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  });
+}
+
 test('compact library keeps game art, plain achievement details and existing unlock protection', async ({
   page,
 }) => {

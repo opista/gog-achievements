@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CalendarDays, Check, Eye, RefreshCw } from 'lucide-react';
+import { CalendarDays, Check, Eye, RefreshCw, Search, X } from 'lucide-react';
 import type { Achievement, AchievementAction } from '../../../shared/api';
 import { Art } from '../../components/Art';
 import { achievementActionName, AchievementActionIcon } from '../../components/AchievementAction';
@@ -8,8 +8,11 @@ import { AchievementSkeleton } from './AchievementSkeleton';
 
 import {
   ACHIEVEMENT_FILTERS,
+  ACHIEVEMENT_SORTS,
+  isAchievementConcealed,
   visibleAchievements,
   type AchievementFilter,
+  type AchievementSort,
 } from './achievement-model';
 interface Props {
   achievements: Achievement[];
@@ -39,12 +42,13 @@ export function Achievements({
 }: Props) {
   const controlsBlocked = busy || loading;
   const [filter, setFilter] = useState<AchievementFilter>('All');
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<AchievementSort>('Default');
   const [revealed, setRevealed] = useState(new Set<string>());
+  const searchInput = useRef<HTMLInputElement>(null);
   const focusTarget = useRef<string | null>(null);
-  const filtered = visibleAchievements(achievements, filter);
-  const available = filtered.filter(
-    (item) => !item.hidden || item.unlocked || revealed.has(item.id),
-  );
+  const filtered = visibleAchievements(achievements, filter, { search, sort, revealed, queued });
+  const available = filtered.filter((item) => !isAchievementConcealed(item, revealed));
   const unlockIds = available
     .filter((item) => !item.unlocked && queued.get(item.id) !== 'unlock')
     .map((item) => item.id);
@@ -59,6 +63,41 @@ export function Achievements({
 
   return (
     <section className="achievement-section">
+      <div className="achievement-search-controls">
+        <div className="search-field">
+          <Search size={18} aria-hidden="true" />
+          <input
+            ref={searchInput}
+            type="search"
+            aria-label="Search achievements"
+            placeholder="Search achievements…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {search ? (
+            <button
+              className="icon-button search-clear"
+              aria-label="Clear achievement search"
+              onClick={() => {
+                setSearch('');
+                searchInput.current?.focus();
+              }}
+            >
+              <X size={16} />
+            </button>
+          ) : null}
+        </div>
+        <label className="achievement-sort">
+          Sort
+          <select value={sort} onChange={(event) => setSort(event.target.value as AchievementSort)}>
+            {ACHIEVEMENT_SORTS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div className="achievement-toolbar">
         <div className="filter-group" aria-label="Achievement filters">
           {ACHIEVEMENT_FILTERS.map((value) => (
@@ -76,7 +115,7 @@ export function Achievements({
           {filter !== 'Unlocked' ? (
             <button
               className="achievement-action-button achievement-action-unlock"
-              title="Queue all revealed locked achievements and remove lock requests for this game"
+              title="Queue all matching revealed locked achievements and remove lock requests for this game"
               disabled={controlsBlocked || (unlockIds.length === 0 && !queuedActions.has('lock'))}
               onClick={() => onQueueAll(unlockIds, 'unlock')}
             >
@@ -87,7 +126,7 @@ export function Achievements({
           {supportsLocking && filter !== 'Locked' ? (
             <button
               className="achievement-action-button achievement-action-lock"
-              title="Queue all unlocked achievements and remove unlock requests for this game"
+              title="Queue all matching unlocked achievements and remove unlock requests for this game"
               disabled={controlsBlocked || (lockIds.length === 0 && !queuedActions.has('unlock'))}
               onClick={() => onQueueAll(lockIds, 'lock')}
             >
@@ -114,7 +153,7 @@ export function Achievements({
           <AchievementSkeleton />
         ) : (
           filtered.map((item) => {
-            const concealed = item.hidden && !item.unlocked && !revealed.has(item.id);
+            const concealed = isAchievementConcealed(item, revealed);
             const name = concealed ? 'Hidden achievement' : item.name;
             const queuedAction = queued.get(item.id);
             const isQueued = queuedAction !== undefined;
@@ -232,10 +271,18 @@ export function Achievements({
             <p>
               {achievements.length === 0
                 ? 'No achievements available for this game.'
-                : 'No achievements match this filter.'}
+                : 'No achievements match your search and filters.'}
             </p>
-            {filter !== 'All' ? (
-              <button onClick={() => setFilter('All')}>Clear filters</button>
+            {filter !== 'All' || search ? (
+              <button
+                onClick={() => {
+                  setFilter('All');
+                  setSearch('');
+                  searchInput.current?.focus();
+                }}
+              >
+                Clear filters
+              </button>
             ) : null}
           </div>
         ) : null}
