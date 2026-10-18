@@ -322,3 +322,104 @@ it('announces skeleton status without placeholder controls', () => {
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(container.querySelector('.skeleton-content')).toHaveAttribute('aria-hidden', 'true');
 });
+
+it('combines search with status filters and clears an empty result with focus', async () => {
+  const user = userEvent.setup();
+  const { onAdd, onRemove, onQueueAll } = show();
+  const search = screen.getByRole('searchbox', { name: 'Search achievements' });
+  await user.type(search, 'DESCRIPTION');
+  expect(rowNames()).toEqual(['Locked B', 'Locked A', 'Newest unlock', 'Older unlock']);
+  await user.click(screen.getByRole('button', { name: 'Locked' }));
+  expect(rowNames()).toEqual(['Locked B', 'Locked A']);
+  await user.click(screen.getByRole('button', { name: 'Unlocked' }));
+  expect(rowNames()).toEqual(['Newest unlock', 'Older unlock']);
+  await user.clear(search);
+  await user.type(search, 'Locked A');
+  expect(screen.queryByRole('article')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+  expect(search).toHaveValue('');
+  expect(search).toHaveFocus();
+  expect(screen.getAllByRole('article')).toHaveLength(input.length);
+  expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+  expect(onAdd).not.toHaveBeenCalled();
+  expect(onRemove).not.toHaveBeenCalled();
+  expect(onQueueAll).not.toHaveBeenCalled();
+});
+
+it('searches hidden text only after reveal and lets users clear the search', async () => {
+  const user = userEvent.setup();
+  show();
+  const search = screen.getByRole('searchbox', { name: 'Search achievements' });
+  for (const query of ['Secret title', 'Secret description']) {
+    await user.clear(search);
+    await user.type(search, query);
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+  }
+  await user.click(screen.getByRole('button', { name: 'Clear achievement search' }));
+  expect(search).toHaveFocus();
+  await user.click(screen.getByRole('button', { name: 'Reveal' }));
+  await user.type(search, 'SECRET DESCRIPTION');
+  expect(rowNames()).toEqual(['Secret title']);
+});
+
+it('changes sort without changing saved requests and keeps queue order stable within each group', async () => {
+  const user = userEvent.setup();
+  const { props, rerender, onAdd, onRemove, onQueueAll } = show(
+    new Map([
+      ['old', 'lock'],
+      ['locked-a', 'unlock'],
+    ]),
+    { supportsLocking: true },
+  );
+  const sort = screen.getByRole('combobox', { name: 'Sort' });
+  await user.selectOptions(sort, 'A–Z');
+  expect(rowNames()).toEqual([
+    'Hidden achievement',
+    'Locked A',
+    'Locked B',
+    'Newest unlock',
+    'Older unlock',
+  ]);
+  await user.selectOptions(sort, 'Newest unlocked');
+  expect(rowNames()).toEqual([
+    'Newest unlock',
+    'Older unlock',
+    'Locked B',
+    'Locked A',
+    'Hidden achievement',
+  ]);
+  await user.selectOptions(sort, 'Queued first');
+  expect(rowNames()).toEqual([
+    'Locked A',
+    'Older unlock',
+    'Locked B',
+    'Hidden achievement',
+    'Newest unlock',
+  ]);
+  await user.type(screen.getByRole('searchbox', { name: 'Search achievements' }), 'Newest');
+  expect(rowNames()).toEqual(['Newest unlock']);
+  await user.click(screen.getByRole('button', { name: 'Clear achievement search' }));
+  expect(screen.getByRole('button', { name: 'Undo queued lock for Older unlock' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Undo queued unlock for Locked A' })).toBeVisible();
+  rerender(<Achievements {...props} queued={new Map([['new', 'lock']])} />);
+  expect(rowNames()[0]).toBe('Newest unlock');
+  await user.selectOptions(sort, 'Locked first');
+  expect(rowNames()).toEqual([
+    'Locked B',
+    'Locked A',
+    'Hidden achievement',
+    'Newest unlock',
+    'Older unlock',
+  ]);
+  expect(onAdd).not.toHaveBeenCalled();
+  expect(onRemove).not.toHaveBeenCalled();
+  expect(onQueueAll).not.toHaveBeenCalled();
+});
+
+it('queues only matching revealed rows without including concealed or already queued achievements', async () => {
+  const user = userEvent.setup();
+  const { onQueueAll } = show(new Map([['locked-b', 'unlock']]));
+  await user.type(screen.getByRole('searchbox', { name: 'Search achievements' }), 'LOCKED A');
+  await user.click(screen.getByRole('button', { name: 'Unlock all' }));
+  expect(onQueueAll).toHaveBeenCalledExactlyOnceWith(['locked-a'], 'unlock');
+});
