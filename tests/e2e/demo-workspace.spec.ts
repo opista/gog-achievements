@@ -33,6 +33,49 @@ async function signIn(page: Page) {
   await expect(page.getByRole('button', { name: 'History', exact: true })).toBeEnabled();
 }
 
+test('pins keep their order, selection and separate saved preferences through refresh and reload', async ({
+  page,
+}, testInfo) => {
+  await signIn(page);
+  const titles = page.locator('.library-pane .game-title');
+  const original = await titles.allTextContents();
+  const savedQueue = await savedDemo(page);
+  await page.getByRole('button', { name: 'Pin Hades', exact: true }).click();
+  await page.getByRole('button', { name: `Pin ${WITCHER}`, exact: true }).click();
+  const pinned = [
+    WITCHER,
+    'Hades',
+    ...original.filter((title) => title !== WITCHER && title !== 'Hades'),
+  ];
+  await expect(titles).toHaveText(pinned);
+  await expect(page.getByRole('button', { name: `Unpin ${WITCHER}`, exact: true })).toBeFocused();
+  await expect(page.locator('.game-heading h2')).toHaveText(CYBERPUNK);
+  expect(await savedDemo(page)).toEqual(savedQueue);
+  await page.screenshot({ path: testInfo.outputPath('pinned-games-desktop.png') });
+
+  const search = page.getByRole('textbox', { name: 'Search your library' });
+  await search.fill('h');
+  await expect(titles).toHaveText([WITCHER, 'Hades', 'Hollow Knight']);
+  await page.getByRole('button', { name: 'Clear library search', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh library', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Refresh library', exact: true })).toBeEnabled();
+  await expect(titles).toHaveText(pinned);
+  await expect(page.locator('.game-heading h2')).toHaveText(CYBERPUNK);
+  await page.reload();
+  await signIn(page);
+  await expect(titles).toHaveText(pinned);
+  await page.getByLabel('Account menu', { exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await signIn(page);
+  await expect(titles).toHaveText(pinned);
+  await page.getByRole('button', { name: `Unpin ${WITCHER}`, exact: true }).click();
+  await expect(titles).toHaveText(['Hades', ...original.filter((title) => title !== 'Hades')]);
+  const stored = await page.evaluate(() =>
+    localStorage.getItem('gog-achievements-demo:pinned-games:v1:123456789'),
+  );
+  expect(JSON.parse(stored!)).toEqual(['5']);
+});
+
 async function confirmation(page: Page, title = CYBERPUNK, count = 3) {
   await expect(applyButton(page, title)).toBeEnabled();
   await applyButton(page, title).click();

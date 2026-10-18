@@ -6,7 +6,10 @@ import userEvent from '@testing-library/user-event';
 import { Library } from '../../../src/renderer/features/library/Library';
 import type { ComponentProps } from 'react';
 import type { Game } from '../../../src/shared/api';
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 const games: Game[] = [
   { id: '1', title: 'Cyberpunk 2077', image: 'https://images.gog-statics.com/demo-image.jpg' },
   {
@@ -21,6 +24,7 @@ function library(overrides: Partial<ComponentProps<typeof Library>> = {}) {
     games,
     gameId: '1',
     signedIn: true,
+    userId: 'account-a',
     loaded: true,
     busy: false,
     demo: false,
@@ -98,4 +102,68 @@ it('leaves the signed-out library blank without a repeated sign-in prompt', () =
   const { container } = library({ signedIn: false, games: [], loaded: false });
   expect(container.querySelector('.library-list')).toBeEmptyDOMElement();
   expect(screen.getByRole('textbox', { name: 'Search your library' })).toBeDisabled();
+});
+
+it('pins without selecting a game, keeps stable group order and searches both groups', async () => {
+  const user = userEvent.setup();
+  const orderedGames = [
+    { id: '1', title: 'Game A' },
+    { id: '2', title: 'Game B' },
+    { id: '3', title: 'Game C' },
+    { id: '4', title: 'Game D' },
+  ];
+  const { container, onSelect } = library({ games: orderedGames });
+  const titles = () =>
+    [...container.querySelectorAll('.game-title')].map((node) => node.textContent);
+  await user.click(screen.getByRole('button', { name: 'Pin Game D' }));
+  await user.click(screen.getByRole('button', { name: 'Pin Game B' }));
+  expect(titles()).toEqual(['Game B', 'Game D', 'Game A', 'Game C']);
+  expect(onSelect).not.toHaveBeenCalled();
+  const pin = screen.getByRole('button', { name: 'Unpin Game B' });
+  expect(pin).toHaveAttribute('aria-pressed', 'true');
+  expect(pin).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Game A' })).toHaveAttribute('aria-pressed', 'true');
+  const search = screen.getByRole('textbox', { name: 'Search your library' });
+  await user.type(search, 'Game');
+  expect(titles()).toEqual(['Game B', 'Game D', 'Game A', 'Game C']);
+  await user.clear(search);
+  await user.type(search, 'Game C');
+  expect(titles()).toEqual(['Game C']);
+  await user.click(screen.getByRole('button', { name: 'Clear library search' }));
+  await user.click(screen.getByRole('button', { name: 'Unpin Game B' }));
+  expect(titles()).toEqual(['Game D', 'Game A', 'Game B', 'Game C']);
+  expect(screen.getByRole('button', { name: 'Pin Game B' })).toHaveFocus();
+});
+
+it('keeps pin preferences through a library refresh and scopes them to the current account', async () => {
+  const user = userEvent.setup();
+  const { props, rerender } = library();
+  await user.click(screen.getByRole('button', { name: `Pin ${games[1]!.title}` }));
+  rerender(<Library {...props} loading />);
+  rerender(<Library {...props} games={[...games]} />);
+  expect(screen.getByRole('button', { name: `Unpin ${games[1]!.title}` })).toBeVisible();
+  rerender(<Library {...props} userId="account-b" />);
+  expect(screen.getByRole('button', { name: `Pin ${games[1]!.title}` })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  rerender(<Library {...props} signedIn={false} />);
+  rerender(<Library {...props} />);
+  expect(screen.getByRole('button', { name: `Unpin ${games[1]!.title}` })).toBeVisible();
+});
+
+it('keeps keyboard selection focus while achievement reads are busy', async () => {
+  const user = userEvent.setup();
+  const { props, rerender, onSelect } = library();
+  const selected = screen.getByRole('button', { name: 'Cyberpunk 2077' });
+  selected.focus();
+  rerender(<Library {...props} busy />);
+  expect(selected).toHaveFocus();
+  expect(selected).toHaveAttribute('aria-disabled', 'true');
+  await user.keyboard('{Enter}');
+  expect(onSelect).not.toHaveBeenCalled();
+  await user.tab();
+  expect(screen.getByRole('button', { name: 'Pin Cyberpunk 2077' })).toHaveFocus();
+  await user.keyboard(' ');
+  expect(screen.getByRole('button', { name: 'Unpin Cyberpunk 2077' })).toHaveFocus();
 });

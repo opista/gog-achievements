@@ -22,6 +22,67 @@ const applicationPath = packageDirectory
     )
   : resolve('.');
 
+test('account pins survive an Electron restart in the same profile', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'gog-achievements-pins-'));
+  let application: Awaited<ReturnType<typeof _electron.launch>> | undefined;
+  const title = 'The Witcher 3: Wild Hunt';
+  try {
+    for (const restarting of [false, true]) {
+      application = await test.step(
+        `Open ${restarting ? 'saved' : 'new'} profile`,
+        () =>
+          _electron.launch({
+            executablePath,
+            args: [...(packageDirectory ? [] : [resolve('.')]), `--user-data-dir=${userData}`],
+            env: { ...process.env, GOG_ACHIEVEMENTS_DEMO: '1' },
+          }),
+        { timeout: 10000 },
+      );
+      const page = await application.firstWindow({ timeout: 10000 });
+      await test.step(
+        'Sign in to the fixture account',
+        async () => {
+          await page.getByRole('button', { name: 'Sign in with GOG', exact: true }).click();
+        },
+        { timeout: 10000 },
+      );
+      await expect(page.getByRole('button', { name: 'History', exact: true })).toBeEnabled();
+      if (!restarting)
+        await page.getByRole('button', { name: `Pin ${title}`, exact: true }).click();
+      await expect(page.locator('.library-pane .game-title').first()).toHaveText(title);
+      await expect(
+        page.getByRole('button', { name: `Unpin ${title}`, exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('.game-heading h2')).toHaveText('Cyberpunk 2077');
+      if (restarting) {
+        await page.getByRole('button', { name: `Unpin ${title}`, exact: true }).click();
+        await page.reload({ timeout: 10000 });
+        await expect(
+          page.getByRole('button', { name: `Pin ${title}`, exact: true }),
+        ).toHaveAttribute('aria-pressed', 'false');
+      }
+      await test.step(
+        'Close the idle app before restarting',
+        async () => {
+          // Reload starts new fixture reads. The native app guards shutdown until they finish.
+          await expect(page.getByRole('button', { name: 'History', exact: true })).toBeEnabled();
+          await application!.close();
+        },
+        {
+          timeout: 10000,
+        },
+      );
+      application = undefined;
+    }
+  } finally {
+    if (application) {
+      application.process().kill();
+      await application.close();
+    }
+    await rm(userData, { recursive: true, force: true });
+  }
+});
+
 for (const existing of [false, true]) {
   test(`the display name uses the original profile folder (${existing ? 'existing' : 'new'} install)`, async () => {
     const appData = await realpath(await mkdtemp(join(tmpdir(), 'gog-achievements-profile-')));

@@ -114,8 +114,14 @@ test('keyboard traversal crosses virtual windows and retains focus during pointe
   await first.focus();
   for (let index = 2; index <= 35; index++) {
     await page.keyboard.press('Tab');
+    await expect(
+      page.getByRole('button', { name: `Pin ${title(index - 1)}`, exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: title(index), exact: true })).toBeFocused();
   }
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: `Pin ${title(34)}`, exact: true })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(page.getByRole('button', { name: title(34), exact: true })).toBeFocused();
   await page.keyboard.press('End');
@@ -142,6 +148,59 @@ test('keyboard traversal crosses virtual windows and retains focus during pointe
   await expect(page.getByRole('textbox', { name: 'Search your library' })).toBeFocused();
   expect(await page.locator('.game-row').count()).toBeLessThan(40);
 });
+
+for (const mobile of [false, true]) {
+  test(`pinning and unpinning distant games keeps focus and bounded rendering (${mobile ? 'mobile' : 'desktop'})`, async ({
+    page,
+  }, testInfo) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await openLibrary(page, 10000);
+    await page.locator('.library-list').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      element.scrollLeft = element.scrollWidth;
+    });
+    await page.getByRole('button', { name: `Pin ${title(10000)}`, exact: true }).click();
+    const lastPin = page.getByRole('button', { name: `Unpin ${title(10000)}`, exact: true });
+    await expect(lastPin).toBeFocused();
+    await expect(lastPin).toBeInViewport();
+    await expect(page.getByRole('listitem').first().locator('.game-title')).toHaveText(
+      title(10000),
+    );
+    await expect(page.locator('.game-heading h2')).toHaveText(title(1));
+
+    await page.keyboard.press('End');
+    const previousPin = page.getByRole('button', { name: `Pin ${title(9999)}`, exact: true });
+    await expect(previousPin).toBeFocused();
+    await page.keyboard.press('Space');
+    const previousUnpin = page.getByRole('button', { name: `Unpin ${title(9999)}`, exact: true });
+    await expect(previousUnpin).toBeFocused();
+    await expect(previousUnpin).toBeInViewport();
+    await expect(page.getByRole('listitem').nth(0).locator('.game-title')).toHaveText(title(9999));
+    await expect(page.getByRole('listitem').nth(1).locator('.game-title')).toHaveText(title(10000));
+    await page.screenshot({
+      path: testInfo.outputPath(`pinned-library-${mobile ? 'mobile' : 'desktop'}.png`),
+    });
+
+    await page.keyboard.press('Enter');
+    await expect(previousPin).toBeFocused();
+    await expect(previousPin).toBeInViewport();
+    expect(await page.locator('.game-row').count()).toBeLessThan(mobile ? 20 : 40);
+    await page.keyboard.press('Home');
+    await expect(lastPin).toBeFocused();
+    await expect(lastPin).toBeInViewport();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: title(1), exact: true })).toBeFocused();
+    const search = page.getByRole('textbox', { name: 'Search your library' });
+    await search.fill('10000');
+    await expect(lastPin).toBeVisible();
+    await expect(page.locator('.game-row')).toHaveCount(1);
+    await expect(page.locator('.virtual-game-list')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Clear library search', exact: true }).click();
+    await expect(search).toBeFocused();
+    await expect(page.locator('.virtual-game-list')).toBeVisible();
+    await expect(lastPin).toBeInViewport();
+  });
+}
 
 test('a large mobile library scrolls horizontally and adapts to desktop with focus intact', async ({
   page,

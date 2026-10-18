@@ -39,6 +39,8 @@ Use **Unlock all** or **Lock all** beside the achievement filters to queue all e
 
 Only unlock achievements you have already earned. Existing unlock dates cannot be edited. Queue changes stay on your computer until you confirm the reviewed actions.
 
+Use the pin button beside a game to pin or unpin it. Pinned games appear first. Each group keeps the library's original order, and search includes both groups. Pins are saved on this device for each GOG account, across refreshes and app restarts. Pin preferences store only game IDs, separately from login details and queues. Demo pins are separate from real account pins.
+
 ### Lock achievements
 
 When the CLI supports locking, unlocked achievements have a red **Lock** button. Select it to queue a lock request. Its previous unlock date stays in the saved history data. Lock requests have no date editor.
