@@ -24,9 +24,14 @@ async function fixture(probe: ProcessProbe = { find: async () => ({ state: 'gone
   folders.push(folder);
   const cli = new FakeCli();
   const createCli = vi.fn(async () => cli);
+  const replacement = new FakeCli();
+  replacement.version = '0.6.0';
+  replacement.supportsExporting = true;
+  const createReplacementCli = vi.fn(() => replacement);
   const context = await NestFactory.createApplicationContext(
     WorkspaceModule.register({
       createCli,
+      createReplacementCli,
       userDataPath: folder,
       version: '0.1.0',
       cliVersion: '0.3.0',
@@ -37,7 +42,16 @@ async function fixture(probe: ProcessProbe = { find: async () => ({ state: 'gone
   contexts.push(context);
   const api = context.get<WorkspaceService>(WORKSPACE_API);
   const store = context.get(QueueStore);
-  return { context, cli, createCli, api, store, operations: context.get(OperationCoordinator) };
+  return {
+    context,
+    cli,
+    replacement,
+    createReplacementCli,
+    createCli,
+    api,
+    store,
+    operations: context.get(OperationCoordinator),
+  };
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -46,6 +60,103 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+function activation() {
+  return {
+    selection: { executable: '/fixture/0.6.0/gog-achievements', version: '0.6.0' },
+    verify: vi.fn(async () => {}),
+    commit: vi.fn(async () => {}),
+  };
+}
+
+test('an idle workspace changes future commands and feature support without signing out', async () => {
+  const f = await fixture();
+  expect(await f.api.initialize()).toMatchObject({ cliVersion: '0.3.0', supportsExporting: false });
+  const events: unknown[] = [];
+  f.api.onOperation((event) => events.push(event));
+  const update = activation();
+  expect(await f.api.activateCli(update)).toBe(true);
+  expect(update.verify).toHaveBeenCalledOnce();
+  expect(update.commit).toHaveBeenCalledOnce();
+  expect(events.at(-1)).toMatchObject({
+    kind: 'idle',
+    cli: { version: '0.6.0', supportsExporting: true },
+  });
+  const oldCalls = f.cli.calls.length;
+  expect(await f.api.initialize()).toMatchObject({
+    cliVersion: '0.6.0',
+    supportsExporting: true,
+    auth: { user_id: userId },
+  });
+  await f.api.listGames();
+  expect(f.cli.calls).toHaveLength(oldCalls);
+  expect(f.replacement.calls.some(({ kind }) => kind === 'games')).toBe(true);
+  expect(f.replacement.calls.some(({ kind }) => kind === 'auth-logout')).toBe(false);
+});
+
+test('a review and its entire apply keep their original CLI and never replay after activation', async () => {
+  const f = await fixture();
+  await writeFile(await f.store.draftPath(userId, gameId), JSON.stringify(makeQueue()));
+  const preview = await f.api.preview({ gameId });
+  const update = activation();
+  expect(await f.api.activateCli(update)).toBe(false);
+  expect(update.verify).not.toHaveBeenCalled();
+  const finish = deferred<void>();
+  f.cli.pause = finish.promise;
+  const applying = f.api.apply({ previewToken: preview.token });
+  await vi.waitFor(() => expect(f.operations.current.kind).toBe('apply'));
+  expect(await f.api.activateCli(update)).toBe(false);
+  finish.resolve();
+  expect((await applying).report?.complete).toBe(true);
+  expect(await f.api.activateCli(update)).toBe(true);
+  expect(f.cli.calls.filter(({ kind }) => kind === 'queue-apply')).toHaveLength(1);
+  expect(f.replacement.calls.filter(({ kind }) => kind === 'queue-apply')).toHaveLength(0);
+});
+
+test('cancelling a review and closing a dialog release the activation guard', async () => {
+  const f = await fixture();
+  await writeFile(await f.store.draftPath(userId, gameId), JSON.stringify(makeQueue()));
+  const preview = await f.api.preview({ gameId });
+  const update = activation();
+  await f.api.setCliActivationBlocked({ blocked: true });
+  await f.api.cancelPreview({ previewToken: preview.token });
+  expect(await f.api.activateCli(update)).toBe(false);
+  await f.api.setCliActivationBlocked({ blocked: false });
+  expect(await f.api.activateCli(update)).toBe(true);
+  await expect(f.api.apply({ previewToken: preview.token })).rejects.toMatchObject({
+    code: 'STALE_PREVIEW',
+  });
+  expect(f.cli.calls.some(({ kind }) => kind === 'queue-apply')).toBe(false);
+});
+
+test('failed activation leaves the current runner and feature cache intact', async () => {
+  const f = await fixture();
+  await f.api.initialize();
+  const update = activation();
+  update.commit.mockRejectedValueOnce(new Error('Disk full'));
+  await expect(f.api.activateCli(update)).rejects.toThrow('Disk full');
+  expect(await f.api.initialize()).toMatchObject({ cliVersion: '0.3.0', supportsExporting: false });
+  expect(f.operations.current.kind).toBe('idle');
+});
+
+test('a new UI workflow waits for an activation already in progress', async () => {
+  const f = await fixture();
+  const finish = deferred<void>();
+  const update = activation();
+  update.verify.mockReturnValueOnce(finish.promise);
+  const updating = f.api.activateCli(update);
+  let acknowledged = false;
+  const holding = f.api.setCliActivationBlocked({ blocked: true }).then(() => {
+    acknowledged = true;
+  });
+  await Promise.resolve();
+  expect(acknowledged).toBe(false);
+  finish.resolve();
+  expect(await updating).toBe(true);
+  await holding;
+  expect((await f.api.listGames()).user_id).toBe(userId);
+  expect(await f.api.activateCli(activation())).toBe(false);
+});
 
 test('the Nest graph shares one operation lock across all workspace routes during a write', async () => {
   const { api, cli, store, operations, createCli } = await fixture();

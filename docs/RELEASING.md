@@ -2,7 +2,7 @@
 
 ## Repository setup
 
-The app releases from `opista/gog-achievements`. Its pinned CLI comes from `opista/gog-achievements-cli`.
+The app releases from `opista/gog-achievements`. Its pinned fallback CLI and automatic CLI updates come from `opista/gog-achievements-cli`.
 
 Both repositories should be public for anonymous builds and installed-app update checks. While the CLI is private, set the app repository secret `CLI_RELEASE_TOKEN` to a token with read-only Contents access to that CLI repository. Do not put a token in the app. A private app repository cannot serve anonymous update checks.
 
@@ -64,11 +64,21 @@ If source code must change, make a new release commit and tag through Release Pl
 
 ## Update checks
 
-The installed app makes one anonymous GitHub API check at startup. The top-right account menu offers **Check for updates…**, even when signed out. The native macOS app menu and Windows Help menu offer the same check. Network errors stay quiet at startup and produce a message when checked manually. A missing or private release is reported as unavailable, not as proof that the app is current.
+The installed app makes one anonymous GitHub API check at startup. The top-right account menu offers **Check for updates**, even when signed out. The native macOS app menu and Windows Help menu offer the same check. Network errors stay quiet at startup and produce a message when checked manually. A missing or private release is reported as unavailable, not as proof that the app is current.
 
 Only a newer stable version with the exact installer for the running platform and architecture is offered. Drafts and prereleases are excluded. Release metadata, size, version and GitHub URLs are checked before a download link is retained. Download opens that retained link in the browser. There is no background download, automatic install or forced restart.
 
 The queue and history remain in the app's user-data folder when a new version replaces the app. Keep `appId` and product name stable across releases. Update notices wait until CLI work is idle.
+
+### CLI component updates
+
+Installed apps check the public CLI release list, including pagination, and select the highest compatible stable version. The current policy accepts `>=0.5.1 <1.0.0`; `CLI_SUPPORTED_MAJOR` and the bundled lock version define the policy. A future app release must explicitly change the supported major before using 1.x. Drafts, prereleases, incomplete assets and locally rejected versions are excluded.
+
+CLI archives and their named SHA-256 files are downloaded without credentials, with size limits, timeouts and restricted HTTPS redirects. The build downloader and runtime updater share the ZIP path, entry and layout validation. The runtime updater also checks the JSON help contract and reads an offline mixed-action fixture queue. It never signs in or applies achievements to test a package.
+
+The complete CLI package, including the private Intel Mac runtime, is kept under `userData/cli-updates/TARGET/packages/`. An atomic version-1 state file records the active package, previous package, pending package and rejected versions. File manifests cover every extracted file. Cached files, metadata and offline commands are verified again before startup activation. Startup selects a verified CLI and passes its actual version into the workspace. A downloaded CLI is reverified and activated under the shared operation lock. UI workflows and dialogs hold activation leases; outstanding achievement previews also block switching until consumed or explicitly cancelled. No running command changes version, and no achievement write is retried. Future commands use the new runner. Version and feature support reach the renderer through operation events without reloading account or library data.
+
+CLI updates are always automatic in installed apps. Older saved opt-out and bundled-version preferences are discarded without losing package or rejection records. The account menu shows the active CLI version, a spinner during checks and downloads, pending activation and fallback details. Failed candidates automatically fall back to the previous verified package or the bundled copy; newer fixes can still download. If the cache cannot be saved, the current CLI stays in use and updates are tried again next launch. App installer updates retain their existing manual browser-download flow. Demo and source runs do not use automatic CLI downloads.
 
 ## Move to another GitHub organisation
 

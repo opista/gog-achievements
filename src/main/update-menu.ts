@@ -21,6 +21,8 @@ interface UpdateMenuOptions {
   platform?: NodeJS.Platform;
   architecture?: string;
   service?: Pick<UpdateService, 'check' | 'openDownload'>;
+  enabled?: boolean;
+  cliUpdates?: { check(): Promise<unknown>; activatePending?(): Promise<unknown> };
 }
 
 type Notice = { result: UpdateCheck; manual: boolean } | { development: true };
@@ -149,6 +151,7 @@ export function installUpdates(options: UpdateMenuOptions) {
       .catch(() => {})
       .finally(() => {
         presenting = undefined;
+        void options.cliUpdates?.activatePending?.().catch(() => {});
       });
     return presenting;
   }
@@ -160,7 +163,7 @@ export function installUpdates(options: UpdateMenuOptions) {
       manualRequested ||= manual;
       return checking;
     }
-    if (!app.isPackaged) {
+    if (!app.isPackaged || options.enabled === false) {
       if (manual) pending = { development: true };
       return presentPending();
     }
@@ -170,11 +173,13 @@ export function installUpdates(options: UpdateMenuOptions) {
     }
     manualRequested = manual;
     checking = (async () => {
-      const result = await service.check().catch((): UpdateCheck => ({
+      const appCheck = service.check().catch((): UpdateCheck => ({
         status: 'unavailable',
         currentVersion: app.getVersion(),
         message: UPDATE_CHECK_FAILED_MESSAGE,
       }));
+      void options.cliUpdates?.check().catch(() => {});
+      const result = await appCheck;
       if (disposed) return;
       if (result.status === 'available' || manualRequested) {
         pending = { result, manual: manualRequested };
@@ -209,7 +214,7 @@ export function installUpdates(options: UpdateMenuOptions) {
   const items = originalItems.filter((item) => item.id !== updateItemId);
   const entry: MenuItemConstructorOptions = {
     id: updateItemId,
-    label: 'Check for Updates…',
+    label: 'Check for Updates',
     click: () => void check(true),
   };
   if (mac) {
@@ -237,10 +242,11 @@ export function installUpdates(options: UpdateMenuOptions) {
   };
   const installedMenu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(installedMenu);
-  if (app.isPackaged) void check(false);
+  if (app.isPackaged && options.enabled !== false) void check(false);
 
   return {
     checkForUpdates: () => check(true),
+    isPresenting: () => presenting !== undefined,
     onIdle: () => void presentPending(),
     cleanup() {
       if (disposed) return;

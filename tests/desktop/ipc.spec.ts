@@ -182,6 +182,16 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
     });
     const initial = await page.evaluate(() => window.ipc.workspace.initialize());
     expect(initial).toMatchObject({ ok: true, data: { auth: { authenticated: false } } });
+    const cliUpdates = await page.evaluate(() => window.ipc.workspace.getCliUpdateState());
+    expect(cliUpdates).toMatchObject({ ok: true, data: { supported: false, status: 'idle' } });
+    const updateActions = await page.evaluate(() => Object.keys(window.ipc.workspace));
+    expect(updateActions).not.toContain('setAutomaticCliUpdates');
+    expect(updateActions).not.toContain('useBundledCli');
+    await page.getByLabel('Account menu', { exact: true }).click();
+    await expect(page.locator('.account-cli-version')).toHaveText(/^CLI \d+\.\d+\.\d+$/);
+    await expect(page.locator('.account-popover input[type="checkbox"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Use bundled version/ })).toHaveCount(0);
+    await page.getByLabel('Account menu', { exact: true }).press('Escape');
     const invalid = await page.evaluate(() => window.ipc.workspace.listAchievements('../invalid'));
     expect(invalid).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
 

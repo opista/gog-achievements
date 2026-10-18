@@ -13,6 +13,7 @@ import { HistoryView } from './features/history/HistoryView';
 import { Library } from './features/library/Library';
 import { QueuePane } from './features/queue/QueuePane';
 import { useWorkspace, type Workspace } from './use-workspace';
+import { CliActivationContext } from './application/cli-activation-guard';
 
 function errorRecovery(w: Workspace): { label: string; run(): void } | null {
   if (!w.auth.authenticated || /AUTH|LOGIN|TOKEN|CREDENTIAL/.test(w.error?.code ?? ''))
@@ -34,6 +35,14 @@ function errorRecovery(w: Workspace): { label: string; run(): void } | null {
 }
 
 export function App({ api }: { api: DesktopApi }) {
+  return (
+    <CliActivationContext value={api}>
+      <WorkspaceApp api={api} />
+    </CliActivationContext>
+  );
+}
+
+function WorkspaceApp({ api }: { api: DesktopApi }) {
   const w = useWorkspace(api);
   const [libraryWidth, setLibraryWidth] = useState<number>();
   const [queueWidth, setQueueWidth] = useState<number>();

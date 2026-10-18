@@ -1,4 +1,5 @@
 import { isConfirmedChange, remainingQueueItems } from './queue-cleanup';
+import { disabledCliUpdates } from './cli-updates';
 import { queueSchema, reportSchema } from './schemas';
 import type {
   Achievement,
@@ -211,6 +212,13 @@ export function createDemoApi(options: DemoOptions = {}): DemoDesktopApi {
   }
   return {
     isDemo: true,
+    async getCliUpdateState() {
+      return disabledCliUpdates('0.3.0');
+    },
+    async setCliActivationBlocked() {},
+    async cancelPreview(input) {
+      if (preview?.token === input.previewToken) preview = null;
+    },
     async checkForUpdates() {
       throw problem('DESKTOP_REQUIRED', 'Update checks are available in the installed app.');
     },

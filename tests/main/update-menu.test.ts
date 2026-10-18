@@ -12,6 +12,7 @@ import type {
 } from 'electron';
 import { installUpdates } from '../../src/main/update-menu';
 import type { UpdateCheck } from '../../src/main/update-service';
+import type { CliUpdateState } from '../../src/shared/cli-updates';
 
 const available: UpdateCheck = {
   status: 'available',
@@ -59,6 +60,8 @@ function fixture({
   existing = null as Menu | null,
   busy = false,
   request = undefined as (() => Promise<UpdateCheck>) | undefined,
+  cliUpdates = undefined as
+    { check(): Promise<CliUpdateState>; activatePending?(): Promise<unknown> } | undefined,
 } = {}) {
   let applicationMenu = existing;
   let active = busy;
@@ -85,6 +88,7 @@ function fixture({
     platform,
     architecture: 'arm64',
     service: { check, openDownload },
+    cliUpdates,
   });
   const notices = () => showMessageBox.mock.calls.map((args) => args.at(-1) as MessageBoxOptions);
   const updateItem = () => {
@@ -137,7 +141,7 @@ test('the macOS app menu keeps standard roles and adds Check for Updates after A
     'separator',
     'quit',
   ]);
-  expect(f.updateItem()?.label).toBe('Check for Updates…');
+  expect(f.updateItem()?.label).toBe('Check for Updates');
   expect(f.check).not.toHaveBeenCalled();
   f.updates.cleanup();
 });
@@ -220,6 +224,89 @@ test('a packaged startup checks once and Download uses only the retained service
   f.updates.onIdle();
   await settle();
   expect(f.showMessageBox).toHaveBeenCalledOnce();
+  f.updates.cleanup();
+});
+
+test.each(['idle', 'ready'] as const)(
+  'a manual result keeps %s CLI details in the account menu',
+  async (status) => {
+    const cliCheck = vi.fn(async (): Promise<CliUpdateState> => ({
+      supported: true,
+      currentVersion: '0.5.1',
+      bundledVersion: '0.5.1',
+      status,
+      ...(status === 'ready' ? { pendingVersion: '0.6.0' } : {}),
+      message:
+        status === 'ready'
+          ? 'CLI 0.6.0 is ready. It will activate when current work finishes.'
+          : 'The CLI is up to date.',
+    }));
+    const f = fixture({
+      result: { status: 'up-to-date', currentVersion: '0.1.0', message: 'The app is up to date.' },
+      cliUpdates: { check: cliCheck },
+    });
+    await settle();
+    expect(f.showMessageBox).not.toHaveBeenCalled();
+    await f.updates.checkForUpdates();
+    expect(cliCheck.mock.calls).toEqual([[], []]);
+    expect(f.notices()[0]).toMatchObject({
+      message: 'The app is up to date.',
+      buttons: ['OK'],
+    });
+    expect(f.notices()[0]).not.toHaveProperty('detail');
+    expect(f.openDownload).not.toHaveBeenCalled();
+    f.updates.cleanup();
+  },
+);
+
+test('a background CLI download does not delay the app update result or open another notice', async () => {
+  const component = deferred<CliUpdateState>();
+  const cliCheck = vi.fn(() => component.promise);
+  const f = fixture({ cliUpdates: { check: cliCheck } });
+  await settle();
+  expect(cliCheck).toHaveBeenCalledOnce();
+  expect(f.notices()).toHaveLength(1);
+  expect(f.notices()[0]).toMatchObject({
+    message: 'GOG Achievements 0.2.0 is available.',
+    detail: 'Download the new version in your browser, then open it to install.',
+  });
+  component.resolve({
+    supported: true,
+    currentVersion: '0.5.1',
+    bundledVersion: '0.5.1',
+    status: 'ready',
+    pendingVersion: '0.6.0',
+    message: 'CLI 0.6.0 is ready.',
+  });
+  await settle();
+  expect(f.notices()).toHaveLength(1);
+  f.updates.cleanup();
+});
+
+test('a component check failure does not suppress an app update notice', async () => {
+  const f = fixture({ cliUpdates: { check: vi.fn().mockRejectedValue(new Error('offline')) } });
+  await settle();
+  expect(f.notices()[0]?.message).toBe('GOG Achievements 0.2.0 is available.');
+  f.updates.cleanup();
+});
+
+test('a pending CLI activation is retried after a native update dialog closes', async () => {
+  const activatePending = vi.fn(async () => {});
+  const response = deferred<MessageBoxReturnValue>();
+  const f = fixture({
+    cliUpdates: {
+      check: vi.fn().mockRejectedValue(new Error('offline')),
+      activatePending,
+    },
+  });
+  f.showMessageBox.mockReturnValueOnce(response.promise);
+  await settle();
+  expect(f.updates.isPresenting()).toBe(true);
+  expect(activatePending).not.toHaveBeenCalled();
+  response.resolve({ response: 1, checkboxChecked: false });
+  await settle();
+  expect(f.updates.isPresenting()).toBe(false);
+  expect(activatePending).toHaveBeenCalledOnce();
   f.updates.cleanup();
 });
 
@@ -438,7 +525,7 @@ test.each(['win32', 'darwin'] as const)(
       'separator',
       'togglefullscreen',
     ]);
-    expect(f.updateItem()?.label).toBe('Check for Updates…');
+    expect(f.updateItem()?.label).toBe('Check for Updates');
     f.updates.cleanup();
     expect(f.menu()).toBe(original);
   },

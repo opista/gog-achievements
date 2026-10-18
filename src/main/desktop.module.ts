@@ -1,6 +1,10 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import type { BrowserWindow } from 'electron';
-import type { DesktopApi } from '../shared/api';
+import type { DesktopApi, AppUpdateActions } from '../shared/api';
+import { disabledCliUpdates } from '../shared/cli-updates';
+import { CLI_VERSION } from '../shared/cli-release';
+import type { CliSelection } from './cli-updates/manager';
+import type { CliRuntime } from './application/cli-runtime';
 import { createDemoApi } from '../shared/demo-api';
 import { CliClient, resolveCli, type CliRunner } from './cli-client';
 import { DesktopError } from './errors';
@@ -12,12 +16,16 @@ import type { ExportDestination } from './workspace.tokens';
 
 export interface DesktopOptions {
   window: BrowserWindow;
-  appActions: Pick<DesktopApi, 'checkForUpdates'>;
+  appActions: Pick<DesktopApi, 'checkForUpdates'> &
+    Partial<Omit<AppUpdateActions, 'checkForUpdates'>>;
   demo: boolean;
   version: string;
   userDataPath: string;
   chooseExportFile?: ExportDestination;
   cli: Parameters<typeof resolveCli>[0];
+  cliSelection?: CliSelection;
+  createCli?: () => CliRunner | Promise<CliRunner>;
+  createReplacementCli?: CliRuntime['create'];
 }
 
 @Module({ providers: [WorkspaceController, IpcBoundary] })
@@ -30,28 +38,42 @@ export class DesktopModule {
         : [
             WorkspaceModule.register({
               version: options.version,
+              cliVersion: options.cliSelection?.version,
               userDataPath: options.userDataPath,
               chooseExportFile: options.chooseExportFile,
-              createCli: async (): Promise<CliRunner> => {
-                try {
-                  // Use only the verified bundled path. Never fall back to PATH.
-                  return new CliClient(await resolveCli(options.cli));
-                } catch {
-                  return {
-                    run: async () => {
-                      throw new DesktopError(
-                        'CLI_PACKAGE_INVALID',
-                        'The bundled CLI is missing or does not match this app. Reinstall the app.',
-                      );
-                    },
-                  };
-                }
-              },
+              createReplacementCli: options.createReplacementCli,
+              createCli:
+                options.createCli ??
+                (async (): Promise<CliRunner> => {
+                  try {
+                    // The initial selection is verified before the renderer starts. Never use PATH.
+                    return new CliClient(
+                      options.cliSelection?.executable ?? (await resolveCli(options.cli)),
+                    );
+                  } catch {
+                    return {
+                      run: async () => {
+                        throw new DesktopError(
+                          'CLI_PACKAGE_INVALID',
+                          'The bundled CLI is missing or does not match this app. Reinstall the app.',
+                        );
+                      },
+                    };
+                  }
+                }),
             }),
           ],
       providers: [
         { provide: DESKTOP_WINDOW, useValue: options.window },
-        { provide: APP_ACTIONS, useValue: options.appActions },
+        {
+          provide: APP_ACTIONS,
+          useValue: {
+            getCliUpdateState: async () =>
+              disabledCliUpdates(options.cliSelection?.version ?? CLI_VERSION),
+            setCliActivationBlocked: async () => {},
+            ...options.appActions,
+          } satisfies AppUpdateActions,
+        },
         ...(options.demo ? [{ provide: WORKSPACE_API, useFactory: () => createDemoApi() }] : []),
       ],
     };

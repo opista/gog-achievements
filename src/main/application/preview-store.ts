@@ -16,6 +16,12 @@ export class PreviewStore {
   clear(): void {
     this.previews.clear();
   }
+  get pending(): boolean {
+    return this.previews.size > 0;
+  }
+  discard(token: string): void {
+    this.previews.delete(token);
+  }
   save(preview: Preview): void {
     this.previews.set(preview.token, preview);
   }

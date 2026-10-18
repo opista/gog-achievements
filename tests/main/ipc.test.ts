@@ -62,9 +62,17 @@ async function fixture(demo = true) {
   const event = { sender: webContents, senderFrame: mainFrame } as unknown as IpcMainInvokeEvent;
   electron.event = event;
   const checkForUpdates = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  const getCliUpdateState = vi.fn(async () => ({
+    supported: true,
+    currentVersion: '0.5.1',
+    bundledVersion: '0.5.1',
+    status: 'idle' as const,
+    message: 'Up to date.',
+  }));
+  const setCliActivationBlocked = vi.fn(async (_input: { blocked: boolean }) => {});
   const application = await createDesktopApplication({
     window,
-    appActions: { checkForUpdates },
+    appActions: { checkForUpdates, getCliUpdateState, setCliActivationBlocked },
     demo,
     version: '0.1.0',
     userDataPath: '/missing-ipc-fixture',
@@ -87,6 +95,8 @@ async function fixture(demo = true) {
     bridge,
     client,
     checkForUpdates,
+    getCliUpdateState,
+    setCliActivationBlocked,
     event,
     async invoke(method: string, payload?: unknown, from = event): Promise<IpcResult> {
       electron.event = from;
@@ -207,6 +217,60 @@ test('IPC permits only trusted, no-payload update checks without GOG sign-in', a
   expect(checkForUpdates).toHaveBeenCalledExactlyOnceWith();
 });
 
+test('CLI update status accepts no payload and is limited to the trusted main frame', async () => {
+  const { invoke, client, bridge, event, getCliUpdateState } = await fixture();
+  for (const payload of [{ enabled: false }, { path: '/tmp/code' }, true, null]) {
+    expect(await invoke('getCliUpdateState', payload)).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    });
+  }
+  expect(
+    await invoke('getCliUpdateState', undefined, {
+      ...event,
+      senderFrame: {},
+    } as IpcMainInvokeEvent),
+  ).toMatchObject({ ok: false, error: { code: 'IPC_DENIED' } });
+  expect(getCliUpdateState).not.toHaveBeenCalled();
+  electron.event = event;
+  expect(await client.getCliUpdateState()).toMatchObject({ currentVersion: '0.5.1' });
+  expect(getCliUpdateState).toHaveBeenCalledExactlyOnceWith();
+  expect(bridge.workspace).not.toHaveProperty('setAutomaticCliUpdates');
+  expect(bridge.workspace).not.toHaveProperty('useBundledCli');
+});
+
+test('activation guards accept only booleans from the trusted renderer', async () => {
+  const { invoke, client, event, setCliActivationBlocked } = await fixture();
+  for (const input of [{ blocked: 'true' }, { blocked: true, path: '/tmp/executable' }, null]) {
+    expect(await invoke('setCliActivationBlocked', input)).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    });
+  }
+  expect(
+    await invoke('setCliActivationBlocked', { blocked: true }, {
+      ...event,
+      senderFrame: {},
+    } as IpcMainInvokeEvent),
+  ).toMatchObject({ ok: false, error: { code: 'IPC_DENIED' } });
+  expect(setCliActivationBlocked).not.toHaveBeenCalled();
+  electron.event = event;
+  await client.setCliActivationBlocked({ blocked: true });
+  expect(setCliActivationBlocked).toHaveBeenCalledExactlyOnceWith({ blocked: true });
+});
+
+test('cancelling a reviewed token through IPC prevents it from being applied', async () => {
+  const { client } = await fixture();
+  await client.login();
+  const original = await client.getQueue('1');
+  const preview = await client.preview({ gameId: '1' });
+  await client.cancelPreview({ previewToken: preview.token });
+  await expect(client.apply({ previewToken: preview.token })).rejects.toMatchObject({
+    code: 'LOCAL_ERROR',
+  });
+  expect(await client.getQueue('1')).toEqual(original);
+});
+
 test('closing the Nest application removes all bridge handlers and permits a clean restart', async () => {
   const { application, bridge } = await fixture();
   expect(electron.handlers.size).toBe(Object.keys(ipcSchemas).length + 1);
@@ -229,6 +293,49 @@ test('Nest supplies the production workspace services and stops recovery polling
   await application.close();
   await vi.advanceTimersByTimeAsync(6000);
   expect(refresh).toHaveBeenCalledOnce();
+});
+
+test('the production workspace uses the selected cached CLI path and its actual version', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'gog-selected-cli-'));
+  const cli = new FakeCli();
+  const selected = '/verified/cache/resources/cli/gog-achievements';
+  const paths: string[] = [];
+  vi.spyOn(CliClient.prototype, 'run').mockImplementation(async function (
+    this: CliClient,
+    command,
+    onSpawn,
+  ) {
+    paths.push(this.executable);
+    const result = await cli.run(command, onSpawn);
+    if (command.kind === 'help' && result.result.ok)
+      return {
+        ...result,
+        result: { ok: true, data: { ...(result.result.data as object), version: '0.6.0' } },
+      };
+    return result;
+  });
+  const mainFrame = {};
+  const webContents = { mainFrame };
+  const application = await createDesktopApplication({
+    window: { webContents } as unknown as BrowserWindow,
+    appActions: { checkForUpdates: async () => {} },
+    demo: false,
+    version: '0.3.1',
+    userDataPath: folder,
+    cli: { packaged: true, resourcesPath: '/missing-bundle', projectPath: '/missing-project' },
+    cliSelection: { executable: selected, version: '0.6.0' },
+  });
+  try {
+    expect(await application.api.initialize()).toMatchObject({
+      cliVersion: '0.6.0',
+      supportsLocking: true,
+    });
+    expect(paths.length).toBeGreaterThan(0);
+    expect(new Set(paths)).toEqual(new Set([selected]));
+  } finally {
+    await application.close();
+    await rm(folder, { recursive: true, force: true });
+  }
 });
 
 test('the production feature services complete the workspace flow through the real IPC bridge', async () => {

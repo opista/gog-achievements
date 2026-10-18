@@ -147,7 +147,7 @@ export function Achievements({
               ? 'CSV export is available in the desktop app.'
               : supportsExporting
                 ? 'Export the current filters. Includes hidden achievement details.'
-                : 'CSV export needs an app with a newer bundled CLI.'
+                : 'CSV export needs a newer CLI. Check for updates in the account menu.'
           }
           onClick={() =>
             onExport?.({ search, status: filter.toLowerCase() as ExportInput['status'] })

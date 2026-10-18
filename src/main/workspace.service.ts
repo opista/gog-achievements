@@ -16,11 +16,16 @@ import { ApplyService } from './features/apply/apply.service';
 import { HistoryService } from './features/history/history.service';
 import { RecoveryService } from './features/recovery/recovery.service';
 import { WORKSPACE_VERSIONS, type WorkspaceVersions } from './workspace.tokens';
+import { CliRuntime } from './application/cli-runtime';
+import { PreviewStore } from './application/preview-store';
+import type { CliActivation } from './cli-updates/manager';
 
 // The only exported feature API. Every route uses the same recovery gate and lock.
 @Injectable()
 export class WorkspaceService implements WorkspaceApi {
   readonly isDemo = false;
+  private activationBlocked = false;
+  private activating: Promise<boolean> | undefined;
   constructor(
     @Inject(OperationCoordinator) private readonly operations: OperationCoordinator,
     @Inject(RecoveryService) private readonly recovery: RecoveryService,
@@ -30,7 +35,34 @@ export class WorkspaceService implements WorkspaceApi {
     @Inject(ApplyService) private readonly changes: ApplyService,
     @Inject(HistoryService) private readonly records: HistoryService,
     @Inject(WORKSPACE_VERSIONS) private readonly versions: WorkspaceVersions,
+    @Inject(CliRuntime) private readonly runtime: CliRuntime,
+    @Inject(PreviewStore) private readonly previews: PreviewStore,
   ) {}
+  async setCliActivationBlocked({ blocked }: { blocked: boolean }): Promise<void> {
+    this.activationBlocked = blocked;
+    if (blocked) await this.activating;
+    else if (this.operations.current.kind === 'idle') this.operations.publish({ kind: 'idle' });
+  }
+  activateCli(activation: CliActivation): Promise<boolean> {
+    if (this.activating) return this.activating;
+    if (this.activationBlocked || this.previews.pending || this.operations.current.kind !== 'idle')
+      return Promise.resolve(false);
+    this.activating = this.operations
+      .run('read', async () => {
+        await activation.verify();
+        const runner = this.runtime.create(activation.selection);
+        const info = await this.session.inspectCli(runner, activation.selection.version);
+        await activation.commit();
+        this.runtime.replace(runner);
+        this.session.acceptCli(info);
+        this.operations.setCli(info);
+        return true;
+      })
+      .finally(() => {
+        this.activating = undefined;
+      });
+    return this.activating;
+  }
   get currentOperation(): OperationState {
     return this.operations.current;
   }
@@ -90,6 +122,10 @@ export class WorkspaceService implements WorkspaceApi {
   }
   preview(input: { gameId: string }) {
     return this.run('read', () => this.changes.preview(input), input.gameId);
+  }
+  async cancelPreview({ previewToken }: { previewToken: string }): Promise<void> {
+    this.previews.discard(previewToken);
+    if (this.operations.current.kind === 'idle') this.operations.publish({ kind: 'idle' });
   }
   apply(input: { previewToken: string }) {
     return this.run('apply', () => this.changes.apply(input));

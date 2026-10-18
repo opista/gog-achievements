@@ -6,7 +6,6 @@ import type {
   ApplyResult,
   AuthStatus,
   DatesInput,
-  DesktopApi,
   GamesData,
   InitializeResult,
   IpcResult,
@@ -18,7 +17,9 @@ import type {
   WorkspaceApi,
   ExportInput,
   ExportResult,
+  AppUpdateActions,
 } from '../shared/api';
+import type { CliUpdateState } from '../shared/cli-updates';
 import { IpcBoundary } from './ipc';
 import { APP_ACTIONS, WORKSPACE_API } from './ipc.tokens';
 
@@ -27,7 +28,7 @@ import { APP_ACTIONS, WORKSPACE_API } from './ipc.tokens';
 export class WorkspaceController {
   constructor(
     @Inject(WORKSPACE_API) private readonly api: WorkspaceApi,
-    @Inject(APP_ACTIONS) private readonly appActions: Pick<DesktopApi, 'checkForUpdates'>,
+    @Inject(APP_ACTIONS) private readonly appActions: AppUpdateActions,
     @Inject(IpcBoundary) private readonly boundary: IpcBoundary,
   ) {}
 
@@ -46,6 +47,26 @@ export class WorkspaceController {
   ): Promise<IpcResult<void>> {
     return this.boundary.execute(event, 'checkForUpdates', payload, () =>
       this.appActions.checkForUpdates(),
+    );
+  }
+
+  @IpcHandle()
+  getCliUpdateState(
+    @RawEvent() event: IpcMainInvokeEvent,
+    payload?: undefined,
+  ): Promise<IpcResult<CliUpdateState>> {
+    return this.boundary.execute(event, 'getCliUpdateState', payload, () =>
+      this.appActions.getCliUpdateState(),
+    );
+  }
+
+  @IpcHandle()
+  setCliActivationBlocked(
+    @RawEvent() event: IpcMainInvokeEvent,
+    input: { blocked: boolean },
+  ): Promise<IpcResult<void>> {
+    return this.boundary.execute(event, 'setCliActivationBlocked', input, () =>
+      this.appActions.setCliActivationBlocked(input),
     );
   }
 
@@ -140,6 +161,16 @@ export class WorkspaceController {
     input: { gameId: string },
   ): Promise<IpcResult<PreviewResult>> {
     return this.boundary.execute(event, 'preview', input, () => this.api.preview(input));
+  }
+
+  @IpcHandle()
+  cancelPreview(
+    @RawEvent() event: IpcMainInvokeEvent,
+    input: { previewToken: string },
+  ): Promise<IpcResult<void>> {
+    return this.boundary.execute(event, 'cancelPreview', input, () =>
+      this.api.cancelPreview(input),
+    );
   }
 
   @IpcHandle()

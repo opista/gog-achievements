@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download, LoaderCircle, LogOut, UserRound } from 'lucide-react';
 import type { AuthStatus, DesktopApi } from '../../../shared/api';
+import type { CliUpdateState } from '../../../shared/cli-updates';
 
 interface AccountMenuProps {
-  api: Pick<DesktopApi, 'checkForUpdates'>;
+  api: Pick<DesktopApi, 'checkForUpdates' | 'getCliUpdateState'>;
   auth: AuthStatus;
   versions: { app: string; cli: string };
   busy: boolean;
@@ -13,8 +14,32 @@ interface AccountMenuProps {
 export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenuProps) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string>();
+  const [open, setOpen] = useState(false);
+  const [updates, setUpdates] = useState<CliUpdateState>();
   const menuRef = useRef<HTMLDetailsElement>(null);
   const summaryRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      try {
+        const state = await api.getCliUpdateState();
+        if (!cancelled) setUpdates(state);
+      } catch {
+        if (!cancelled)
+          setError('CLI update status could not be loaded. Close the menu and try again.');
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void refresh(), 2000);
+      }
+    }
+    void refresh();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [api, open, versions.cli]);
 
   useEffect(() => {
     function dismissOutside(event: PointerEvent | FocusEvent) {
@@ -50,10 +75,16 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
     }
   }
 
+  const updating =
+    updates?.status === 'checking' ||
+    updates?.status === 'downloading' ||
+    updates?.status === 'activating';
+
   return (
     <details
       ref={menuRef}
       className="account-menu"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && menuRef.current?.open) {
           event.preventDefault();
@@ -74,7 +105,7 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
           ) : (
             <Download size={17} aria-hidden="true" />
           )}
-          {checking ? 'Checking…' : 'Check for updates…'}
+          {checking ? 'Checking…' : 'Check for updates'}
         </button>
         {error ? (
           <p className="account-update-notice" role="alert">
@@ -93,7 +124,26 @@ export function AccountMenu({ api, auth, versions, busy, onLogout }: AccountMenu
             Sign out
           </button>
         ) : null}
-        {versions.app ? <small>Version {versions.app}</small> : null}
+        {versions.app ? <small>App {versions.app}</small> : null}
+        {updates?.currentVersion || versions.cli ? (
+          <div className="account-cli-version">
+            <small>CLI {updates?.currentVersion ?? versions.cli}</small>
+            {updating ? (
+              <span className="account-cli-progress" role="status" title={updates.message}>
+                <LoaderCircle size={14} className="spinner" aria-hidden="true" />
+                <span className="sr-only">{updates.message}</span>
+              </span>
+            ) : null}
+            {updates?.status === 'ready' ? (
+              <small role="status">{updates.pendingVersion} ready · waiting for current work</small>
+            ) : null}
+          </div>
+        ) : null}
+        {updates?.status === 'fallback' || updates?.status === 'unavailable' ? (
+          <p className="account-update-notice" role="status">
+            {updates.message}
+          </p>
+        ) : null}
       </div>
     </details>
   );

@@ -9,6 +9,7 @@ import { applied, deferred, preview } from './fixtures';
 afterEach(cleanup);
 function setup() {
   const api = {
+    cancelPreview: vi.fn(async () => {}),
     preview: vi.fn(async () => preview()),
     apply: vi.fn(async () => applied()),
   };
