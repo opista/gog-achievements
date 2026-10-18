@@ -43,7 +43,7 @@ export function Achievements({
   const controlsBlocked = busy || loading;
   const [filter, setFilter] = useState<AchievementFilter>('All');
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<AchievementSort>('Default');
+  const [sort, setSort] = useState<AchievementSort>('Locked first');
   const [revealed, setRevealed] = useState(new Set<string>());
   const searchInput = useRef<HTMLInputElement>(null);
   const focusTarget = useRef<string | null>(null);

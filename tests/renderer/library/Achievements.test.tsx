@@ -403,7 +403,7 @@ it('changes sort without changing saved requests and keeps queue order stable wi
   expect(screen.getByRole('button', { name: 'Undo queued unlock for Locked A' })).toBeVisible();
   rerender(<Achievements {...props} queued={new Map([['new', 'lock']])} />);
   expect(rowNames()[0]).toBe('Newest unlock');
-  await user.selectOptions(sort, 'Default');
+  await user.selectOptions(sort, 'Locked first');
   expect(rowNames()).toEqual([
     'Locked B',
     'Locked A',

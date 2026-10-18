@@ -105,6 +105,7 @@ for (const viewport of [
     const names = rows.getByRole('heading');
     const search = page.getByRole('searchbox', { name: 'Search achievements' });
     const sort = page.getByRole('combobox', { name: 'Sort', exact: true });
+    await expect(sort).toHaveValue('Locked first');
     const defaults = await names.allTextContents();
     await search.fill('THE WORLD');
     await expect(names).toHaveText(['The World']);
@@ -144,7 +145,7 @@ for (const viewport of [
       'Hidden achievement',
       'Daemon In The Shell',
     ]);
-    await sort.selectOption('Default');
+    await sort.selectOption('Locked first');
     await expect(names).toHaveText(defaults);
     await expect(completion).toHaveText(totals!);
     expect(await savedDemo(page)).toEqual(saved);

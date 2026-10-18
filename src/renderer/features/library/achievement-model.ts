@@ -2,7 +2,12 @@ import type { Achievement, AchievementAction } from '../../../shared/api';
 
 export const ACHIEVEMENT_FILTERS = ['All', 'Unlocked', 'Locked'] as const;
 export type AchievementFilter = (typeof ACHIEVEMENT_FILTERS)[number];
-export const ACHIEVEMENT_SORTS = ['Default', 'A–Z', 'Newest unlocked', 'Queued first'] as const;
+export const ACHIEVEMENT_SORTS = [
+  'Locked first',
+  'A–Z',
+  'Newest unlocked',
+  'Queued first',
+] as const;
 export type AchievementSort = (typeof ACHIEVEMENT_SORTS)[number];
 
 export function isAchievementConcealed(item: Achievement, revealed: ReadonlySet<string>): boolean {
@@ -31,7 +36,7 @@ export function visibleAchievements(
   filter: AchievementFilter,
   {
     search = '',
-    sort = 'Default',
+    sort = 'Locked first',
     revealed = new Set<string>(),
     queued = new Map<string, AchievementAction>(),
   }: {
