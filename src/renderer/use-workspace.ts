@@ -314,6 +314,7 @@ export function useWorkspace(api: DesktopApi) {
     supportsLocking: account.supportsLocking,
     auth,
     games,
+    completion: library.completion,
     libraryLoaded,
     achievementsLoaded,
     queuesLoaded,

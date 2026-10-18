@@ -362,9 +362,27 @@ small {
 .game-title {
   flex: 1;
   min-width: 0;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.game-completion {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.game-completion strong {
+  font-weight: 600;
+}
+.game-completion.complete {
+  color: var(--green);
 }
 .search-clear {
   position: absolute;
@@ -376,9 +394,6 @@ small {
 }
 .game-row:disabled {
   opacity: 1;
-}
-.game-row span:last-child {
-  line-height: 1.35;
 }
 .art {
   display: inline-flex;
@@ -432,6 +447,14 @@ small {
 .game-heading h2 {
   font-size: 29px;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.game-heading-info {
+  min-width: 0;
+}
+.game-heading-info .game-completion {
+  margin-top: 8px;
+  font-size: 14px;
 }
 .game-heading h3 {
   margin-top: 10px;

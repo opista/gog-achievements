@@ -63,12 +63,17 @@ describe('desktop restoration flow', () => {
   });
   it('checks automatically and never writes before final confirmation', async () => {
     const { api, user } = await connected();
+    const progress = screen
+      .getByRole('heading', { level: 2, name: 'Cyberpunk 2077' })
+      .parentElement!.querySelector('.game-completion');
+    expect(progress).toHaveTextContent('2/7 unlocked · 29%');
     const apply = await confirm(api, user);
     const dialog = screen.getByRole('dialog', { name: 'Apply changes to 3 achievements?' });
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
+    expect(progress).toHaveTextContent('2/7 unlocked · 29%');
     await user.click(screen.getByRole('button', { name: 'Review changes for Cyberpunk 2077' }));
     await screen.findByRole('dialog');
     await user.click(screen.getByRole('button', { name: 'Apply changes' }));
@@ -78,6 +83,7 @@ describe('desktop restoration flow', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Cyberpunk 2077' })).toHaveFocus();
     expect(apply).toHaveBeenCalledTimes(1);
+    expect(progress).toHaveTextContent('5/7 unlocked · 71%');
     expect(screen.getByText('Queue is empty.')).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Review changes for Cyberpunk 2077' }),
@@ -95,6 +101,9 @@ describe('desktop restoration flow', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Save date' }));
     await ready();
     expect(setDates).toHaveBeenCalledWith({ gameId: '1', dates: { '1': '2020-02-02T18:14:15Z' } });
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Cyberpunk 2077' }).parentElement,
+    ).toHaveTextContent('2/7 unlocked · 29%');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(apply).not.toHaveBeenCalled();
   });

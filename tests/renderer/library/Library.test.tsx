@@ -36,6 +36,7 @@ it('retains compact cover artwork and exposes complete game titles and selection
   const user = userEvent.setup();
   const { onSelect, container } = library();
   expect(container.querySelector('.game-row img')).toBeInTheDocument();
+  expect(container.querySelector('.game-completion')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Cyberpunk 2077' })).toHaveAttribute(
     'aria-pressed',
     'true',
