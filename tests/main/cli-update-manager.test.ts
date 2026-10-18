@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 import { CLI_VERSION } from '../../src/shared/cli-release';
 import { CliUpdateManager, type CliActivation } from '../../src/main/cli-updates/manager';
 import { CliCache } from '../../src/main/cli-updates/cache';
@@ -121,9 +122,18 @@ test('a busy workspace defers activation and later activates without another dow
 test('an idle notification during a deferred activation attempt is not lost', async () => {
   const f = await fixture();
   let release!: () => void;
+  let started!: () => void;
+  let committed!: () => void;
+  const activationStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const activationCommitted = new Promise<void>((resolve) => {
+    committed = resolve;
+  });
   let calls = 0;
   const manager = f.create(true, async (update) => {
     if (++calls === 1) {
+      started();
       await new Promise<void>((resolve) => {
         release = resolve;
       });
@@ -131,16 +141,22 @@ test('an idle notification during a deferred activation attempt is not lost', as
     }
     await update.verify();
     await update.commit();
+    committed();
     return true;
   });
   const check = manager.check();
-  await vi.waitFor(() => expect(calls).toBe(1));
+  // Real cache I/O can exceed waitFor's one-second default on native CI runners.
+  await activationStarted;
   const retry = manager.activatePending();
-  await Promise.resolve();
-  await Promise.resolve();
+  // Let the idle notification reach the in-flight attempt before releasing it.
+  await setImmediate();
   release();
   await Promise.all([check, retry]);
-  await vi.waitFor(() => expect(manager.snapshot().currentVersion).toBe('0.6.0'));
+  await activationCommitted;
+  // Wait for the successful retry's cache cleanup before removing the fixture.
+  await manager.activatePending();
+  expect(manager.snapshot().currentVersion).toBe('0.6.0');
+  expect(calls).toBe(2);
   expect(f.download).toHaveBeenCalledOnce();
 });
 
