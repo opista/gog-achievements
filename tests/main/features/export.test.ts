@@ -1,6 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { QueueStore } from '../../../src/main/queue-store';
 import { SessionService } from '../../../src/main/features/account/session.service';
 import { LibraryService } from '../../../src/main/features/library/library.service';
 import { PreviewStore } from '../../../src/main/application/preview-store';
@@ -9,7 +10,7 @@ import { FakeCli, gameId } from '../fixtures';
 function fixture(supported = true) {
   const cli = new FakeCli();
   cli.supportsExporting = supported;
-  const previews = new PreviewStore();
+  const previews = new PreviewStore(new QueueStore(join(tmpdir(), 'gog-export-fixture')));
   const session = new SessionService(cli, previews, { app: '0.1.0', cli: '0.3.0' });
   const file = join(tmpdir(), 'selected achievements.csv');
   const choose = vi.fn<() => Promise<string | null>>().mockResolvedValue(file);

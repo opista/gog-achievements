@@ -1,4 +1,7 @@
-import { expect, test, vi } from 'vitest';
+import { access, lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, expect, test, vi } from 'vitest';
 import {
   CliReleaseClient,
   compareVersions,
@@ -7,6 +10,23 @@ import {
 import { cliPackage, releaseMetadata } from './cli-update-fixtures';
 
 const signal = () => new AbortController().signal;
+const roots: string[] = [];
+afterEach(async () => {
+  vi.useRealTimers();
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+async function destination() {
+  const root = await mkdtemp(join(tmpdir(), 'gog-cli-transfer-'));
+  roots.push(root);
+  return join(root, 'archive.zip');
+}
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((accept) => {
+    resolve = accept;
+  });
+  return { promise, resolve };
+}
 
 test('all stable 0.x versions at or above the bundled CLI are compatible', () => {
   for (const version of ['0.5.1', '0.6.0', '0.99.999'])
@@ -76,9 +96,11 @@ test('downloads use the exact public archive and matching named checksum', async
     .fn<typeof fetch>()
     .mockResolvedValueOnce(new Response(`${fixture.sha256}  ${fixture.release.archive}\n`))
     .mockResolvedValueOnce(new Response(new Uint8Array(fixture.bytes)));
-  const downloaded = await new CliReleaseClient(request).download(fixture.release, signal());
-  expect(downloaded.bytes).toEqual(fixture.bytes);
-  expect(downloaded.sha256).toBe(fixture.sha256);
+  const path = await destination();
+  const downloaded = await new CliReleaseClient(request).download(fixture.release, path, signal());
+  expect(await readFile(path)).toEqual(fixture.bytes);
+  expect(downloaded).toBe(fixture.sha256);
+  if (process.platform !== 'win32') expect((await lstat(path)).mode & 0o777).toBe(0o600);
   expect(request.mock.calls.map(([url]) => url)).toEqual(
     ['.sha256', ''].map(
       (suffix) =>
@@ -94,9 +116,9 @@ test('checksum filenames and GitHub asset digests must agree before downloading 
     `${fixture.sha256}\n${fixture.sha256}  ${fixture.release.archive}`,
   ]) {
     const request = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(checksum));
-    await expect(new CliReleaseClient(request).download(fixture.release, signal())).rejects.toThrow(
-      'checksum',
-    );
+    await expect(
+      new CliReleaseClient(request).download(fixture.release, await destination(), signal()),
+    ).rejects.toThrow('checksum');
     expect(request).toHaveBeenCalledOnce();
   }
   const request = vi
@@ -105,6 +127,7 @@ test('checksum filenames and GitHub asset digests must agree before downloading 
   await expect(
     new CliReleaseClient(request).download(
       { ...fixture.release, digest: '0'.repeat(64) },
+      await destination(),
       signal(),
     ),
   ).rejects.toThrow('mismatch');
@@ -120,7 +143,7 @@ test.each([
     .fn<typeof fetch>()
     .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location } }));
   await expect(
-    new CliReleaseClient(request).download(cliPackage().release, signal()),
+    new CliReleaseClient(request).download(cliPackage().release, await destination(), signal()),
   ).rejects.toThrow('Unsafe');
   expect(request).toHaveBeenCalledOnce();
 });
@@ -149,7 +172,183 @@ test('oversized streams are rejected and cancelled', async () => {
     ),
   );
   await expect(
-    new CliReleaseClient(request).download(cliPackage().release, signal()),
+    new CliReleaseClient(request).download(cliPackage().release, await destination(), signal()),
   ).rejects.toThrow('large');
   expect(cancel).toHaveBeenCalled();
+});
+
+function archiveRequest(fixture: ReturnType<typeof cliPackage>, response: Response) {
+  return vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(`${fixture.sha256}  ${fixture.release.archive}`))
+    .mockResolvedValueOnce(response);
+}
+
+test('archives stream without Content-Length and retain exact chunk order', async () => {
+  const fixture = cliPackage();
+  const response = new Response(
+    new ReadableStream({
+      start(controller) {
+        for (let offset = 0; offset < fixture.bytes.length; offset += 37)
+          controller.enqueue(fixture.bytes.subarray(offset, offset + 37));
+        controller.close();
+      },
+    }),
+  );
+  expect(response.headers.has('content-length')).toBe(false);
+  const path = await destination();
+  const client = new CliReleaseClient(archiveRequest(fixture, response));
+  await expect(client.download(fixture.release, path, signal())).resolves.toBe(fixture.sha256);
+  expect(await readFile(path)).toEqual(fixture.bytes);
+});
+
+test.each(['digest', 'stream-size', 'advertised-size'])(
+  'failed archive %s removes its partial file',
+  async (failure) => {
+    const fixture = cliPackage();
+    const cancel = vi.fn();
+    const response = new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from('first chunk'));
+          controller.enqueue(Buffer.from('second chunk'));
+          if (failure === 'digest') controller.close();
+        },
+        cancel,
+      }),
+      { headers: failure === 'advertised-size' ? { 'content-length': '100' } : {} },
+    );
+    const path = await destination();
+    const client = new CliReleaseClient(archiveRequest(fixture, response), {
+      archiveBytes: failure === 'digest' ? 100 : 15,
+    });
+    await expect(client.download(fixture.release, path, signal())).rejects.toThrow(
+      failure === 'digest' ? 'SHA-256' : 'large',
+    );
+    await expect(access(path)).rejects.toThrow();
+    if (failure !== 'digest') expect(cancel).toHaveBeenCalledOnce();
+  },
+);
+
+test('an existing destination is neither overwritten nor removed', async () => {
+  const fixture = cliPackage();
+  const path = await destination();
+  await writeFile(path, 'existing');
+  const client = new CliReleaseClient(
+    archiveRequest(fixture, new Response(new Uint8Array(fixture.bytes))),
+  );
+  await expect(client.download(fixture.release, path, signal())).rejects.toThrow();
+  expect(await readFile(path, 'utf8')).toBe('existing');
+});
+
+test('caller abort cancels a stalled body and removes the archive before returning', async () => {
+  const fixture = cliPackage();
+  const started = deferred();
+  const cancel = vi.fn();
+  const response = new Response(
+    new ReadableStream(
+      {
+        pull() {
+          started.resolve();
+        },
+        cancel,
+      },
+      { highWaterMark: 0 },
+    ),
+  );
+  const path = await destination();
+  const controller = new AbortController();
+  const pending = new CliReleaseClient(archiveRequest(fixture, response)).download(
+    fixture.release,
+    path,
+    controller.signal,
+  );
+  const rejected = expect(pending).rejects.toThrow('cancelled by test');
+  await started.promise;
+  controller.abort(new Error('cancelled by test'));
+  await rejected;
+  expect(cancel).toHaveBeenCalledOnce();
+  await expect(access(path)).rejects.toThrow();
+});
+
+test.each(['headers', 'body'])(
+  'inactivity bounds stalled %s even when transport ignores abort',
+  async (stage) => {
+    const fixture = cliPackage();
+    const path = await destination();
+    const started = deferred();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(`${fixture.sha256}  ${fixture.release.archive}`));
+    if (stage === 'headers')
+      request.mockImplementationOnce(() => {
+        started.resolve();
+        return new Promise<Response>(() => {});
+      });
+    else
+      request.mockResolvedValueOnce(
+        new Response(
+          new ReadableStream(
+            {
+              pull() {
+                started.resolve();
+              },
+              cancel() {
+                return new Promise<void>(() => {});
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+        ),
+      );
+    vi.useFakeTimers();
+    const pending = new CliReleaseClient(request, {
+      inactivityTimeoutMs: 100,
+      totalTimeoutMs: 1000,
+    }).download(fixture.release, path, signal());
+    const rejected = expect(pending).rejects.toThrow('stalled');
+    await started.promise;
+    await vi.advanceTimersByTimeAsync(101);
+    await rejected;
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(access(path)).rejects.toThrow();
+  },
+);
+
+test('continued body progress resets inactivity but cannot exceed the total deadline', async () => {
+  const fixture = cliPackage();
+  const path = await destination();
+  let ready = deferred();
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const response = new Response(
+    new ReadableStream<Uint8Array>(
+      {
+        start(value) {
+          controller = value;
+        },
+        pull() {
+          ready.resolve();
+        },
+      },
+      { highWaterMark: 0 },
+    ),
+  );
+  vi.useFakeTimers();
+  const client = new CliReleaseClient(archiveRequest(fixture, response), {
+    inactivityTimeoutMs: 60,
+    totalTimeoutMs: 100,
+  });
+  const pending = client.download(fixture.release, path, signal());
+  const rejected = expect(pending).rejects.toThrow('deadline');
+  await ready.promise;
+  for (let index = 0; index < 2; index++) {
+    await vi.advanceTimersByTimeAsync(40);
+    ready = deferred();
+    controller.enqueue(new Uint8Array([index]));
+    await ready.promise;
+  }
+  await vi.advanceTimersByTimeAsync(21);
+  await rejected;
+  expect(vi.getTimerCount()).toBe(0);
+  await expect(access(path)).rejects.toThrow();
 });

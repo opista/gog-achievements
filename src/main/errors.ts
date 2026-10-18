@@ -54,6 +54,8 @@ const messages: Record<string, string> = {
   CLI_PACKAGE_INVALID: 'Some app files are missing or damaged. Reinstall the app.',
   CLI_VERSION_MISMATCH: 'Some app files do not match. Reinstall the app.',
   CLI_START_FAILED: 'The app could not start this action. Restart the app and try again.',
+  CLI_READ_TIMEOUT: 'The read took too long and was stopped. Please try again.',
+  CLI_READ_CANCELLED: 'The read was cancelled.',
   INVALID_CLI_OUTPUT: 'The app could not complete this action. Please try again.',
   INVALID_CLI_EXIT: 'The app could not complete this action. Please try again.',
   CLI_OUTPUT_LIMIT: 'The app could not complete this action. Please try again.',

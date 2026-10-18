@@ -5,7 +5,7 @@ import { createDesktopApplication, type DesktopApplication } from '../../../src/
 import { CliUpdateManager } from '../../../src/main/cli-updates/manager';
 import { IPC_OPERATION } from '../../../src/shared/api';
 import { FakeCli } from '../../main/fixtures';
-import { cliPackage } from '../../main/cli-update-fixtures';
+import { cliPackage, writeDownload } from '../../main/cli-update-fixtures';
 
 export interface UpdateFixture {
   start(): void;
@@ -49,9 +49,9 @@ void app.whenReady().then(async () => {
     verify: async () => {}, // Dummy package bytes are never executed; FakeCli implements the port.
     client: {
       latest: async () => fixture.release,
-      download: async () => {
+      download: async (_release, path) => {
         await download;
-        return fixture;
+        return writeDownload(path, fixture);
       },
     },
     activate: (activation) => desktop.activateCli(activation),

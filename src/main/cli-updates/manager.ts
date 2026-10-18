@@ -290,9 +290,15 @@ export class CliUpdateManager {
       }
       this.phase = 'downloading';
       this.message = `Downloading CLI ${release.version}…`;
-      const { bytes, sha256 } = await this.client.download(release, signal);
-      signal.throwIfAborted();
-      const record = await this.cache.install(bytes, release.version, sha256);
+      const record = await this.cache.installDownload(
+        release.version,
+        async (path) => {
+          const sha256 = await this.client.download(release, path, signal);
+          signal.throwIfAborted();
+          return sha256;
+        },
+        signal,
+      );
       signal.throwIfAborted();
       const executable = join(
         this.cache.directory(record),

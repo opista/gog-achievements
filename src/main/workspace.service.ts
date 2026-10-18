@@ -54,7 +54,7 @@ export class WorkspaceService implements WorkspaceApi {
         const info = await this.session.inspectCli(runner, activation.selection.version);
         await activation.commit();
         this.runtime.replace(runner);
-        this.session.acceptCli(info);
+        await this.session.acceptCli(info);
         this.operations.setCli(info);
         return true;
       })
@@ -76,7 +76,17 @@ export class WorkspaceService implements WorkspaceApi {
   ): Promise<T> {
     await this.recovery.ensure();
     await this.recovery.refresh();
-    return this.operations.run(kind, action, gameId);
+    return this.operations.run(
+      kind,
+      async () => {
+        try {
+          return await action();
+        } finally {
+          await this.previews.settleCleanup();
+        }
+      },
+      gameId,
+    );
   }
   async initialize(): Promise<InitializeResult> {
     await this.recovery.ensure();
@@ -124,7 +134,7 @@ export class WorkspaceService implements WorkspaceApi {
     return this.run('read', () => this.changes.preview(input), input.gameId);
   }
   async cancelPreview({ previewToken }: { previewToken: string }): Promise<void> {
-    this.previews.discard(previewToken);
+    await this.previews.discard(previewToken);
     if (this.operations.current.kind === 'idle') this.operations.publish({ kind: 'idle' });
   }
   apply(input: { previewToken: string }) {

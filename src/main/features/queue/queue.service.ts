@@ -123,7 +123,7 @@ export class QueueService {
       kind === 'queue-add' ? additionSchema.parse(input) : selectionSchema.parse(input);
     const action = parsed.action;
     if (action === 'lock') await this.session.requireLockSupport();
-    this.previews.clear();
+    await this.previews.clear();
     const account = await this.session.requireAccount();
     const file = await this.store.draftPath(account, parsed.gameId);
     const exists = await this.store.exists(file);
@@ -157,7 +157,7 @@ export class QueueService {
   }
   async setDates(input: DatesInput): Promise<Queue> {
     const parsed = datesSchema.parse(input);
-    this.previews.clear();
+    await this.previews.clear();
     const account = await this.session.requireAccount();
     const queue = await this.readQueue(parsed.gameId, account);
     if (!queue) throw new DesktopError('QUEUE_MISSING', 'There is no saved queue for this game.');

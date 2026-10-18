@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { sha256 } from '../../src/main/cli-package';
 import { packageSpec } from '../../src/main/cli-updates/release-client';
 
@@ -121,4 +122,9 @@ export function helpFixture(version = '0.6.0') {
       }).map(([command, flags]) => ({ command, flags })),
     },
   };
+}
+
+export async function writeDownload(path: string, fixture: { bytes: Buffer; sha256: string }) {
+  await writeFile(path, fixture.bytes, { flag: 'wx', mode: 0o600 });
+  return fixture.sha256;
 }

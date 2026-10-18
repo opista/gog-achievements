@@ -341,6 +341,7 @@ test('failed record persistence prevents any launch of --yes', async () => {
     throw new Error('disk full');
   };
   await expect(api.apply({ previewToken: preview.token })).rejects.toThrow('disk full');
+  expect(await store.exists(store.snapshotPath(userId, preview.token))).toBe(false);
   expect(cli.calls.some((command) => command.kind === 'queue-apply')).toBe(false);
 });
 async function seedRunning(store: QueueStore): Promise<StoredOperation> {
@@ -515,6 +516,7 @@ test('report persistence must succeed before confirmed draft rows are removed', 
     'result could not be saved',
   );
   expect((await api.getQueue(gameId))?.items).toHaveLength(1);
+  expect(await store.exists(store.snapshotPath(userId, preview.token))).toBe(true);
   expect(cli.calls.filter((command) => command.kind === 'queue-apply')).toHaveLength(1);
 });
 

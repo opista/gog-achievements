@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, rename, readdir, open, unlink } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, readdir, open, unlink, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Dirent } from 'node:fs';
 import { z } from 'zod';
@@ -50,8 +50,36 @@ export class QueueStore {
     const bytes = await this.bytes(source);
     const path = this.snapshotPath(userId, operationId);
     await mkdir(join(this.accountFolder(userId), 'snapshots'), { recursive: true, mode: 0o700 });
-    await writeFile(path, bytes, { flag: 'wx', mode: 0o400 });
+    // Only the handle created here owns cleanup. A wx collision must preserve the existing file.
+    const file = await open(path, 'wx', 0o400);
+    try {
+      await file.writeFile(bytes);
+      await file.close();
+    } catch (error) {
+      await file.close().catch(() => {});
+      await unlink(path).catch(() => {});
+      throw error;
+    }
     return { path, digest: digestBytes(bytes) };
+  }
+  async removeUnreferencedSnapshot(userId: string, operationId: string): Promise<void> {
+    const operation = join(
+      this.accountFolder(userId),
+      'operations',
+      `${tokenSchema.parse(operationId)}.json`,
+    );
+    try {
+      await lstat(operation);
+      // Even an unreadable or invalid record may be the only evidence of an apply.
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await unlink(this.snapshotPath(userId, operationId));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
   async bytes(path: string): Promise<Buffer> {
     const bytes = await readFile(path);

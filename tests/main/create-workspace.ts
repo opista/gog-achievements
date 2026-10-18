@@ -20,7 +20,7 @@ export function createWorkspace(
   probe: ProcessProbe,
 ): WorkspaceService {
   const operations = new OperationCoordinator();
-  const previews = new PreviewStore();
+  const previews = new PreviewStore(store);
   const versions = { app: version, cli: cliVersion };
   const runtime = new CliRuntime(cli);
   const session = new SessionService(runtime, previews, versions);

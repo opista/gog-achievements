@@ -1,7 +1,7 @@
 import { TextDecoder } from 'node:util';
 import { createHash } from 'node:crypto';
-import { createWriteStream } from 'node:fs';
-import { chmod, lstat, mkdir, readFile, readdir } from 'node:fs/promises';
+import { createWriteStream, open, close, constants } from 'node:fs';
+import { chmod, lstat, mkdir, open as openFile, readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform, type Readable } from 'node:stream';
@@ -47,6 +47,95 @@ export function verifyArchive(
   if (bytes.length > limits.archiveBytes) throw new Error('CLI archive exceeds the size limit.');
   if (sha256(bytes) !== expected.sha256)
     throw new Error('CLI archive SHA-256 does not match its lock.');
+}
+
+/** Bound disk reads as well as metadata: a file can change after lstat. */
+export async function hashCliFile(path: string, maximum: number, signal?: AbortSignal) {
+  signal?.throwIfAborted();
+  const before = await lstat(path);
+  if (!before.isFile() || before.isSymbolicLink() || before.size > maximum)
+    throw new Error('CLI verification requires a bounded regular file.');
+  const hash = createHash('sha256');
+  let size = 0;
+  const file = await openFile(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    for await (const chunk of file.createReadStream({
+      autoClose: false,
+      highWaterMark: 64 * 1024,
+      signal,
+    })) {
+      size += chunk.length;
+      if (size > maximum || size > before.size)
+        throw new Error('CLI file changed during verification.');
+      hash.update(chunk);
+    }
+  } finally {
+    await file.close();
+  }
+  signal?.throwIfAborted();
+  const after = await lstat(path);
+  if (
+    !after.isFile() ||
+    after.isSymbolicLink() ||
+    size !== before.size ||
+    after.size !== before.size ||
+    after.dev !== before.dev ||
+    after.ino !== before.ino ||
+    after.mtimeMs !== before.mtimeMs ||
+    after.ctimeMs !== before.ctimeMs
+  )
+    throw new Error('CLI file changed during verification.');
+  return { sha256: hash.digest('hex'), size };
+}
+
+async function openZip(source: Buffer | string) {
+  const options = {
+    lazyEntries: true,
+    decodeStrings: false,
+    autoClose: false,
+    validateEntrySizes: true,
+  };
+  if (Buffer.isBuffer(source)) {
+    const zip = await new Promise<ZipFile>((accept, reject) =>
+      yauzl.fromBuffer(source, options, (error, value) =>
+        error || !value ? reject(error ?? new Error('Missing ZIP.')) : accept(value),
+      ),
+    );
+    return {
+      zip,
+      close: async () => {
+        zip.close();
+      },
+    };
+  }
+  const descriptor = await new Promise<number>((accept, reject) =>
+    open(source, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0), (error, descriptor) =>
+      error ? reject(error) : accept(descriptor),
+    ),
+  );
+  let zip: ZipFile;
+  try {
+    zip = await new Promise<ZipFile>((accept, reject) =>
+      yauzl.fromFd(descriptor, options, (error, value) =>
+        error || !value ? reject(error ?? new Error('Missing ZIP.')) : accept(value),
+      ),
+    );
+  } catch (error) {
+    await new Promise<void>((accept, reject) =>
+      close(descriptor, (failure) => (failure ? reject(failure) : accept())),
+    );
+    throw error;
+  }
+  return {
+    zip,
+    close: () =>
+      new Promise<void>((accept, reject) => {
+        // Await the descriptor close before cache cleanup, especially on Windows.
+        zip.once('close', accept);
+        zip.once('error', reject);
+        zip.close();
+      }),
+  };
 }
 
 function safeEntry(entry: Entry, root: string, seen: Map<string, boolean>, limits: ArchiveLimits) {
@@ -96,15 +185,8 @@ function safeEntry(entry: Entry, root: string, seen: Map<string, boolean>, limit
   return { entry, path, directory, mode };
 }
 
-async function readZip(bytes: Buffer, root: string, limits: ArchiveLimits) {
-  const zip = await new Promise<ZipFile>((accept, reject) =>
-    yauzl.fromBuffer(
-      bytes,
-      { lazyEntries: true, decodeStrings: false, autoClose: false, validateEntrySizes: true },
-      (error, value) =>
-        error || !value ? reject(error ?? new Error('Missing ZIP.')) : accept(value),
-    ),
-  );
+async function readZip(source: Buffer | string, root: string, limits: ArchiveLimits) {
+  const { zip, close } = await openZip(source);
   try {
     const entries = await new Promise<SafeEntry[]>((accept, reject) => {
       const result: SafeEntry[] = [];
@@ -138,9 +220,9 @@ async function readZip(bytes: Buffer, root: string, limits: ArchiveLimits) {
       });
       zip.readEntry();
     });
-    return { zip, entries };
+    return { zip, entries, close };
   } catch (error) {
-    zip.close();
+    await close();
     throw error;
   }
 }
@@ -188,19 +270,25 @@ export async function validateCliPackage(directory: string, target: CliPackage) 
 }
 
 export async function extractCliPackage(
-  bytes: Buffer,
+  source: Buffer | string,
   directory: string,
   target: CliPackage,
   limits: ArchiveLimits = ARCHIVE_LIMITS,
+  signal?: AbortSignal,
 ) {
-  verifyArchive(bytes, target, limits);
-  const { zip, entries } = await readZip(bytes, target.archive.slice(0, -4), limits);
+  signal?.throwIfAborted();
+  if (Buffer.isBuffer(source)) verifyArchive(source, target, limits);
+  else if ((await hashCliFile(source, limits.archiveBytes, signal)).sha256 !== target.sha256)
+    throw new Error('CLI archive SHA-256 does not match its lock.');
+  signal?.throwIfAborted();
+  const { zip, entries, close } = await readZip(source, target.archive.slice(0, -4), limits);
   try {
     await mkdir(directory, { recursive: true, mode: 0o755 });
     const stat = await lstat(directory);
     if (!stat.isDirectory() || stat.isSymbolicLink() || (await readdir(directory)).length)
       throw new Error('CLI extraction requires an empty regular directory.');
     for (const item of entries) {
+      signal?.throwIfAborted();
       if (!item.path) continue;
       const path = join(directory, item.path);
       if (item.directory) await mkdir(path, { recursive: true, mode: 0o755 });
@@ -223,14 +311,17 @@ export async function extractCliPackage(
             );
           },
         });
-        await pipeline(stream, count, createWriteStream(path, { flags: 'wx', mode: 0o644 }));
+        await pipeline(stream, count, createWriteStream(path, { flags: 'wx', mode: 0o644 }), {
+          signal,
+        });
         if (size !== item.entry.uncompressedSize)
           throw new Error('CLI archive entry size is invalid.');
         if (target.platform === 'darwin' && item.mode & 0o111) await chmod(path, 0o755);
       }
     }
+    signal?.throwIfAborted();
     return await validateCliPackage(directory, target);
   } finally {
-    zip.close();
+    await close();
   }
 }

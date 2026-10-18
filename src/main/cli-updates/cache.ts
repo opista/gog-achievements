@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { ARCHIVE_LIMITS, extractCliPackage, sha256, validateCliPackage } from '../cli-package';
+import { ARCHIVE_LIMITS, extractCliPackage, hashCliFile, validateCliPackage } from '../cli-package';
 import { compatibleVersion, packageSpec, stableVersion } from './release-client';
 
 const version = z
@@ -88,11 +88,12 @@ function safePath(path: string): boolean {
 }
 
 /** A file manifest covers every extracted file, including the private Intel runtime. */
-async function manifest(directory: string) {
+async function manifest(directory: string, signal?: AbortSignal) {
   const files: CachedCli['files'] = [];
   const seen = new Set<string>();
   let total = 0;
   async function walk(relative: string, depth: number): Promise<void> {
+    signal?.throwIfAborted();
     if (depth > 16) throw new Error('CLI cache nesting exceeds the limit.');
     const stat = await lstat(join(directory, relative));
     if (stat.isSymbolicLink()) throw new Error('CLI cache contains a link.');
@@ -115,12 +116,16 @@ async function manifest(directory: string) {
         total > ARCHIVE_LIMITS.totalBytes
       )
         throw new Error('CLI cache exceeds the size limit.');
-      const bytes = await readFile(join(directory, relative));
-      if (bytes.length !== stat.size) throw new Error('CLI cache changed during verification.');
+      const verified = await hashCliFile(
+        join(directory, relative),
+        ARCHIVE_LIMITS.fileBytes,
+        signal,
+      );
+      if (verified.size !== stat.size) throw new Error('CLI cache changed during verification.');
       files.push({
         path: relative,
         size: stat.size,
-        sha256: sha256(bytes),
+        sha256: verified.sha256,
         executable: Boolean(stat.mode & 0o111),
       });
     }
@@ -205,17 +210,52 @@ export class CliCache {
   }
 
   async install(bytes: Buffer, version: string, expected: string): Promise<CachedCli> {
+    return this.installStaged(version, async () => ({ source: bytes, expected }));
+  }
+
+  /** This method owns the archive until cleanup, then publishes only the extracted package. */
+  async installDownload(
+    version: string,
+    download: (path: string) => Promise<string>,
+    signal?: AbortSignal,
+  ): Promise<CachedCli> {
+    return this.installStaged(
+      version,
+      async (staging) => {
+        const source = join(staging, '.archive.zip');
+        const expected = await download(source);
+        return { source, expected };
+      },
+      signal,
+    );
+  }
+
+  private async installStaged(
+    version: string,
+    prepare: (staging: string) => Promise<{ source: Buffer | string; expected: string }>,
+    signal?: AbortSignal,
+  ): Promise<CachedCli> {
+    signal?.throwIfAborted();
     if (!compatibleVersion(version)) throw new Error('Incompatible CLI version.');
     await this.ensure();
     const staging = await mkdtemp(join(this.root, 'packages', '.download-'));
-    await chmod(staging, 0o700);
     try {
+      await chmod(staging, 0o700);
+      const { source, expected } = await prepare(staging);
       await extractCliPackage(
-        bytes,
+        source,
         join(staging, 'resources', 'cli'),
         packageSpec(version, this.target, expected),
+        ARCHIVE_LIMITS,
+        signal,
       );
-      const record: CachedCli = { version, sha256: expected, files: await manifest(staging) };
+      if (typeof source === 'string') await rm(source);
+      const record: CachedCli = {
+        version,
+        sha256: expected,
+        files: await manifest(staging, signal),
+      };
+      signal?.throwIfAborted();
       const destination = this.packageRoot(record);
       try {
         await lstat(destination);
