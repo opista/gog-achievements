@@ -81,12 +81,12 @@ test('sandboxed Electron uses Nest and the generated bridge for the workspace fl
     await expect(page.getByText('DEMO DATA', { exact: true })).toBeVisible();
     expect(await application.evaluate(({ app }) => app.getName())).toBe('GOG Achievements');
     const profile = await realpath(userData);
-    expect(
-      await application.evaluate(({ app }) => ({
-        userData: app.getPath('userData'),
-        sessionData: app.getPath('sessionData'),
-      })),
-    ).toEqual({ userData: profile, sessionData: profile });
+    const paths = await application.evaluate(({ app }) => ({
+      userData: app.getPath('userData'),
+      sessionData: app.getPath('sessionData'),
+    }));
+    expect(await realpath(paths.userData)).toBe(profile);
+    expect(await realpath(paths.sessionData)).toBe(profile);
     if (process.platform === 'darwin') {
       expect(
         await application.evaluate(({ Menu }) =>
