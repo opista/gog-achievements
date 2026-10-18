@@ -31,7 +31,9 @@ Every PR runs formatting, lint, types, unit tests, app compilation and the offli
 
 The policy lives in `scripts/select-native-builds.mjs`. It compares the PR's complete Git diff, including both paths of a rename. A failed comparison selects native builds. Fork PRs retain offline-only checks and cannot access the private CLI token.
 
-Native jobs run unit/script tests on each platform, build installers, verify the package and CLI, and run the packaged desktop IPC test. Formatting, lint and type checks run once in the Linux checks job. Release publication still requires every expected package and checksum from the exact release tag.
+The Linux checks job runs `npm run build` after formatting, lint, types and unit/script tests. Compilation needs no CLI download, native CLI execution or cached CLI package. It still includes the tracked release metadata in the app.
+
+Native jobs run unit/script tests on each platform. `npm run package -- --target=TARGET` checks the native host, downloads and verifies the pinned CLI, runs offline CLI smoke checks, then compiles the app, builds installers and writes checksums. CI then verifies the package and CLI and runs the packaged desktop tests. Release publication still requires every expected package and checksum from the exact release tag.
 
 To force a native check for a UI PR, run **CI → Run workflow**, select its branch and choose `all` or a single target. Workflow dispatch always enables native packaging.
 
