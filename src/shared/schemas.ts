@@ -82,18 +82,17 @@ export const achievementsSchema = z
   })
   .refine((value) => value.count === value.achievements.length);
 const requestIdentity = { achievement_id: idSchema, key: z.string(), name: z.string() };
-const queueItemSchema = z.union([
-  z
-    .object({
-      ...requestIdentity,
-      action: z.literal('unlock').optional(),
-      unlocked_at: timestampSchema,
-    })
-    .strict(),
-  z
-    .object({ ...requestIdentity, action: z.literal('lock'), previous_unlocked_at: observedDate })
-    .strict(),
-]);
+export const unlockQueueItemSchema = z
+  .object({
+    ...requestIdentity,
+    action: z.literal('unlock').optional(),
+    unlocked_at: timestampSchema,
+  })
+  .strict();
+export const lockQueueItemSchema = z
+  .object({ ...requestIdentity, action: z.literal('lock'), previous_unlocked_at: observedDate })
+  .strict();
+const queueItemSchema = z.union([unlockQueueItemSchema, lockQueueItemSchema]);
 export const queueSchema = z
   .object({
     schema_version: z.literal(1),
@@ -116,7 +115,7 @@ const reportIdentity = {
     .regex(/^[A-Z][A-Z0-9_]{0,63}$/)
     .optional(),
 };
-const unlockReportItemSchema = z
+export const unlockReportItemSchema = z
   .object({
     ...reportIdentity,
     action: z.literal('unlock').optional(),
@@ -147,7 +146,7 @@ const unlockReportItemSchema = z
     if (value.status === 'pending') return value.actual_unlocked_at === null;
     return true;
   });
-const lockReportItemSchema = z
+export const lockReportItemSchema = z
   .object({
     ...reportIdentity,
     action: z.literal('lock'),

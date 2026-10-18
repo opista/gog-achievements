@@ -151,4 +151,4 @@ Installed apps check for a newer public stable release once at startup. The nati
 
 Read the [plan](PLAN.md), [screen design](docs/design/WORKFLOW.md), [implementation notes](docs/IMPLEMENTATION.md) and [CLI release lock](cli-release.lock.json).
 
-IPC method types are generated from the main-process controller by `@electron-ipc-bridge/vite-plugin`. `npm run dev`, desktop builds and `npm run typecheck` generate them automatically. Run `npm run ipc:generate` to refresh editor types directly. Generated files are ignored by Git and need no manual edits.
+Validated data types come from the shared Zod schemas. IPC handlers receive parsed payloads, with method-specific input and result types derived from `DesktopApi`. `@electron-ipc-bridge/vite-plugin` generates the bridge from the main-process controller and refers back to those API types. `npm run dev`, desktop builds and `npm run typecheck` generate it automatically. Run `npm run ipc:generate` to refresh editor types directly. Generated files are ignored by Git and need no manual edits.

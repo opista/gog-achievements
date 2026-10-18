@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { ApplyResult, PreviewResult, Report } from '../../../shared/api';
+import type { ApplyResult, PreviewResult } from '../../../shared/api';
 import { idSchema, tokenSchema, reportSchema } from '../../../shared/schemas';
 import { requireSuccess, type CliRunner } from '../../cli-client';
 import { QueueStore, digestBytes, type StoredOperation } from '../../queue-store';
@@ -39,7 +39,7 @@ export class ApplyService {
     try {
       const report = reportSchema.parse(
         requireSuccess(await this.cli.run({ kind: 'queue-preview', file: snapshot.path })),
-      ) as Report;
+      );
       this.session.assertOwner(report.user_id, account);
       validateReport(report, queue, true);
       this.previews.save({ ...snapshot, queue, report });
@@ -105,7 +105,7 @@ export class ApplyService {
             ? (outcome.result.error.details as { report?: unknown } | undefined)?.report
             : undefined;
         if (raw !== undefined) {
-          const report = reportSchema.parse(raw) as Report;
+          const report = reportSchema.parse(raw);
           this.session.assertOwner(report.user_id, account);
           validateReport(report, preview.queue, false);
           if ((outcome.exitCode === 0) !== report.complete)

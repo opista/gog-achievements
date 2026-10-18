@@ -155,6 +155,36 @@ test('IPC rejects file paths, unreviewed writes and unknown fields', async () =>
   expect(spy).not.toHaveBeenCalled();
 });
 
+test.each([
+  ['exportAchievements', { gameId: '18446744073709551615', search: 'earned', status: 'locked' }],
+  ['addAchievements', { gameId: '1', achievementIds: ['18446744073709551615'], action: 'unlock' }],
+  ['removeAchievements', { gameId: '1', achievementIds: ['2'] }],
+  ['setDates', { gameId: '1', dates: { '2': '2020-02-01T00:00:00Z' } }],
+  ['preview', { gameId: '1' }],
+  ['cancelPreview', { previewToken: '00000000-0000-4000-8000-000000000001' }],
+  ['apply', { previewToken: '00000000-0000-4000-8000-000000000001' }],
+  ['history', { gameId: '1' }],
+  ['checkCurrentState', { gameId: '1' }],
+] as const)('%s receives parsed data, never the caller object', async (method, payload) => {
+  const { api, invoke } = await fixture();
+  // Stop at the feature boundary: this test must not invoke any write operation.
+  const action = vi.spyOn(api, method).mockRejectedValue(new Error('Fixture handler reached.'));
+  const original = structuredClone(payload);
+  expect(await invoke(method, { ...payload, file: '/untrusted' })).toMatchObject({
+    ok: false,
+    error: { code: 'INVALID_INPUT' },
+  });
+  expect(action).not.toHaveBeenCalled();
+  await invoke(method, payload);
+  expect(action).toHaveBeenCalledExactlyOnceWith(original);
+  const parsed = action.mock.calls[0]![0];
+  expect(parsed).not.toBe(payload);
+  if ('achievementIds' in parsed && 'achievementIds' in payload)
+    expect(parsed.achievementIds).not.toBe(payload.achievementIds);
+  if ('dates' in parsed && 'dates' in payload) expect(parsed.dates).not.toBe(payload.dates);
+  expect(payload).toEqual(original);
+});
+
 test('IPC preserves sanitized error codes through the generated preload and renderer adapter', async () => {
   const { api, client, invoke } = await fixture();
   const token = randomUUID();
@@ -255,8 +285,10 @@ test('activation guards accept only booleans from the trusted renderer', async (
   ).toMatchObject({ ok: false, error: { code: 'IPC_DENIED' } });
   expect(setCliActivationBlocked).not.toHaveBeenCalled();
   electron.event = event;
-  await client.setCliActivationBlocked({ blocked: true });
+  const input = { blocked: true };
+  await client.setCliActivationBlocked(input);
   expect(setCliActivationBlocked).toHaveBeenCalledExactlyOnceWith({ blocked: true });
+  expect(setCliActivationBlocked.mock.calls[0]![0]).not.toBe(input);
 });
 
 test('cancelling a reviewed token through IPC prevents it from being applied', async () => {
