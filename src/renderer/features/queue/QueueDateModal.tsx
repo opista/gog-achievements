@@ -54,8 +54,10 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
         ? null
         : resolution.error;
   const changed = resolution.iso && Date.parse(resolution.iso) !== Date.parse(item.unlocked_at);
-  const savedOccurrence =
-    value === initialValue ? localTimeOccurrence(item.unlocked_at, zone) : null;
+  const savedOccurrence = useMemo(
+    () => localTimeOccurrence(item.unlocked_at, zone),
+    [item.unlocked_at, zone],
+  );
 
   async function save(iso: string | null) {
     if (!iso || locked || inFlight.current) return;
@@ -123,7 +125,7 @@ function DateModal({ item, description, zone, busy, onSave, onClose }: Props) {
               }}
             />
           </label>
-          {savedOccurrence ? <small>{savedOccurrence}</small> : null}
+          {value === initialValue && savedOccurrence ? <small>{savedOccurrence}</small> : null}
           {resolution.choices.length > 1 ? (
             <label>
               Repeated time

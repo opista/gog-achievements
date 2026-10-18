@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, CalendarDays, FileText, LoaderCircle, Trash2, X } from 'lucide-react';
+import { ArrowRight, FileText, LoaderCircle, Trash2, X } from 'lucide-react';
 import type { Achievement, Queue } from '../../../shared/api';
 import { achievementActionName, AchievementActionLabel } from '../../components/AchievementAction';
 import { PaneResize } from '../../components/PaneResize';
-import { formatTimestamp, localTimeOccurrence } from '../../date-time';
+import { QueueDateButton } from './QueueDateButton';
 import { QueueDateModal } from './QueueDateModal';
 import { queueGroups, type QueueAction } from './queue-model';
 interface Props {
@@ -175,13 +175,6 @@ function SignedInQueuePane({
                             ? 'No description available.'
                             : 'Description not loaded.');
                         const locking = item.action === 'lock';
-                        const date = locking ? item.previous_unlocked_at : item.unlocked_at;
-                        const savedDate = [
-                          formatTimestamp(date, zone),
-                          localTimeOccurrence(date, zone),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ');
                         return (
                           <div className="queue-row" key={item.achievement_id}>
                             <div className="queue-row-content">
@@ -192,10 +185,10 @@ function SignedInQueuePane({
                             </div>
                             <div className="queue-row-controls">
                               {!locking ? (
-                                <button
-                                  className="icon-button"
-                                  aria-label={`Edit date for ${item.name}`}
-                                  title={savedDate}
+                                <QueueDateButton
+                                  date={item.unlocked_at}
+                                  name={item.name}
+                                  zone={zone}
                                   disabled={busy}
                                   onClick={() =>
                                     setEditing({
@@ -204,9 +197,7 @@ function SignedInQueuePane({
                                       achievementId: item.achievement_id,
                                     })
                                   }
-                                >
-                                  <CalendarDays size={18} />
-                                </button>
+                                />
                               ) : null}
                               <button
                                 ref={(element) => {
