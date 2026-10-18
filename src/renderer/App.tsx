@@ -6,6 +6,7 @@ import { Art } from './components/Art';
 import { AccountMenu } from './features/account/AccountMenu';
 import { Achievements } from './features/library/Achievements';
 import { AchievementSkeleton } from './features/library/AchievementSkeleton';
+import { GameCompletion } from './features/library/GameCompletion';
 import { ApplyDialog } from './features/apply/ApplyDialog';
 import { useLocalTimeZone } from './use-local-time-zone';
 import { HistoryView } from './features/history/HistoryView';
@@ -171,9 +172,12 @@ export function App({ api }: { api: DesktopApi }) {
                       demo={api.isDemo}
                     />
                   ) : null}
-                  <h2 tabIndex={-1} data-dialog-return-focus>
-                    {headingTitle}
-                  </h2>
+                  <div className="game-heading-info">
+                    <h2 tabIndex={-1} data-dialog-return-focus>
+                      {headingTitle}
+                    </h2>
+                    {headingGame ? <GameCompletion progress={w.completion} /> : null}
+                  </div>
                   {w.game ? (
                     <button
                       className="icon-button desktop-refresh"

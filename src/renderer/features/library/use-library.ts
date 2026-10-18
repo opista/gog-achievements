@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Achievement,
   AchievementsData,
@@ -7,7 +7,7 @@ import type {
   GamesData,
   QueueGame,
 } from '../../../shared/api';
-import { preferredGame } from './library-model';
+import { achievementProgress, preferredGame } from './library-model';
 
 interface LibraryDependencies {
   assertOwner(userId: string): void;
@@ -24,6 +24,10 @@ export function useLibrary(
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [achievementsLoaded, setAchievementsLoaded] = useState(false);
   const [cache, setCache] = useState<Record<string, Achievement[]>>({});
+  const completion = useMemo(
+    () => (achievementsLoaded ? achievementProgress(achievements) : undefined),
+    [achievements, achievementsLoaded],
+  );
   const selected = useRef<Game | null>(null);
   const metadata = useRef(new Map<string, QueueGame>());
   const generation = useRef(0);
@@ -135,6 +139,7 @@ export function useLibrary(
 
   return {
     games,
+    completion,
     libraryLoaded,
     game,
     achievements,

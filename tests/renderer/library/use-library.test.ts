@@ -98,6 +98,7 @@ it('shows a pending selection and publishes achievements only after its queue re
   expect(result.current.achievementsLoaded).toBe(false);
   await waitFor(() => expect(syncQueue).toHaveBeenCalledTimes(1));
   expect(result.current.achievements).toEqual([]);
+  expect(result.current.completion).toBeUndefined();
   await act(async () => {
     queue.resolve(undefined);
     await loading;
@@ -155,6 +156,7 @@ it('clears account data and prevents a pending response from restoring it', asyn
   expect(result.current.achievements).toEqual([]);
   expect(result.current.achievementsLoaded).toBe(false);
   expect(result.current.achievementFor('1', '101')).toBeUndefined();
+  expect(result.current.completion).toBeUndefined();
   expect(result.current.metadataFor('1')).toBeUndefined();
   expect(assertOwner).not.toHaveBeenCalled();
   expect(syncQueue).not.toHaveBeenCalled();
@@ -236,17 +238,68 @@ it('refreshes selected current state while preserving rows until the read succee
   expect(result.current.achievementFor('1', '101')?.description).toBe('Updated description');
 });
 
-it('refreshes after apply only for the selected game without repeating queue sync', async () => {
+it('refreshes completion after apply only for the selected game without repeating queue sync', async () => {
   const { result, api, syncQueue } = library();
   await act(() => result.current.loadGame(game('1')));
+  await act(() => result.current.loadDetails('2'));
+  const next = data('1');
+  next.achievements[0] = {
+    ...next.achievements[0]!,
+    unlocked: true,
+    unlocked_at: '2026-10-01T12:00:00Z',
+  };
   api.listAchievements.mockClear();
+  api.listAchievements.mockResolvedValueOnce(next);
   syncQueue.mockClear();
   await act(() => result.current.refreshAfterApply('2'));
   expect(api.listAchievements).not.toHaveBeenCalled();
+  expect(result.current.completion).toEqual({ unlocked: 0, total: 1, percentage: 0 });
+  expect(result.current.achievements).toEqual(data('1').achievements);
   await act(() => result.current.refreshAfterApply('1'));
   expect(api.listAchievements).toHaveBeenCalledExactlyOnceWith('1');
+  expect(result.current.completion).toEqual({ unlocked: 1, total: 1, percentage: 100 });
   expect(syncQueue).not.toHaveBeenCalled();
   expect(result.current.game).toEqual(game('1'));
+});
+
+it('counts hidden achievements, rounds progress and keeps 100% for fully complete games', async () => {
+  const { result, api } = library();
+  const sample = data('1').achievements[0]!;
+  const partial = {
+    ...data('1'),
+    count: 3,
+    achievements: [
+      { ...sample, id: '11', unlocked: true, unlocked_at: '2026-10-01T12:00:00Z' },
+      { ...sample, id: '12', unlocked: true, unlocked_at: '2026-10-01T12:00:00Z', hidden: true },
+      { ...sample, id: '13', hidden: true },
+    ],
+  };
+  api.listAchievements.mockResolvedValueOnce(partial);
+  await act(() => result.current.loadGame(game('1')));
+  expect(result.current.completion).toEqual({ unlocked: 2, total: 3, percentage: 67 });
+
+  const almostComplete = {
+    ...data('2'),
+    count: 200,
+    achievements: Array.from({ length: 200 }, (_, index) => ({
+      ...sample,
+      id: String(index + 1),
+      unlocked: index < 199,
+      unlocked_at: index < 199 ? '2026-10-01T12:00:00Z' : null,
+    })),
+  };
+  api.listAchievements.mockResolvedValueOnce(almostComplete);
+  await act(() => result.current.loadGame(game('2')));
+  expect(result.current.completion).toEqual({
+    unlocked: 199,
+    total: 200,
+    percentage: 99,
+  });
+
+  api.listAchievements.mockResolvedValueOnce({ ...data('3'), count: 0, achievements: [] });
+  await act(() => result.current.loadGame(game('3')));
+  expect(result.current.completion).toEqual({ unlocked: 0, total: 0, percentage: null });
+  expect(api.listAchievements).toHaveBeenCalledTimes(3);
 });
 
 it.each(['API replacement', 'unmount'])('invalidates pending reads on %s', async (change) => {
