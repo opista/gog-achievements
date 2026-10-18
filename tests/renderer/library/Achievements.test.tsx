@@ -322,3 +322,156 @@ it('announces skeleton status without placeholder controls', () => {
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(container.querySelector('.skeleton-content')).toHaveAttribute('aria-hidden', 'true');
 });
+
+it('combines case-insensitive name and description searches with filters and every sort', async () => {
+  const user = userEvent.setup();
+  const { onAdd, onQueueAll, onRemove } = show();
+  const search = screen.getByRole('textbox', { name: 'Search achievements' });
+  const sort = screen.getByRole('combobox', { name: 'Sort achievements' });
+  await user.type(search, '  LOCKED  ');
+  expect(rowNames()).toEqual(['Locked B', 'Locked A']);
+  await user.selectOptions(sort, 'A–Z');
+  expect(rowNames()).toEqual(['Locked A', 'Locked B']);
+  await user.clear(search);
+  await user.type(search, '  UNLOCK  ');
+  await user.click(screen.getByRole('button', { name: 'Unlocked' }));
+  expect(rowNames()).toEqual(['Newest unlock', 'Older unlock']);
+  await user.clear(search);
+  await user.type(search, '  OLDER UNLOCK DESCRIPTION  ');
+  for (const value of ['Default', 'A–Z', 'Newest unlocked', 'Queued first']) {
+    await user.selectOptions(sort, value);
+    expect(rowNames()).toEqual(['Older unlock']);
+  }
+  expect(onAdd).not.toHaveBeenCalled();
+  expect(onQueueAll).not.toHaveBeenCalled();
+  expect(onRemove).not.toHaveBeenCalled();
+});
+
+it('hides concealed search text until revealed and sorts on the visible name', async () => {
+  const user = userEvent.setup();
+  const { onQueueAll } = show();
+  const search = screen.getByRole('textbox', { name: 'Search achievements' });
+  const sort = screen.getByRole('combobox', { name: 'Sort achievements' });
+  await user.selectOptions(sort, 'A–Z');
+  expect(rowNames()[0]).toBe('Hidden achievement');
+  for (const query of ['Secret title', 'Secret description']) {
+    await user.clear(search);
+    await user.type(search, query);
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+  }
+  await user.click(screen.getByRole('button', { name: 'Clear achievement search' }));
+  expect(search).toHaveFocus();
+  await user.click(screen.getByRole('button', { name: 'Reveal' }));
+  expect(rowNames().at(-1)).toBe('Secret title');
+  await user.type(search, '  SECRET DESCRIPTION  ');
+  expect(rowNames()).toEqual(['Secret title']);
+  await user.click(screen.getByRole('button', { name: 'Unlock all' }));
+  expect(onQueueAll).toHaveBeenCalledExactlyOnceWith(['secret'], 'unlock');
+});
+
+it('keeps search, sort and keyboard focus as queued rows move between groups', async () => {
+  const user = userEvent.setup();
+  const saved = new Map<string, AchievementAction>([['old', 'lock']]);
+  const { onAdd, onRemove, props, rerender } = show(saved, { supportsLocking: true });
+  const search = screen.getByRole('textbox', { name: 'Search achievements' });
+  const sort = screen.getByRole('combobox', { name: 'Sort achievements' });
+  await user.type(search, 'locked');
+  await user.click(screen.getByRole('button', { name: 'Locked' }));
+  await user.selectOptions(sort, 'Queued first');
+  expect(rowNames()).toEqual(['Locked B', 'Locked A']);
+  screen.getByRole('button', { name: 'Queue unlock for Locked A' }).focus();
+  await user.keyboard('{Enter}');
+  expect(onAdd).toHaveBeenCalledExactlyOnceWith(['locked-a']);
+  rerender(<Achievements {...props} queued={new Map([...saved, ['locked-a', 'unlock']])} />);
+  expect(rowNames()).toEqual(['Locked A', 'Locked B']);
+  expect(screen.getByRole('button', { name: 'Undo queued unlock for Locked A' })).toHaveFocus();
+  await user.keyboard('{Enter}');
+  expect(onRemove).toHaveBeenCalledExactlyOnceWith(['locked-a']);
+  rerender(<Achievements {...props} />);
+  expect(rowNames()).toEqual(['Locked B', 'Locked A']);
+  expect(screen.getByRole('button', { name: 'Queue unlock for Locked A' })).toHaveFocus();
+  expect(search).toHaveValue('locked');
+  expect(sort).toHaveValue('Queued first');
+  await user.click(screen.getByRole('button', { name: 'Clear achievement search' }));
+  await user.click(screen.getByRole('button', { name: 'All' }));
+  expect(rowNames()[0]).toBe('Older unlock');
+  expect(screen.getByRole('button', { name: 'Undo queued lock for Older unlock' })).toBeVisible();
+  expect([...saved]).toEqual([['old', 'lock']]);
+});
+
+it.each([
+  ['unlock', 'Locked', '  LOCKED A DESCRIPTION  ', 'locked-a'],
+  ['lock', 'Unlocked', '  NEWEST UNLOCK DESCRIPTION  ', 'new'],
+] as const)(
+  'bulk %s uses only eligible search and filter results',
+  async (action, filter, query, id) => {
+    const user = userEvent.setup();
+    const { onQueueAll, props, rerender } = show(
+      new Map([
+        ['locked-b', 'unlock'],
+        ['old', 'lock'],
+      ]),
+      { supportsLocking: true },
+    );
+    await user.type(screen.getByRole('textbox', { name: 'Search achievements' }), query);
+    await user.click(screen.getByRole('button', { name: filter }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sort achievements' }), 'A–Z');
+    const button = screen.getByRole('button', {
+      name: action === 'unlock' ? 'Unlock all' : 'Lock all',
+    });
+    await user.click(button);
+    expect(onQueueAll).toHaveBeenCalledExactlyOnceWith([id], action);
+    rerender(<Achievements {...props} queued={new Map([[id, action]])} />);
+    expect(button).toBeDisabled();
+    rerender(
+      <Achievements
+        {...props}
+        queued={
+          new Map([
+            [id, action],
+            ['outside-search', action === 'unlock' ? 'lock' : 'unlock'],
+          ])
+        }
+      />,
+    );
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(onQueueAll).toHaveBeenLastCalledWith([], action);
+  },
+);
+
+it('clears search and status together from an empty result without resetting sort', async () => {
+  const user = userEvent.setup();
+  show();
+  const search = screen.getByRole('textbox', { name: 'Search achievements' });
+  const sort = screen.getByRole('combobox', { name: 'Sort achievements' });
+  await user.selectOptions(sort, 'A–Z');
+  await user.click(screen.getByRole('button', { name: 'Locked' }));
+  await user.type(search, 'no matching achievement');
+  expect(screen.getByText('No achievements match this search and filter.')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+  expect(search).toHaveValue('');
+  expect(search).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+  expect(sort).toHaveValue('A–Z');
+  expect(rowNames()).toHaveLength(input.length);
+});
+
+it('keeps search and sort controls stable across loading and disables queue edits', async () => {
+  const user = userEvent.setup();
+  const { props, rerender } = show();
+  const search = screen.getByRole('textbox', { name: 'Search achievements' });
+  const sort = screen.getByRole('combobox', { name: 'Sort achievements' });
+  await user.type(search, 'Locked');
+  await user.selectOptions(sort, 'A–Z');
+  rerender(<Achievements {...props} loading />);
+  expect(screen.getByRole('textbox', { name: 'Search achievements' })).toBe(search);
+  expect(screen.getByRole('combobox', { name: 'Sort achievements' })).toBe(sort);
+  expect(search).toHaveValue('Locked');
+  expect(sort).toHaveValue('A–Z');
+  expect(screen.getByRole('button', { name: 'Unlock all' })).toBeDisabled();
+  expect(screen.queryByRole('article')).not.toBeInTheDocument();
+  rerender(<Achievements {...props} busy />);
+  expect(rowNames()).toEqual(['Locked A', 'Locked B']);
+  expect(screen.getByRole('button', { name: 'Queue unlock for Locked A' })).toBeDisabled();
+});
