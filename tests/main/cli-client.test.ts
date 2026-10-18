@@ -327,6 +327,9 @@ test('cancellation closes inherited output pipes only after the read child has e
     const { spawn } = require('node:child_process');
     const descendant = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000);'], {
       stdio: ['ignore', 1, 2],
+      // On Windows, unref alone does not escape the parent's kill-on-exit job.
+      detached: true,
+      windowsHide: true,
     });
     descendant.unref();
     process.stdout.write(String(descendant.pid), () => process.exit(0));
@@ -334,7 +337,11 @@ test('cancellation closes inherited output pipes only after the read child has e
     2000,
   );
   const abort = new AbortController();
-  const pending = f.client.run({ kind: 'games' }, undefined, { signal: abort.signal });
+  // Observe rejection before any precondition can fail and leave the result unhandled.
+  const outcome = f.client.run({ kind: 'games' }, undefined, { signal: abort.signal }).then(
+    (result) => ({ result }),
+    (error: unknown) => ({ error }),
+  );
   const child = f.children[0]!;
   let output = '';
   child.stdout.on('data', (chunk: Buffer) => {
@@ -356,7 +363,7 @@ test('cancellation closes inherited output pipes only after the read child has e
   expect(f.closed.has(child)).toBe(false);
   expect(child.stdout.destroyed).toBe(false);
   abort.abort();
-  await expect(pending).rejects.toMatchObject({ code: 'CLI_READ_CANCELLED' });
+  await expect(outcome).resolves.toMatchObject({ error: { code: 'CLI_READ_CANCELLED' } });
   expect(f.closed.has(child)).toBe(true);
   expect(child.stdout.destroyed).toBe(true);
   expect(child.stderr.destroyed).toBe(true);
