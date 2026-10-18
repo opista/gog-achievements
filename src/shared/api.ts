@@ -1,118 +1,50 @@
+import type { z } from 'zod';
 import type { CliUpdateActions } from './cli-updates';
+import type {
+  achievementSchema,
+  achievementsSchema,
+  additionSchema,
+  applyInputSchema,
+  authSchema,
+  datesSchema,
+  exportInputSchema,
+  exportResultSchema,
+  gameInputSchema,
+  gameSchema,
+  gamesSchema,
+  historyInputSchema,
+  lockQueueItemSchema,
+  lockReportItemSchema,
+  queueGameSchema,
+  queueSchema,
+  reportSchema,
+  selectionSchema,
+  unlockQueueItemSchema,
+  unlockReportItemSchema,
+} from './schemas';
 
-export interface AuthStatus {
-  authenticated: boolean;
-  user_id?: string;
-  expired?: boolean;
-  storage?: string;
-  local_login_removed?: boolean;
-  method?: string;
-}
-export interface Game {
-  id: string;
-  title: string;
-  slug?: string | null;
-  image?: string | null;
-  works_on?: unknown;
-}
-export interface QueueGame {
-  id: string;
-  title: string;
-  client_id: string;
-}
-export interface Achievement {
-  id: string;
-  key: string;
-  name: string;
-  description: string;
-  unlocked: boolean;
-  unlocked_at: string | null;
-  hidden: boolean;
-  image_locked: string | null;
-  image_unlocked: string | null;
-  rarity: unknown;
-}
-export interface GamesData {
-  user_id: string;
-  count: number;
-  games: Game[];
-}
-export interface AchievementsData {
-  user_id: string;
-  game: QueueGame;
-  count: number;
-  achievements: Achievement[];
-}
-export interface ExportInput {
-  gameId: string;
-  search?: string;
-  status?: 'all' | 'locked' | 'unlocked';
-}
-export type ExportResult = { cancelled: true } | { cancelled: false; path: string; count: number };
-export interface UnlockQueueItem {
-  achievement_id: string;
-  key: string;
-  name: string;
-  action?: 'unlock';
-  unlocked_at: string;
-}
-export interface LockQueueItem {
-  achievement_id: string;
-  key: string;
-  name: string;
-  action: 'lock';
-  unlocked_at?: never;
-  previous_unlocked_at: string;
-}
+export type AuthStatus = z.infer<typeof authSchema>;
+export type Game = z.infer<typeof gameSchema>;
+export type QueueGame = z.infer<typeof queueGameSchema>;
+export type Achievement = z.infer<typeof achievementSchema>;
+export type GamesData = z.infer<typeof gamesSchema>;
+export type AchievementsData = z.infer<typeof achievementsSchema>;
+export type ExportInput = z.infer<typeof exportInputSchema>;
+export type ExportResult =
+  { cancelled: true } | ({ cancelled: false } & z.infer<typeof exportResultSchema>);
+export type UnlockQueueItem = z.infer<typeof unlockQueueItemSchema>;
+// Keep the public union readable before narrowing, without allowing this key in stored locks.
+export type LockQueueItem = z.infer<typeof lockQueueItemSchema> & { unlocked_at?: never };
 export type QueueItem = UnlockQueueItem | LockQueueItem;
-export type AchievementAction = 'unlock' | 'lock';
-export interface Queue {
-  schema_version: 1;
-  user_id: string;
-  game: QueueGame;
-  created_at: string;
-  updated_at: string;
-  items: QueueItem[];
-}
-export type UnlockReportStatus =
-  | 'pending'
-  | 'restored'
-  | 'skipped_already_unlocked'
-  | 'restored_with_different_date'
-  | 'failed'
-  | 'unconfirmed'
-  | 'not_attempted';
-export type LockReportStatus =
-  'pending' | 'locked' | 'skipped_already_locked' | 'failed' | 'unconfirmed' | 'not_attempted';
-export type ReportStatus = UnlockReportStatus | LockReportStatus;
-export interface UnlockReportItem {
-  achievement_id: string;
-  name: string;
-  actual_unlocked_at: string | null;
-  error_code?: string;
-  action?: 'unlock';
-  requested_unlocked_at: string;
-  previous_unlocked_at: string | null;
-  status: UnlockReportStatus;
-}
-export interface LockReportItem {
-  achievement_id: string;
-  name: string;
-  actual_unlocked_at: string | null;
-  error_code?: string;
-  action: 'lock';
-  requested_unlocked_at: null;
-  previous_unlocked_at: string;
-  status: LockReportStatus;
-}
+export type AchievementAction = NonNullable<QueueItem['action']>;
+export type Queue = Omit<z.infer<typeof queueSchema>, 'items'> & { items: QueueItem[] };
+export type UnlockReportItem = z.infer<typeof unlockReportItemSchema>;
+export type LockReportItem = z.infer<typeof lockReportItemSchema>;
 export type ReportItem = UnlockReportItem | LockReportItem;
-export interface Report {
-  dry_run: boolean;
-  user_id: string;
-  game: QueueGame;
-  complete: boolean;
-  results: ReportItem[];
-}
+export type UnlockReportStatus = UnlockReportItem['status'];
+export type LockReportStatus = LockReportItem['status'];
+export type ReportStatus = ReportItem['status'];
+export type Report = z.infer<typeof reportSchema>;
 export interface PublicError {
   code: string;
   message: string;
@@ -149,17 +81,12 @@ export interface InitializeResult {
   auth: AuthStatus;
   operation: OperationState;
 }
-export interface SelectionInput {
-  gameId: string;
-  achievementIds: string[];
-}
-export interface AdditionInput extends SelectionInput {
-  action?: AchievementAction;
-}
-export interface DatesInput {
-  gameId: string;
-  dates: Record<string, string>;
-}
+export type SelectionInput = z.infer<typeof selectionSchema>;
+export type AdditionInput = z.infer<typeof additionSchema>;
+export type DatesInput = z.infer<typeof datesSchema>;
+export type GameInput = z.infer<typeof gameInputSchema>;
+export type ApplyInput = z.infer<typeof applyInputSchema>;
+export type HistoryInput = z.infer<typeof historyInputSchema>;
 export interface PreviewResult {
   token: string;
   report: Report;
@@ -183,11 +110,11 @@ export interface WorkspaceApi {
   addAchievements(input: AdditionInput): Promise<Queue>;
   removeAchievements(input: SelectionInput): Promise<Queue>;
   setDates(input: DatesInput): Promise<Queue>;
-  preview(input: { gameId: string }): Promise<PreviewResult>;
-  cancelPreview(input: { previewToken: string }): Promise<void>;
-  apply(input: { previewToken: string }): Promise<ApplyResult>;
-  history(input: { gameId?: string }): Promise<OperationRecord[]>;
-  checkCurrentState(input: { gameId: string }): Promise<AchievementsData>;
+  preview(input: GameInput): Promise<PreviewResult>;
+  cancelPreview(input: ApplyInput): Promise<void>;
+  apply(input: ApplyInput): Promise<ApplyResult>;
+  history(input: HistoryInput): Promise<OperationRecord[]>;
+  checkCurrentState(input: GameInput): Promise<AchievementsData>;
   onOperation(listener: (state: OperationState) => void): () => void;
 }
 export interface DesktopApi extends WorkspaceApi, CliUpdateActions {

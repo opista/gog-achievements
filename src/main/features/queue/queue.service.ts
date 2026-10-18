@@ -1,11 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type {
-  Queue,
-  SelectionInput,
-  AdditionInput,
-  DatesInput,
-  AchievementsData,
-} from '../../../shared/api';
+import type { Queue, SelectionInput, AdditionInput, DatesInput } from '../../../shared/api';
 import {
   idSchema,
   queueSchema,
@@ -36,7 +30,7 @@ export class QueueService {
   async readQueue(gameId: string, account: string): Promise<Queue | null> {
     const path = await this.store.draftPath(account, gameId);
     if (!(await this.store.exists(path))) return null;
-    const queue = queueSchema.parse(await this.read({ kind: 'queue-show', file: path })) as Queue;
+    const queue = queueSchema.parse(await this.read({ kind: 'queue-show', file: path }));
     this.session.assertOwner(queue.user_id, account);
     if (queue.game.id !== gameId)
       throw new DesktopError(
@@ -88,7 +82,7 @@ export class QueueService {
       try {
         const bytes = await this.store.bytes(this.store.snapshotPath(record.user_id, record.id));
         if (digestBytes(bytes) !== record.digest) break;
-        const reviewed = queueSchema.parse(JSON.parse(bytes.toString('utf8'))) as Queue;
+        const reviewed = queueSchema.parse(JSON.parse(bytes.toString('utf8')));
         if (
           reviewed.user_id !== draft.user_id ||
           reviewed.game.id !== draft.game.id ||
@@ -140,7 +134,7 @@ export class QueueService {
       : kind === 'queue-add'
         ? { kind, file, achievementIds: parsed.achievementIds, ...(action ? { action } : {}) }
         : { kind, file, achievementIds: parsed.achievementIds };
-    const queue = queueSchema.parse(await this.read(command)) as Queue;
+    const queue = queueSchema.parse(await this.read(command));
     this.session.assertOwner(queue.user_id, account);
     if (queue.game.id !== parsed.gameId)
       throw new DesktopError(
@@ -172,7 +166,7 @@ export class QueueService {
       );
     const live = achievementsSchema.parse(
       await this.read({ kind: 'achievements', gameId: parsed.gameId }),
-    ) as AchievementsData;
+    );
     this.session.assertOwner(live.user_id, account);
     if (live.game.id !== parsed.gameId || live.game.client_id !== queue.game.client_id)
       throw new DesktopError(
@@ -201,7 +195,7 @@ export class QueueService {
     for (const [timestamp, achievementIds] of groups) {
       result = queueSchema.parse(
         await this.read({ kind: 'queue-date', file, achievementIds, timestamp }),
-      ) as Queue;
+      );
       this.session.assertOwner(result.user_id, account);
       if (result.game.id !== parsed.gameId || result.game.client_id !== queue.game.client_id)
         throw new DesktopError(

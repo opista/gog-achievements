@@ -1,25 +1,8 @@
 import { IpcController, IpcHandle, RawEvent } from '@electron-ipc-bridge/core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { IpcMainInvokeEvent } from 'electron';
-import type {
-  AchievementsData,
-  ApplyResult,
-  AuthStatus,
-  DatesInput,
-  GamesData,
-  InitializeResult,
-  IpcResult,
-  OperationRecord,
-  PreviewResult,
-  Queue,
-  SelectionInput,
-  AdditionInput,
-  WorkspaceApi,
-  ExportInput,
-  ExportResult,
-  AppUpdateActions,
-} from '../shared/api';
-import type { CliUpdateState } from '../shared/cli-updates';
+import type { AppUpdateActions, WorkspaceApi } from '../shared/api';
+import type { IpcPayload, IpcResponse } from '../shared/ipc-contract';
 import { IpcBoundary } from './ipc';
 import { APP_ACTIONS, WORKSPACE_API } from './ipc.tokens';
 
@@ -35,16 +18,16 @@ export class WorkspaceController {
   @IpcHandle()
   initialize(
     @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<InitializeResult>> {
+    payload?: IpcPayload<'initialize'>,
+  ): Promise<IpcResponse<'initialize'>> {
     return this.boundary.execute(event, 'initialize', payload, () => this.api.initialize());
   }
 
   @IpcHandle()
   checkForUpdates(
     @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<void>> {
+    payload?: IpcPayload<'checkForUpdates'>,
+  ): Promise<IpcResponse<'checkForUpdates'>> {
     return this.boundary.execute(event, 'checkForUpdates', payload, () =>
       this.appActions.checkForUpdates(),
     );
@@ -53,8 +36,8 @@ export class WorkspaceController {
   @IpcHandle()
   getCliUpdateState(
     @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<CliUpdateState>> {
+    payload?: IpcPayload<'getCliUpdateState'>,
+  ): Promise<IpcResponse<'getCliUpdateState'>> {
     return this.boundary.execute(event, 'getCliUpdateState', payload, () =>
       this.appActions.getCliUpdateState(),
     );
@@ -63,139 +46,142 @@ export class WorkspaceController {
   @IpcHandle()
   setCliActivationBlocked(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: { blocked: boolean },
-  ): Promise<IpcResult<void>> {
-    return this.boundary.execute(event, 'setCliActivationBlocked', input, () =>
-      this.appActions.setCliActivationBlocked(input),
+    input: IpcPayload<'setCliActivationBlocked'>,
+  ): Promise<IpcResponse<'setCliActivationBlocked'>> {
+    return this.boundary.execute(event, 'setCliActivationBlocked', input, (parsed) =>
+      this.appActions.setCliActivationBlocked(parsed),
     );
   }
 
   @IpcHandle()
   login(
     @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<AuthStatus>> {
+    payload?: IpcPayload<'login'>,
+  ): Promise<IpcResponse<'login'>> {
     return this.boundary.execute(event, 'login', payload, () => this.api.login());
   }
 
   @IpcHandle()
   logout(
     @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<AuthStatus>> {
+    payload?: IpcPayload<'logout'>,
+  ): Promise<IpcResponse<'logout'>> {
     return this.boundary.execute(event, 'logout', payload, () => this.api.logout());
   }
 
   @IpcHandle()
   listGames(
     @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<GamesData>> {
+    payload?: IpcPayload<'listGames'>,
+  ): Promise<IpcResponse<'listGames'>> {
     return this.boundary.execute(event, 'listGames', payload, () => this.api.listGames());
   }
 
   @IpcHandle()
   listAchievements(
     @RawEvent() event: IpcMainInvokeEvent,
-    gameId: string,
-  ): Promise<IpcResult<AchievementsData>> {
-    return this.boundary.execute(event, 'listAchievements', gameId, () =>
-      this.api.listAchievements(gameId),
+    gameId: IpcPayload<'listAchievements'>,
+  ): Promise<IpcResponse<'listAchievements'>> {
+    return this.boundary.execute(event, 'listAchievements', gameId, (parsed) =>
+      this.api.listAchievements(parsed),
     );
   }
 
   @IpcHandle()
   exportAchievements(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: ExportInput,
-  ): Promise<IpcResult<ExportResult>> {
-    return this.boundary.execute(event, 'exportAchievements', input, () =>
-      this.api.exportAchievements(input),
+    input: IpcPayload<'exportAchievements'>,
+  ): Promise<IpcResponse<'exportAchievements'>> {
+    return this.boundary.execute(event, 'exportAchievements', input, (parsed) =>
+      this.api.exportAchievements(parsed),
     );
   }
 
   @IpcHandle()
   getQueue(
     @RawEvent() event: IpcMainInvokeEvent,
-    gameId: string,
-  ): Promise<IpcResult<Queue | null>> {
-    return this.boundary.execute(event, 'getQueue', gameId, () => this.api.getQueue(gameId));
+    gameId: IpcPayload<'getQueue'>,
+  ): Promise<IpcResponse<'getQueue'>> {
+    return this.boundary.execute(event, 'getQueue', gameId, (parsed) => this.api.getQueue(parsed));
   }
 
   @IpcHandle()
   listQueues(
     @RawEvent() event: IpcMainInvokeEvent,
-    payload?: undefined,
-  ): Promise<IpcResult<Queue[]>> {
+    payload?: IpcPayload<'listQueues'>,
+  ): Promise<IpcResponse<'listQueues'>> {
     return this.boundary.execute(event, 'listQueues', payload, () => this.api.listQueues());
   }
 
   @IpcHandle()
   addAchievements(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: AdditionInput,
-  ): Promise<IpcResult<Queue>> {
-    return this.boundary.execute(event, 'addAchievements', input, () =>
-      this.api.addAchievements(input),
+    input: IpcPayload<'addAchievements'>,
+  ): Promise<IpcResponse<'addAchievements'>> {
+    return this.boundary.execute(event, 'addAchievements', input, (parsed) =>
+      this.api.addAchievements(parsed),
     );
   }
 
   @IpcHandle()
   removeAchievements(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: SelectionInput,
-  ): Promise<IpcResult<Queue>> {
-    return this.boundary.execute(event, 'removeAchievements', input, () =>
-      this.api.removeAchievements(input),
+    input: IpcPayload<'removeAchievements'>,
+  ): Promise<IpcResponse<'removeAchievements'>> {
+    return this.boundary.execute(event, 'removeAchievements', input, (parsed) =>
+      this.api.removeAchievements(parsed),
     );
   }
 
   @IpcHandle()
-  setDates(@RawEvent() event: IpcMainInvokeEvent, input: DatesInput): Promise<IpcResult<Queue>> {
-    return this.boundary.execute(event, 'setDates', input, () => this.api.setDates(input));
+  setDates(
+    @RawEvent() event: IpcMainInvokeEvent,
+    input: IpcPayload<'setDates'>,
+  ): Promise<IpcResponse<'setDates'>> {
+    return this.boundary.execute(event, 'setDates', input, (parsed) => this.api.setDates(parsed));
   }
 
   @IpcHandle()
   preview(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: { gameId: string },
-  ): Promise<IpcResult<PreviewResult>> {
-    return this.boundary.execute(event, 'preview', input, () => this.api.preview(input));
+    input: IpcPayload<'preview'>,
+  ): Promise<IpcResponse<'preview'>> {
+    return this.boundary.execute(event, 'preview', input, (parsed) => this.api.preview(parsed));
   }
 
   @IpcHandle()
   cancelPreview(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: { previewToken: string },
-  ): Promise<IpcResult<void>> {
-    return this.boundary.execute(event, 'cancelPreview', input, () =>
-      this.api.cancelPreview(input),
+    input: IpcPayload<'cancelPreview'>,
+  ): Promise<IpcResponse<'cancelPreview'>> {
+    return this.boundary.execute(event, 'cancelPreview', input, (parsed) =>
+      this.api.cancelPreview(parsed),
     );
   }
 
   @IpcHandle()
   apply(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: { previewToken: string },
-  ): Promise<IpcResult<ApplyResult>> {
-    return this.boundary.execute(event, 'apply', input, () => this.api.apply(input));
+    input: IpcPayload<'apply'>,
+  ): Promise<IpcResponse<'apply'>> {
+    return this.boundary.execute(event, 'apply', input, (parsed) => this.api.apply(parsed));
   }
 
   @IpcHandle()
   history(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: { gameId?: string },
-  ): Promise<IpcResult<OperationRecord[]>> {
-    return this.boundary.execute(event, 'history', input, () => this.api.history(input));
+    input: IpcPayload<'history'>,
+  ): Promise<IpcResponse<'history'>> {
+    return this.boundary.execute(event, 'history', input, (parsed) => this.api.history(parsed));
   }
 
   @IpcHandle()
   checkCurrentState(
     @RawEvent() event: IpcMainInvokeEvent,
-    input: { gameId: string },
-  ): Promise<IpcResult<AchievementsData>> {
-    return this.boundary.execute(event, 'checkCurrentState', input, () =>
-      this.api.checkCurrentState(input),
+    input: IpcPayload<'checkCurrentState'>,
+  ): Promise<IpcResponse<'checkCurrentState'>> {
+    return this.boundary.execute(event, 'checkCurrentState', input, (parsed) =>
+      this.api.checkCurrentState(parsed),
     );
   }
 }

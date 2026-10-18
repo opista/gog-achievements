@@ -5,7 +5,6 @@ import type { Dirent } from 'node:fs';
 import { z } from 'zod';
 import type { OperationRecord, Queue, Report } from '../shared/api';
 import { idSchema, tokenSchema, reportSchema, queueSchema } from '../shared/schemas';
-import type { ProcessIdentity } from './process-identity';
 import { DesktopError } from './errors';
 import { isConfirmedChange, remainingQueueItems } from '../shared/queue-cleanup';
 const errorSchema = z.object({ code: z.string(), message: z.string() });
@@ -23,10 +22,7 @@ const recordSchema = z.object({
   digest: z.string().regex(/^[a-f0-9]{64}$/),
   process: identitySchema.nullable(),
 });
-export interface StoredOperation extends OperationRecord {
-  digest: string;
-  process: ProcessIdentity | null;
-}
+export type StoredOperation = z.infer<typeof recordSchema>;
 export const digestBytes = (bytes: Buffer): string =>
   createHash('sha256').update(bytes).digest('hex');
 export class QueueStore {
@@ -112,7 +108,7 @@ export class QueueStore {
       try {
         const queue = queueSchema.parse(
           JSON.parse((await this.bytes(join(folder, file.name))).toString('utf8')),
-        ) as Queue;
+        );
         if (queue.user_id === account && file.name === `${queue.game.id}.json`) queues.push(queue);
       } catch {
         // One unreadable draft must not hide other valid saved queues.
@@ -136,7 +132,7 @@ export class QueueStore {
         `${JSON.stringify({ pid: process.pid, started_at: new Date().toISOString() })}\n`,
       );
       const bytes = await this.bytes(destination);
-      const draft = queueSchema.parse(JSON.parse(bytes.toString('utf8'))) as Queue;
+      const draft = queueSchema.parse(JSON.parse(bytes.toString('utf8')));
       if (
         draft.user_id !== reviewed.user_id ||
         draft.game.id !== reviewed.game.id ||
@@ -206,7 +202,7 @@ export class QueueStore {
         try {
           const record = recordSchema.parse(JSON.parse(await readFile(join(folder, file), 'utf8')));
           if (record.user_id !== account || file !== `${record.id}.json`) throw new Error();
-          records.push(record as StoredOperation);
+          records.push(record);
         } catch {
           throw new DesktopError(
             'HISTORY_INVALID',

@@ -43,16 +43,14 @@ export class LibraryService {
   }
   async games(): Promise<GamesData> {
     const account = await this.session.requireAccount();
-    const data = gamesSchema.parse(await this.read({ kind: 'games' })) as GamesData;
+    const data = gamesSchema.parse(await this.read({ kind: 'games' }));
     this.session.assertOwner(data.user_id, account);
     return data;
   }
   async achievements(gameId: string): Promise<AchievementsData> {
     gameId = idSchema.parse(gameId);
     const account = await this.session.requireAccount();
-    const data = achievementsSchema.parse(
-      await this.read({ kind: 'achievements', gameId }),
-    ) as AchievementsData;
+    const data = achievementsSchema.parse(await this.read({ kind: 'achievements', gameId }));
     this.session.assertOwner(data.user_id, account);
     if (data.game.id !== gameId)
       throw new DesktopError(
