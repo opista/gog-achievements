@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { QueueDateModal } from '../../../src/renderer/features/queue/QueueDateModal';
 import type { UnlockQueueItem } from '../../../src/shared/api';
+import * as dateTime from '../../../src/renderer/date-time';
 
 const item: UnlockQueueItem = {
   achievement_id: '1',
@@ -140,6 +141,41 @@ it('keeps a saved ambiguous instant without guessing an offset for a new edit', 
   expect(screen.getByRole('button', { name: 'Save date' })).toBeDisabled();
   fireEvent.change(input, { target: { value: '2026-10-25T01:30:01' } });
   expect(screen.getByRole('combobox')).toHaveValue('');
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it('reuses the saved occurrence while busy state changes and hides it for an edited date', () => {
+  const occurrence = vi.spyOn(dateTime, 'localTimeOccurrence');
+  const saved = { ...item, unlocked_at: '2026-10-25T01:30:00Z' };
+  const { input, props, rerender } = modal('Europe/London', saved);
+  expect(screen.getByText('Second occurrence')).toBeVisible();
+  expect(occurrence).toHaveBeenCalledExactlyOnceWith(saved.unlocked_at, 'Europe/London');
+
+  rerender(<QueueDateModal {...props} busy />);
+  expect(input).toBeDisabled();
+  expect(screen.getByText('Second occurrence')).toBeVisible();
+  rerender(<QueueDateModal {...props} />);
+  fireEvent.change(input, { target: { value: '2026-10-26T12:00:00' } });
+  expect(screen.queryByText('Second occurrence')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save date' })).toBeEnabled();
+  expect(occurrence).toHaveBeenCalledTimes(1);
+});
+
+it('checks each new edit against the current clock while the saved occurrence is reused', () => {
+  const occurrence = vi.spyOn(dateTime, 'localTimeOccurrence');
+  const { input, props, rerender, onSave } = modal();
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-14T20:22:00Z'));
+  fireEvent.change(input, { target: { value: '2026-10-14T20:23:00' } });
+  expect(screen.getByRole('status')).toHaveTextContent(/future/);
+  expect(screen.getByRole('button', { name: 'Save date' })).toBeDisabled();
+
+  rerender(<QueueDateModal {...props} busy />);
+  rerender(<QueueDateModal {...props} />);
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-14T20:24:00Z'));
+  fireEvent.change(input, { target: { value: '2026-10-14T20:23:01' } });
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save date' })).toBeEnabled();
+  expect(occurrence).toHaveBeenCalledTimes(1);
   expect(onSave).not.toHaveBeenCalled();
 });
 
