@@ -1,5 +1,6 @@
 {
   "name": "gog-achievements",
+  "productName": "GOG Achievements",
   "version": "0.3.1",
   "private": true,
   "description": "Restore GOG achievements you have already earned.",

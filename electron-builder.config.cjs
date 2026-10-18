@@ -8,7 +8,7 @@ const icon = path.join(__dirname, 'resources/ui/assets/app-icon.png');
 const macEntitlements = path.join(__dirname, 'resources/entitlements.mac.plist');
 module.exports = {
   appId: 'com.metacurb.gogachievements',
-  productName: 'GOG Achievements',
+  productName: require('./package.json').productName,
   asar: true,
   // Updates use browser downloads. Do not generate an automatic update feed.
   publish: null,
