@@ -62,8 +62,8 @@ export class LibraryService {
     return data;
   }
 
-  checkCurrentState({ gameId }: { gameId: string }): Promise<AchievementsData> {
-    this.previews.clear();
+  async checkCurrentState({ gameId }: { gameId: string }): Promise<AchievementsData> {
+    await this.previews.clear();
     return this.achievements(gameId);
   }
 }

@@ -36,9 +36,36 @@ export interface CliOutcome {
     | { ok: true; data: unknown }
     | { ok: false; error: { code: string; message: string; details?: unknown } };
 }
-export interface CliRunner {
-  run(command: CliCommand, onSpawn?: (pid: number) => Promise<void>): Promise<CliOutcome>;
+export interface CliRunOptions {
+  /** Cancellation applies only to read commands. Writes and login own their lifecycle. */
+  signal?: AbortSignal;
 }
+export interface CliRunner {
+  run(
+    command: CliCommand,
+    onSpawn?: (pid: number) => Promise<void>,
+    options?: CliRunOptions,
+  ): Promise<CliOutcome>;
+}
+
+// Local mutations can leave files or credentials partly changed when interrupted.
+// Login must close its native window itself; apply must preserve its durable process record.
+// Only reads receive automatic deadlines or caller cancellation, and no command is retried.
+export const CLI_READ_TIMEOUTS = Object.freeze({
+  help: 10_000,
+  doctor: 15_000,
+  'auth-status': 15_000,
+  'queue-show': 15_000,
+  games: 180_000,
+  achievements: 120_000,
+  'queue-preview': 120_000,
+});
+type ReadCommandKind = keyof typeof CLI_READ_TIMEOUTS;
+interface CliProcessPolicy {
+  readTimeouts?: Partial<Record<ReadCommandKind, number>>;
+  terminationGraceMs?: number;
+}
+
 export function commandArgs(command: CliCommand): string[] {
   const plain: Partial<Record<CliCommand['kind'], string[]>> = {
     help: ['--help'],
@@ -118,8 +145,20 @@ export class CliClient implements CliRunner {
     readonly executable: string,
     private readonly spawnProcess: SpawnProcess = spawn as SpawnProcess,
     private readonly outputLimit = 256 * 1024 * 1024,
+    private readonly policy: CliProcessPolicy = {},
   ) {}
-  run(command: CliCommand, onSpawn?: (pid: number) => Promise<void>): Promise<CliOutcome> {
+  run(
+    command: CliCommand,
+    onSpawn?: (pid: number) => Promise<void>,
+    options: CliRunOptions = {},
+  ): Promise<CliOutcome> {
+    const read = Object.hasOwn(CLI_READ_TIMEOUTS, command.kind);
+    const signal = read ? options.signal : undefined;
+    if (signal?.aborted) return Promise.reject(cliError('CLI_READ_CANCELLED'));
+    const timeoutMs = read
+      ? (this.policy.readTimeouts?.[command.kind as ReadCommandKind] ??
+        CLI_READ_TIMEOUTS[command.kind as ReadCommandKind])
+      : undefined;
     return new Promise((resolve, reject) => {
       let child: ChildProcessWithoutNullStreams;
       try {
@@ -135,32 +174,83 @@ export class CliClient implements CliRunner {
       let bytes = 0;
       const chunks: Buffer[] = [];
       let exceeded = false;
+      let exited = false;
+      let closed = false;
+      let failure: DesktopError | undefined;
+      let deadline: ReturnType<typeof setTimeout> | undefined;
+      let termination: ReturnType<typeof setTimeout> | undefined;
       let spawnRecord: Promise<void> = Promise.resolve();
       let spawnProblem: unknown;
+      const closePipesAfterExit = () => {
+        // A descendant can inherit a pipe. Release it only after the read child has exited.
+        if (!exited || !failure) return;
+        child.stdin.destroy();
+        child.stdout.destroy();
+        child.stderr.destroy();
+      };
+      const kill = (signal: NodeJS.Signals) => {
+        if (exited || closed) return;
+        try {
+          child.kill(signal);
+        } catch {
+          // Keep ownership until close even if the OS rejects a termination request.
+        }
+      };
+      const stop = (problem: DesktopError) => {
+        if (!read || closed || failure) return;
+        failure = problem;
+        chunks.length = 0;
+        kill('SIGTERM');
+        termination = setTimeout(() => kill('SIGKILL'), this.policy.terminationGraceMs ?? 1000);
+        termination.unref();
+        closePipesAfterExit();
+      };
+      const cancel = () => stop(cliError('CLI_READ_CANCELLED'));
       child.once('spawn', () => {
-        if (child.pid && onSpawn)
-          spawnRecord = onSpawn(child.pid).catch((error: unknown) => {
-            spawnProblem = error;
-          });
+        if (child.pid && onSpawn) {
+          const pid = child.pid;
+          spawnRecord = Promise.resolve()
+            .then(() => onSpawn(pid))
+            .catch((error: unknown) => {
+              spawnProblem = error;
+            });
+        }
+        // An abort can arrive between spawn() returning and the spawn event.
+        if (failure) kill('SIGTERM');
       });
       child.stdout.on('data', (chunk: Buffer) => {
+        if (failure) return;
         bytes += chunk.length;
         if (bytes > this.outputLimit) {
           exceeded = true;
           chunks.length = 0;
+          stop(
+            new DesktopError(
+              'CLI_OUTPUT_LIMIT',
+              'The CLI result exceeded the capture limit. Check current state before another attempt.',
+            ),
+          );
         } else if (!exceeded) chunks.push(chunk);
       });
       // Always drain private diagnostics; never pass unvalidated stderr to the renderer.
       child.stderr.on('data', () => {});
       child.stdin.on('error', () => {});
-      child.stdin.end();
-      child.once('error', () =>
-        reject(new DesktopError('CLI_START_FAILED', 'The bundled CLI could not start.')),
-      );
+      child.once('error', () => {
+        failure ??= new DesktopError('CLI_START_FAILED', 'The bundled CLI could not start.');
+      });
+      child.once('exit', () => {
+        exited = true;
+        closePipesAfterExit();
+      });
       child.once('close', (code) => {
+        closed = true;
+        clearTimeout(deadline);
+        clearTimeout(termination);
+        signal?.removeEventListener('abort', cancel);
         void spawnRecord
           .then(() => {
             if (spawnProblem) throw spawnProblem;
+            if (failure) throw failure;
             if (exceeded)
               throw new DesktopError(
                 'CLI_OUTPUT_LIMIT',
@@ -170,6 +260,13 @@ export class CliClient implements CliRunner {
           })
           .catch(reject);
       });
+      if (timeoutMs !== undefined) {
+        deadline = setTimeout(() => stop(cliError('CLI_READ_TIMEOUT')), timeoutMs);
+        deadline.unref();
+      }
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) cancel();
+      child.stdin.end();
     });
   }
 }

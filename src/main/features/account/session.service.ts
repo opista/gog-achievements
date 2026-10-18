@@ -18,9 +18,9 @@ export class SessionService {
   private async read(command: CliCommand): Promise<unknown> {
     return requireSuccess(await this.cli.run(command));
   }
-  private accept(auth: AuthStatus): AuthStatus {
+  private async accept(auth: AuthStatus): Promise<AuthStatus> {
     if (auth.user_id !== this.auth.user_id || auth.authenticated !== this.auth.authenticated)
-      this.previews.clear();
+      await this.previews.clear();
     this.auth = auth;
     return auth;
   }
@@ -56,11 +56,11 @@ export class SessionService {
       );
     return { version, supportsLocking, supportsExporting };
   }
-  acceptCli(info: CliRuntimeInfo): void {
+  async acceptCli(info: CliRuntimeInfo): Promise<void> {
     this.versions.cli = info.version;
     this.supportsLocking = info.supportsLocking;
     this.supportsExporting = info.supportsExporting;
-    this.previews.clear();
+    await this.previews.clear();
   }
   private async inspectHelp(): Promise<void> {
     const info = await this.inspectCli(this.cli, this.versions.cli);
@@ -94,7 +94,7 @@ export class SessionService {
         'UNSUPPORTED_PLATFORM',
         'This app does not support your computer. Download the version for your system.',
       );
-    this.accept(authSchema.parse(await this.read({ kind: 'auth-status' })));
+    await this.accept(authSchema.parse(await this.read({ kind: 'auth-status' })));
     return {
       version: this.versions.app,
       cliVersion: this.versions.cli,
@@ -105,22 +105,22 @@ export class SessionService {
     };
   }
   async login(): Promise<AuthStatus> {
-    this.previews.clear();
+    await this.previews.clear();
     return this.accept(authSchema.parse(await this.read({ kind: 'auth-login' })));
   }
   async logout(): Promise<AuthStatus> {
-    this.previews.clear();
+    await this.previews.clear();
     return this.accept(authSchema.parse(await this.read({ kind: 'auth-logout' })));
   }
   async requireAccount(): Promise<string> {
-    const auth = this.accept(authSchema.parse(await this.read({ kind: 'auth-status' })));
+    const auth = await this.accept(authSchema.parse(await this.read({ kind: 'auth-status' })));
     if (!auth.authenticated || !auth.user_id)
       throw new DesktopError('AUTH_REQUIRED', 'Sign in to GOG to continue.');
     return auth.user_id;
   }
   assertOwner(userId: string, expected: string): void {
     if (userId !== expected) {
-      this.previews.clear();
+      void this.previews.clear();
       throw new DesktopError('ACCOUNT_CHANGED', 'Your GOG account changed. Refresh your library.');
     }
   }

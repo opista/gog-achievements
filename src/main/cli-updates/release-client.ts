@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { open, rm } from 'node:fs/promises';
 import { CLI_VERSION } from '../../shared/cli-release';
 import { ARCHIVE_LIMITS, type CliPackage } from '../cli-package';
 
@@ -79,18 +81,49 @@ function selectRelease(value: unknown, target: string): CliRelease | undefined {
   return { version, archive, ...(digest ? { digest } : {}) };
 }
 
-export class CliReleaseClient {
-  constructor(private readonly request: typeof fetch = globalThis.fetch) {}
+function abortable<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    void pending.catch(() => {});
+    return Promise.reject(signal.reason);
+  }
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    pending.then(
+      (value) => {
+        signal.removeEventListener('abort', abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', abort);
+        reject(error);
+      },
+    );
+  });
+}
 
-  private async bytes(
+interface DownloadLimits {
+  totalTimeoutMs?: number;
+  inactivityTimeoutMs?: number;
+  archiveBytes?: number;
+}
+
+export class CliReleaseClient {
+  constructor(
+    private readonly request: typeof fetch = globalThis.fetch,
+    private readonly downloadLimits: DownloadLimits = {},
+  ) {}
+
+  private async response(
     url: string,
     maximum: number,
     signal: AbortSignal,
-    assets = false,
-  ): Promise<{ bytes: Buffer; next: boolean }> {
+    assets: boolean,
+    activity: () => void = () => {},
+  ): Promise<Response> {
     for (let redirect = 0; redirect <= 3; redirect++) {
       signal.throwIfAborted();
-      const response = await this.request(url, {
+      const pending = this.request(url, {
         redirect: 'manual',
         signal,
         headers: {
@@ -98,6 +131,15 @@ export class CliReleaseClient {
           'User-Agent': 'gog-achievements-desktop',
         },
       });
+      // A transport that settles after cancellation must still release its body.
+      void pending.then(
+        (response) => {
+          if (signal.aborted) void response.body?.cancel().catch(() => {});
+        },
+        () => {},
+      );
+      const response = await abortable(pending, signal);
+      activity();
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         void response.body?.cancel().catch(() => {});
         const location = response.headers.get('location');
@@ -124,32 +166,48 @@ export class CliReleaseClient {
         void response.body.cancel().catch(() => {});
         throw new Error('CLI response is too large.');
       }
-      const reader = response.body.getReader();
-      const cancel = () => void reader.cancel().catch(() => {});
-      signal.addEventListener('abort', cancel, { once: true });
-      try {
-        const chunks: Buffer[] = [];
-        let size = 0;
-        while (true) {
-          signal.throwIfAborted();
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.byteLength;
-          if (size > maximum) throw new Error('CLI response is too large.');
-          chunks.push(Buffer.from(value));
-        }
-        signal.throwIfAborted();
-        return {
-          bytes: Buffer.concat(chunks),
-          next: /rel="next"/.test(response.headers.get('link') ?? ''),
-        };
-      } finally {
-        signal.removeEventListener('abort', cancel);
-        cancel();
-        reader.releaseLock();
-      }
+      return response;
     }
     throw new Error('Too many CLI redirects.');
+  }
+
+  private async *chunks(
+    response: Response,
+    maximum: number,
+    signal: AbortSignal,
+    activity: () => void = () => {},
+  ): AsyncGenerator<Uint8Array> {
+    const reader = response.body!.getReader();
+    const cancel = () => void reader.cancel().catch(() => {});
+    signal.addEventListener('abort', cancel, { once: true });
+    try {
+      let size = 0;
+      while (true) {
+        signal.throwIfAborted();
+        const { done, value } = await abortable(reader.read(), signal);
+        if (done) break;
+        size += value.byteLength;
+        if (size > maximum) throw new Error('CLI response is too large.');
+        if (value.byteLength) activity();
+        yield value;
+      }
+      signal.throwIfAborted();
+    } finally {
+      signal.removeEventListener('abort', cancel);
+      cancel();
+      reader.releaseLock();
+    }
+  }
+
+  private async bytes(url: string, maximum: number, signal: AbortSignal, assets = false) {
+    const response = await this.response(url, maximum, signal, assets);
+    const chunks: Buffer[] = [];
+    for await (const chunk of this.chunks(response, maximum, signal))
+      chunks.push(Buffer.from(chunk));
+    return {
+      bytes: Buffer.concat(chunks),
+      next: /rel="next"/.test(response.headers.get('link') ?? ''),
+    };
   }
 
   async latest(target: string, rejected: readonly string[], signal: AbortSignal) {
@@ -172,18 +230,69 @@ export class CliReleaseClient {
     throw new Error('CLI release listing is incomplete.');
   }
 
-  async download(release: CliRelease, signal: AbortSignal) {
-    const bounded = AbortSignal.any([signal, AbortSignal.timeout(30000)]);
+  /** The cache owns the private destination directory; failed transfers remove only their file. */
+  async download(release: CliRelease, destination: string, signal: AbortSignal): Promise<string> {
+    const checksumSignal = AbortSignal.any([signal, AbortSignal.timeout(15000)]);
     const url = `${DOWNLOADS}/v${release.version}/${release.archive}`;
-    const checksum = (await this.bytes(`${url}.sha256`, 4096, bounded, true)).bytes
+    const checksum = (await this.bytes(`${url}.sha256`, 4096, checksumSignal, true)).bytes
       .toString('utf8')
       .trim();
     const match = /^([a-fA-F0-9]{64})[ \t]+\*?([^\r\n]+)$/.exec(checksum);
     if (!match || match[2] !== release.archive) throw new Error('Invalid CLI checksum.');
-    const sha256 = match[1]!.toLowerCase();
-    if (release.digest && release.digest !== sha256) throw new Error('CLI checksum mismatch.');
-    const bytes = (await this.bytes(url, ARCHIVE_LIMITS.archiveBytes, bounded, true)).bytes;
-    return { bytes, sha256 };
+    const expected = match[1]!.toLowerCase();
+    if (release.digest && release.digest !== expected) throw new Error('CLI checksum mismatch.');
+    signal.throwIfAborted();
+    const controller = new AbortController();
+    const bounded = AbortSignal.any([signal, controller.signal]);
+    const total = setTimeout(
+      () => controller.abort(new Error('CLI download deadline exceeded.')),
+      this.downloadLimits.totalTimeoutMs ?? 300000,
+    );
+    total.unref();
+    let inactivity: ReturnType<typeof setTimeout>;
+    const activity = () => {
+      clearTimeout(inactivity);
+      inactivity = setTimeout(
+        () => controller.abort(new Error('CLI download stalled.')),
+        this.downloadLimits.inactivityTimeoutMs ?? 30000,
+      );
+      inactivity.unref();
+    };
+    activity();
+    let file: Awaited<ReturnType<typeof open>> | undefined;
+    let created = false;
+    let complete = false;
+    try {
+      file = await open(destination, 'wx', 0o600);
+      created = true;
+      const maximum = Math.min(
+        this.downloadLimits.archiveBytes ?? ARCHIVE_LIMITS.archiveBytes,
+        ARCHIVE_LIMITS.archiveBytes,
+      );
+      const response = await this.response(url, maximum, bounded, true, activity);
+      const hash = createHash('sha256');
+      for await (const chunk of this.chunks(response, maximum, bounded, activity)) {
+        hash.update(chunk);
+        await file.writeFile(chunk);
+      }
+      bounded.throwIfAborted();
+      if (hash.digest('hex') !== expected)
+        throw new Error('CLI archive SHA-256 does not match its checksum.');
+      await file.sync();
+      bounded.throwIfAborted();
+      await file.close();
+      file = undefined;
+      complete = true;
+      return expected;
+    } finally {
+      clearTimeout(total);
+      clearTimeout(inactivity!);
+      try {
+        await file?.close();
+      } finally {
+        if (created && !complete) await rm(destination, { force: true });
+      }
+    }
   }
 }
 

@@ -6,7 +6,8 @@ import { setImmediate } from 'node:timers/promises';
 import { CLI_VERSION } from '../../src/shared/cli-release';
 import { CliUpdateManager, type CliActivation } from '../../src/main/cli-updates/manager';
 import { CliCache } from '../../src/main/cli-updates/cache';
-import { cliPackage, helpFixture } from './cli-update-fixtures';
+import { cliPackage, helpFixture, writeDownload } from './cli-update-fixtures';
+import type { CliReleaseClient } from '../../src/main/cli-updates/release-client';
 import { verifyHelpContract } from '../../src/main/cli-updates/verify';
 
 const roots: string[] = [];
@@ -23,7 +24,9 @@ async function fixture() {
   const latest = vi.fn(async (_target: string, rejected: readonly string[]) =>
     rejected.includes(release.release.version) ? undefined : release.release,
   );
-  const download = vi.fn(async () => ({ bytes: release.bytes, sha256: release.sha256 }));
+  const download = vi.fn<CliReleaseClient['download']>(async (_release, path) =>
+    writeDownload(path, release),
+  );
   const verify = vi.fn(async (_executable: string, _version: string) => {});
   const bundled = join(root, 'bundled', 'gog-achievements');
   const resolveBundled = vi.fn(async () => bundled);
@@ -210,19 +213,19 @@ test('legacy opt-out preferences cannot prevent activation or automatic download
 test('closing the app during a download prevents even a late response from staging', async () => {
   const f = await fixture();
   const packageFixture = cliPackage();
-  let finish!: (value: { bytes: Buffer; sha256: string }) => void;
-  f.download.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
+  let finish!: () => void;
+  f.download.mockImplementationOnce(async (_release, path) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return writeDownload(path, packageFixture);
+  });
   const manager = f.create();
   await manager.prepare();
   const check = manager.check();
   await vi.waitFor(() => expect(f.download).toHaveBeenCalledOnce());
   manager.close();
-  finish(packageFixture);
+  finish();
   expect(await check).toMatchObject({ currentVersion: CLI_VERSION });
   expect((await f.cache.load()).staged).toBeNull();
   expect(await readdir(join(f.root, 'cli-updates', 'macos-arm64', 'packages'))).toEqual([]);
@@ -244,16 +247,21 @@ test('a pending package does not hide a later background check or download', asy
   await manager.check();
   const nextRelease = cliPackage('0.7.0');
   let finishCheck!: (value: typeof nextRelease.release) => void;
-  let finishDownload!: (value: { bytes: Buffer; sha256: string }) => void;
+  let finishDownload!: () => void;
   f.latest.mockImplementationOnce(() => new Promise((resolve) => (finishCheck = resolve)));
-  f.download.mockImplementationOnce(() => new Promise((resolve) => (finishDownload = resolve)));
+  f.download.mockImplementationOnce(async (_release, path) => {
+    await new Promise<void>((resolve) => {
+      finishDownload = resolve;
+    });
+    return writeDownload(path, nextRelease);
+  });
   const check = manager.check();
   await vi.waitFor(() => expect(manager.snapshot().status).toBe('checking'));
   expect(manager.snapshot().currentVersion).toBe(CLI_VERSION);
   finishCheck(nextRelease.release);
   await vi.waitFor(() => expect(manager.snapshot().status).toBe('downloading'));
   expect(manager.snapshot().currentVersion).toBe(CLI_VERSION);
-  finishDownload(nextRelease);
+  finishDownload();
   expect(await check).toMatchObject({
     currentVersion: CLI_VERSION,
     status: 'ready',
@@ -344,10 +352,12 @@ test('automatic fallback can receive a later fixed release without user settings
 
 test('a checksum failure never stages unverified bytes or changes the current CLI', async () => {
   const f = await fixture();
-  f.download.mockResolvedValueOnce({
-    bytes: Buffer.from('corrupt archive'),
-    sha256: '0'.repeat(64),
-  });
+  f.download.mockImplementationOnce((_release, path) =>
+    writeDownload(path, {
+      bytes: Buffer.from('corrupt archive'),
+      sha256: '0'.repeat(64),
+    }),
+  );
   const manager = f.create();
   await manager.prepare();
   expect(await manager.check()).toMatchObject({
